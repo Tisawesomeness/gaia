@@ -5,7 +5,8 @@ import (
 )
 
 func main() {
-	_, err := discordgo.New("Bot " + "")
+	config := LoadConfig()
+	_, err := discordgo.New("Bot " + config.Token)
 	if err != nil {
 		panic(err)
 	}
