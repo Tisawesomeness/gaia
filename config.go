@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 )
 
@@ -10,15 +9,20 @@ type Config struct {
 	Token string `json:"token"`
 }
 
-func LoadConfig() Config {
+func LoadConfig() (Config, error) {
 	var config Config
 	configFile, err := os.ReadFile("config.json")
 	if err != nil {
-		log.Fatalf("Error reading config file: %v", err)
+		return Config{}, err
 	}
 	err = json.Unmarshal(configFile, &config)
 	if err != nil {
-		log.Fatalf("Error parsing config file: %v", err)
+		return Config{}, err
 	}
-	return config
+
+	if envToken, exists := os.LookupEnv("GAIA_DISCORD_TOKEN"); exists {
+		config.Token = envToken
+	}
+
+	return config, nil
 }
