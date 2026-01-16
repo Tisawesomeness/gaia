@@ -12,16 +12,20 @@ import (
 	"github.com/valkey-io/valkey-go"
 )
 
-func interactionCreate(s *discordgo.Session, i *discordgo.InteractionCreate, client *valkey.Client) {
-	if i.Type != discordgo.InteractionApplicationCommand {
-		return
-	}
-	switch i.ApplicationCommandData().Name {
-	case SubscribeCommand.Name:
-		subscribeCommand(i, s, client)
-	case ListCommand.Name:
-		listCommand(i, s, client)
-	}
+type CommandContext struct {
+	config       *Config
+	valkeyClient *valkey.Client
+}
+
+type Command struct {
+	discord *discordgo.ApplicationCommand
+	handler func(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext)
+}
+
+var commands = []*Command{
+	{SubscribeCommand, subscribeCommand},
+	{ListCommand, listCommand},
+	{UnsubscribeCommand, unsubscribeCommand},
 }
 
 func main() {
@@ -30,14 +34,14 @@ func main() {
 		log.Fatalf("Error loading config: %v", err)
 	}
 
-	client, err := initValkey(&config)
+	valkeyClient, err := initValkey(&config)
 	if err != nil {
 		log.Fatalf("Error creating Valkey client: %v", err)
 	}
-	defer client.Close()
+	defer valkeyClient.Close()
 	log.Println("Connected to valkey")
 
-	api, err := NewHytaleAPI(&client, &config)
+	api, err := NewHytaleAPI(&valkeyClient, &config)
 	if err != nil {
 		log.Fatalf("Error creating Hytale API: %v", err)
 	}
@@ -49,7 +53,19 @@ func main() {
 	log.Println("Bot authenticated")
 
 	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		interactionCreate(s, i, &client)
+		if i.Type != discordgo.InteractionApplicationCommand {
+			return
+		}
+		commandName := i.ApplicationCommandData().Name
+		for _, command := range commands {
+			if commandName == command.discord.Name {
+				command.handler(s, i, &CommandContext{
+					&config,
+					&valkeyClient,
+				})
+				return
+			}
+		}
 	})
 
 	err = session.Open()
@@ -83,14 +99,10 @@ func initValkey(config *Config) (valkey.Client, error) {
 }
 
 func initCommands(session *discordgo.Session) error {
-	commands := []*discordgo.ApplicationCommand{
-		SubscribeCommand,
-		ListCommand,
-	}
 	for _, command := range commands {
-		_, err := session.ApplicationCommandCreate(session.State.User.ID, "", command)
+		_, err := session.ApplicationCommandCreate(session.State.User.ID, "", command.discord)
 		if err != nil {
-			return fmt.Errorf("Could not deploy '%v' command: %v", command.Name, err)
+			return fmt.Errorf("Could not deploy '%v' command: %v", command.discord.Name, err)
 		}
 	}
 	return nil

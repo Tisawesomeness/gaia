@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"sort"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -59,9 +60,22 @@ var (
 		Name:        "list-subscriptions",
 		Description: "List all subscriptions for channels in your guild",
 	}
+
+	UnsubscribeCommand = &discordgo.ApplicationCommand{
+		Name:        "unsubscribe",
+		Description: "Unsubscribe from Hytale updates",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionChannel,
+				Name:        "channel",
+				Description: "Which channel to unsubscribe (defaults to all channels)",
+				Required:    false,
+			},
+		},
+	}
 )
 
-func subscribeCommand(i *discordgo.InteractionCreate, s *discordgo.Session, client *valkey.Client) {
+func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	options := i.ApplicationCommandData().Options
 	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
 	for _, opt := range options {
@@ -71,7 +85,7 @@ func subscribeCommand(i *discordgo.InteractionCreate, s *discordgo.Session, clie
 	subType := optionMap["type"].StringValue()
 	channel := optionMap["channel"].ChannelValue(s)
 
-	err := addSubscription(client, subType, channel.ID)
+	err := addSubscription(ctx.valkeyClient, subType, channel.ID)
 	var response discordgo.InteractionResponseData
 	if err != nil {
 		log.Printf("Error saving subscription to Valkey: %v", err)
@@ -91,7 +105,7 @@ func subscribeCommand(i *discordgo.InteractionCreate, s *discordgo.Session, clie
 	})
 }
 
-func listCommand(i *discordgo.InteractionCreate, s *discordgo.Session, client *valkey.Client) {
+func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	guildID := i.GuildID
 	if guildID == "" {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -117,6 +131,11 @@ func listCommand(i *discordgo.InteractionCreate, s *discordgo.Session, client *v
 		return
 	}
 
+	// Sort channels by name
+	sort.Slice(channels, func(i, j int) bool {
+		return channels[i].Name < channels[j].Name
+	})
+
 	channelMap := make(map[string]*discordgo.Channel)
 	for _, channel := range channels {
 		channelMap[channel.ID] = channel
@@ -126,7 +145,7 @@ func listCommand(i *discordgo.InteractionCreate, s *discordgo.Session, client *v
 	channelSubscriptions := make(map[string][]string)
 
 	for _, feedType := range feedTypes {
-		members, err := getSubscriptions(client, feedType)
+		members, err := getSubscriptions(ctx.valkeyClient, feedType)
 		if err != nil {
 			log.Printf("Error fetching subscriptions for %s: %v", feedType, err)
 			continue
@@ -174,10 +193,87 @@ func listCommand(i *discordgo.InteractionCreate, s *discordgo.Session, client *v
 	})
 }
 
+func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+	guildID := i.GuildID
+	if guildID == "" {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "This command can only be used in a guild.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	options := i.ApplicationCommandData().Options
+	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
+	for _, opt := range options {
+		optionMap[opt.Name] = opt
+	}
+
+	var channelID string
+	if channelOpt, exists := optionMap["channel"]; exists {
+		channel := channelOpt.ChannelValue(s)
+		channelID = channel.ID
+	}
+
+	feedTypes := []string{launcherRelease, launcherFeed}
+	var response discordgo.InteractionResponseData
+
+	if channelID != "" {
+		// Unsubscribe specific channel from all feeds
+		for _, feedType := range feedTypes {
+			if err := removeSubscription(ctx.valkeyClient, feedType, channelID); err != nil {
+				log.Printf("Error removing subscription for %s: %v", feedType, err)
+			}
+		}
+		channel := optionMap["channel"].ChannelValue(s)
+		response = discordgo.InteractionResponseData{
+			Content: "Unsubscribed all feeds from channel: " + channel.Mention(),
+		}
+	} else {
+		// Unsubscribe all channels in the guild from all feeds
+		channels, err := s.GuildChannels(guildID)
+		if err != nil {
+			log.Printf("Error fetching guild channels: %v", err)
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "An error occurred while fetching guild channels.",
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
+
+		for _, channel := range channels {
+			for _, feedType := range feedTypes {
+				if err := removeSubscription(ctx.valkeyClient, feedType, channel.ID); err != nil {
+					log.Printf("Error removing subscription for %s in channel %s: %v", feedType, channel.ID, err)
+				}
+			}
+		}
+
+		response = discordgo.InteractionResponseData{
+			Content: "Unsubscribed all feeds in this guild.",
+		}
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &response,
+	})
+}
+
 func addSubscription(client *valkey.Client, subType string, channelId string) error {
 	return (*client).Do(context.Background(), (*client).B().Sadd().Key(subType+":subs").Member(channelId).Build()).Error()
 }
 
 func getSubscriptions(client *valkey.Client, subType string) ([]string, error) {
 	return (*client).Do(context.Background(), (*client).B().Smembers().Key(subType+":subs").Build()).AsStrSlice()
+}
+
+func removeSubscription(client *valkey.Client, subType string, channelId string) error {
+	return (*client).Do(context.Background(), (*client).B().Srem().Key(subType+":subs").Member(channelId).Build()).Error()
 }
