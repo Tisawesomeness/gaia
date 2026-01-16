@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -15,9 +16,11 @@ func interactionCreate(s *discordgo.Session, i *discordgo.InteractionCreate, cli
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
 	}
-
-	if i.ApplicationCommandData().Name == "subscribe" {
+	switch i.ApplicationCommandData().Name {
+	case SubscribeCommand.Name:
 		subscribeCommand(i, s, client)
+	case ListCommand.Name:
+		listCommand(i, s, client)
 	}
 }
 
@@ -56,9 +59,9 @@ func main() {
 	defer session.Close()
 	log.Println("Bot started")
 
-	_, err = session.ApplicationCommandCreate(session.State.User.ID, "", SubscribeCommand)
+	err = initCommands(session)
 	if err != nil {
-		log.Fatalf("Could not create subscribe command: %v", err)
+		log.Fatalf("Error while registering commands: %v", err)
 	}
 
 	go pollAPIs(api, &config)
@@ -77,6 +80,20 @@ func initValkey(config *Config) (valkey.Client, error) {
 		options.Password = config.Valkey.Password
 	}
 	return valkey.NewClient(options)
+}
+
+func initCommands(session *discordgo.Session) error {
+	commands := []*discordgo.ApplicationCommand{
+		SubscribeCommand,
+		ListCommand,
+	}
+	for _, command := range commands {
+		_, err := session.ApplicationCommandCreate(session.State.User.ID, "", command)
+		if err != nil {
+			return fmt.Errorf("Could not deploy '%v' command: %v", command.Name, err)
+		}
+	}
+	return nil
 }
 
 func pollAPIs(api *HytaleAPI, config *Config) {

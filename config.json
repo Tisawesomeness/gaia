@@ -7,6 +7,6 @@
   },
   "api": {
     "endpoint": "https://launcher.hytale.com/version/release/launcher.json",
-    "interval": 60
+    "interval": 999999999
   }
 }
