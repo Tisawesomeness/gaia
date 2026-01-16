@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/valkey-io/valkey-go"
@@ -26,18 +27,23 @@ func main() {
 		log.Fatalf("Error loading config: %v", err)
 	}
 
-	session, err := discordgo.New("Bot " + config.Token)
-	if err != nil {
-		log.Fatalf("Error starting bot: %v", err)
-	}
-	log.Println("Bot authenticated")
-
-	client, err := initValkey(config)
+	client, err := initValkey(&config)
 	if err != nil {
 		log.Fatalf("Error creating Valkey client: %v", err)
 	}
 	defer client.Close()
 	log.Println("Connected to valkey")
+
+	api, err := NewHytaleAPI(&client, &config)
+	if err != nil {
+		log.Fatalf("Error creating Hytale API: %v", err)
+	}
+
+	session, err := discordgo.New("Bot " + config.Token)
+	if err != nil {
+		log.Fatalf("Error starting bot: %v", err)
+	}
+	log.Println("Bot authenticated")
 
 	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		interactionCreate(s, i, &client)
@@ -55,13 +61,15 @@ func main() {
 		log.Fatalf("Could not create subscribe command: %v", err)
 	}
 
+	go pollAPIs(api, &config)
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	<-stop
 	log.Println("Bot shut down")
 }
 
-func initValkey(config Config) (valkey.Client, error) {
+func initValkey(config *Config) (valkey.Client, error) {
 	options := valkey.ClientOption{
 		InitAddress: []string{config.Valkey.Address + ":" + strconv.Itoa(config.Valkey.Port)},
 	}
@@ -69,4 +77,20 @@ func initValkey(config Config) (valkey.Client, error) {
 		options.Password = config.Valkey.Password
 	}
 	return valkey.NewClient(options)
+}
+
+func pollAPIs(api *HytaleAPI, config *Config) {
+	ticker := time.NewTicker(time.Duration(config.API.Interval) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			log.Println("Polling APIs...")
+			err := api.PollLauncherRelease()
+			if err != nil {
+				log.Printf("Error while polling launcher release: %v", err)
+			}
+		}
+	}
 }

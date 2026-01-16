@@ -12,14 +12,18 @@ type Config struct {
 		Port     int    `json:"port"`
 		Password string `json:"password"`
 	} `json:"valkey"`
+	API struct {
+		Endpoint string `json:"endpoint"`
+		Interval int    `json:"interval"` // Interval in seconds
+	} `json:"api"`
 }
 
 func LoadConfig() (Config, error) {
-	var config Config
 	configFile, err := os.ReadFile("config.json")
 	if err != nil {
 		return Config{}, err
 	}
+	var config Config
 	err = json.Unmarshal(configFile, &config)
 	if err != nil {
 		return Config{}, err

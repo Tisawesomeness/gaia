@@ -8,6 +8,17 @@ import (
 	"github.com/valkey-io/valkey-go"
 )
 
+func friendlyFeedName(feedId string) string {
+	switch feedId {
+	case "launcher_release":
+		return "New Versions"
+	case "launcher_feed":
+		return "Launcher Posts"
+	default:
+		return feedId
+	}
+}
+
 var (
 	SubscribeCommand = &discordgo.ApplicationCommand{
 		Name:        "subscribe",
@@ -16,16 +27,16 @@ var (
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Name:        "type",
-				Description: "Type of subscription",
+				Description: "What to subscribe to",
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{
-						Name:  "Server",
-						Value: "server",
+						Name:  friendlyFeedName("launcher_release"),
+						Value: "launcher_release",
 					},
 					{
-						Name:  "Client",
-						Value: "client",
+						Name:  friendlyFeedName("launcher_feed"),
+						Value: "launcher_feed",
 					},
 				},
 			},
@@ -59,7 +70,7 @@ func subscribeCommand(i *discordgo.InteractionCreate, s *discordgo.Session, clie
 		}
 	} else {
 		response = discordgo.InteractionResponseData{
-			Content: "Subscribed to " + subType + " channel: " + channel.Mention(),
+			Content: "Subscribed to " + friendlyFeedName(subType) + " channel: " + channel.Mention(),
 		}
 	}
 
@@ -70,5 +81,5 @@ func subscribeCommand(i *discordgo.InteractionCreate, s *discordgo.Session, clie
 }
 
 func addSubscription(client *valkey.Client, subType string, channelId string) error {
-	return (*client).Do(context.Background(), (*client).B().Sadd().Key("subscription:"+subType).Member(channelId).Build()).Error()
+	return (*client).Do(context.Background(), (*client).B().Sadd().Key(subType+":subs").Member(channelId).Build()).Error()
 }
