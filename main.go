@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/valkey-io/valkey-go"
@@ -24,14 +25,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
 	}
+
 	session, err := discordgo.New("Bot " + config.Token)
 	if err != nil {
 		log.Fatalf("Error starting bot: %v", err)
 	}
 	log.Println("Bot authenticated")
 
-	// Initialize Valkey client
-	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{"127.0.0.1:6379"}})
+	client, err := initValkey(config)
 	if err != nil {
 		log.Fatalf("Error creating Valkey client: %v", err)
 	}
@@ -49,7 +50,6 @@ func main() {
 	defer session.Close()
 	log.Println("Bot started")
 
-	// Register the subscribe command
 	_, err = session.ApplicationCommandCreate(session.State.User.ID, "", SubscribeCommand)
 	if err != nil {
 		log.Fatalf("Could not create subscribe command: %v", err)
@@ -59,4 +59,14 @@ func main() {
 	signal.Notify(stop, os.Interrupt)
 	<-stop
 	log.Println("Bot shut down")
+}
+
+func initValkey(config Config) (valkey.Client, error) {
+	options := valkey.ClientOption{
+		InitAddress: []string{config.Valkey.Address + ":" + strconv.Itoa(config.Valkey.Port)},
+	}
+	if config.Valkey.Password != "" {
+		options.Password = config.Valkey.Password
+	}
+	return valkey.NewClient(options)
 }

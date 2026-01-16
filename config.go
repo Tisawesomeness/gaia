@@ -6,7 +6,12 @@ import (
 )
 
 type Config struct {
-	Token string `json:"token"`
+	Token  string `json:"token"`
+	Valkey struct {
+		Address  string `json:"address"`
+		Port     int    `json:"port"`
+		Password string `json:"password"`
+	} `json:"valkey"`
 }
 
 func LoadConfig() (Config, error) {

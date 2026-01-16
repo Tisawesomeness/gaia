@@ -1,3 +1,8 @@
 {
-  "token": "YOUR_DISCORD_BOT_TOKEN"
+  "token": "YOUR_DISCORD_BOT_TOKEN",
+  "valkey": {
+    "address": "127.0.0.1",
+    "port": 6379,
+    "password": ""
+  }
 }
