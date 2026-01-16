@@ -15,6 +15,7 @@ import (
 type CommandContext struct {
 	config       *Config
 	valkeyClient *valkey.Client
+	hytale       *HytaleAPI
 }
 
 type Command struct {
@@ -62,6 +63,7 @@ func main() {
 				command.handler(s, i, &CommandContext{
 					&config,
 					&valkeyClient,
+					api,
 				})
 				return
 			}
@@ -80,7 +82,7 @@ func main() {
 		log.Fatalf("Error while registering commands: %v", err)
 	}
 
-	go pollAPIs(api, &config)
+	go pollAPIs(session, &config, &valkeyClient, api)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -108,18 +110,28 @@ func initCommands(session *discordgo.Session) error {
 	return nil
 }
 
-func pollAPIs(api *HytaleAPI, config *Config) {
+func pollAPIs(s *discordgo.Session, config *Config, client *valkey.Client, api *HytaleAPI) {
 	ticker := time.NewTicker(time.Duration(config.API.Interval) * time.Second)
 	defer ticker.Stop()
 
+	poll(api, s, client)
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("Polling APIs...")
-			err := api.PollLauncherRelease()
-			if err != nil {
-				log.Printf("Error while polling launcher release: %v", err)
-			}
+			poll(api, s, client)
 		}
+	}
+}
+
+func poll(api *HytaleAPI, s *discordgo.Session, client *valkey.Client) {
+	log.Println("Polling APIs...")
+	err := api.PollLauncherRelease()
+	if err != nil {
+		log.Printf("Error while polling launcher release: %v", err)
+		return
+	}
+	err = notifyLauncherReleaseFeeds(s, client, api)
+	if err != nil {
+		log.Printf("Error while notifying channels: %v", err)
 	}
 }

@@ -85,7 +85,7 @@ func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx 
 	subType := optionMap["type"].StringValue()
 	channel := optionMap["channel"].ChannelValue(s)
 
-	err := addSubscription(ctx.valkeyClient, subType, channel.ID)
+	err := addSubscription(ctx.valkeyClient, subType, channel.ID, ctx.hytale.LauncherRelease.Version)
 	var response discordgo.InteractionResponseData
 	if err != nil {
 		log.Printf("Error saving subscription to Valkey: %v", err)
@@ -151,7 +151,7 @@ func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 			continue
 		}
 
-		for _, member := range members {
+		for member := range members {
 			if channel, exists := channelMap[member]; exists {
 				channelSubscriptions[channel.ID] = append(channelSubscriptions[channel.ID], feedType)
 			}
@@ -266,14 +266,40 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 	})
 }
 
-func addSubscription(client *valkey.Client, subType string, channelId string) error {
-	return (*client).Do(context.Background(), (*client).B().Sadd().Key(subType+":subs").Member(channelId).Build()).Error()
+func notifyLauncherReleaseFeeds(s *discordgo.Session, client *valkey.Client, api *HytaleAPI) error {
+	subs, err := getSubscriptions(client, launcherRelease)
+	if err != nil {
+		return err
+	}
+	for channelId, lastKnownVersion := range subs {
+		if lastKnownVersion != api.LauncherRelease.Version {
+			_, err = s.Channel(channelId)
+			if err != nil {
+				log.Printf("Error accessing channel, removing: %v", err)
+				removeSubscription(client, launcherRelease, channelId)
+			} else {
+				_, err = s.ChannelMessageSend(channelId, "new version: "+api.LauncherRelease.Version)
+				if err != nil {
+					log.Printf("Cannot send feed update: %v", err)
+				}
+			}
+		}
+	}
+	return nil
 }
 
-func getSubscriptions(client *valkey.Client, subType string) ([]string, error) {
-	return (*client).Do(context.Background(), (*client).B().Smembers().Key(subType+":subs").Build()).AsStrSlice()
+func addSubscription(client *valkey.Client, subType string, channelId string, currentVersion string) error {
+	command := (*client).B().Hset().Key(subType+":subs").FieldValue().FieldValue(channelId, currentVersion).Build()
+	return (*client).Do(context.Background(), command).Error()
+}
+
+// Returns a mapping of channel ID to last notified version
+func getSubscriptions(client *valkey.Client, subType string) (map[string]string, error) {
+	command := (*client).B().Hgetall().Key(subType + ":subs").Build()
+	return (*client).Do(context.Background(), command).AsStrMap()
 }
 
 func removeSubscription(client *valkey.Client, subType string, channelId string) error {
-	return (*client).Do(context.Background(), (*client).B().Srem().Key(subType+":subs").Member(channelId).Build()).Error()
+	command := (*client).B().Hdel().Key(subType + ":subs").Field(channelId).Build()
+	return (*client).Do(context.Background(), command).Error()
 }

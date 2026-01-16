@@ -32,7 +32,7 @@ type HytaleRelease struct {
 type HytaleAPI struct {
 	client          *valkey.Client
 	config          *Config
-	launcherRelease *HytaleRelease
+	LauncherRelease *HytaleRelease
 }
 
 func NewHytaleAPI(client *valkey.Client, config *Config) (*HytaleAPI, error) {
@@ -45,7 +45,13 @@ func NewHytaleAPI(client *valkey.Client, config *Config) (*HytaleAPI, error) {
 	if err != nil {
 		return nil, err
 	}
-	api.launcherRelease = release
+	if release == nil {
+		err = api.PollLauncherRelease()
+		if err != nil {
+			return nil, err
+		}
+	}
+	api.LauncherRelease = release
 
 	return api, nil
 }
@@ -80,8 +86,8 @@ func (h HytaleAPI) PollLauncherRelease() error {
 		return err
 	}
 
-	if h.launcherRelease != nil && h.launcherRelease.Version != release.Version {
-		println("new version! " + h.launcherRelease.Version + " -> " + release.Version)
+	if h.LauncherRelease != nil && h.LauncherRelease.Version != release.Version {
+		h.LauncherRelease = release
 	}
 	return nil
 }
@@ -99,6 +105,5 @@ func (h HytaleAPI) fetchLauncherRelease() (*HytaleRelease, error) {
 
 	var release HytaleRelease
 	err = json.NewDecoder(resp.Body).Decode(&release)
-	release.Version = "sample text"
 	return &release, err
 }
