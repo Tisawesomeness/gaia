@@ -13,8 +13,9 @@ type Config struct {
 		Password string `json:"password"`
 	} `json:"valkey"`
 	Feeds struct {
-		Interval        int    `json:"interval"` // in seconds
-		LauncherRelease string `json:"launcher_release"`
+		Interval         int    `json:"interval"` // in seconds
+		LauncherRelease  string `json:"launcher_release"`
+		LauncherArticles string `json:"launcher_articles"`
 	} `json:"feeds"`
 	HTTP struct {
 		Timeout      int `json:"timeout"` // in seconds
