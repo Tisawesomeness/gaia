@@ -1,5 +1,6 @@
 {
   "token": "YOUR_DISCORD_BOT_TOKEN",
+  "test_server": "",
   "valkey": {
     "address": "127.0.0.1",
     "port": 6379,

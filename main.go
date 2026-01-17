@@ -57,7 +57,7 @@ func main() {
 	defer session.Close()
 	log.Println("Bot started")
 
-	err = cmd.InitCommands(session)
+	err = cmd.InitCommands(session, config)
 	if err != nil {
 		log.Fatalf("Error while registering commands: %v", err)
 	}

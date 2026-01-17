@@ -6,8 +6,9 @@ import (
 )
 
 type Config struct {
-	Token  string `json:"token"`
-	Valkey struct {
+	Token      string `json:"token"`
+	TestServer string `json:"test_server"`
+	Valkey     struct {
 		Address  string `json:"address"`
 		Port     int    `json:"port"`
 		Password string `json:"password"`
@@ -36,6 +37,9 @@ func LoadConfig() (Config, error) {
 
 	if envToken, exists := os.LookupEnv("GAIA_DISCORD_TOKEN"); exists {
 		config.Token = envToken
+	}
+	if envToken, exists := os.LookupEnv("GAIA_TEST_SERVER"); exists {
+		config.TestServer = envToken
 	}
 
 	return config, nil
