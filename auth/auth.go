@@ -1,0 +1,233 @@
+package auth
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"time"
+
+	"github.com/Tisawesomeness/gaia/config"
+)
+
+type TokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	IDToken      string `json:"id_token"`
+	Error        string `json:"error"`
+	ExpiresIn    int    `json:"expires_in"`
+}
+
+func (t TokenResponse) isSuccess() bool {
+	return t.Error == "" && t.AccessToken != ""
+}
+
+type DeviceAuthResponse struct {
+	DeviceCode              string `json:"device_code"`
+	UserCode                string `json:"user_code"`
+	VerificationURI         string `json:"verification_uri"`
+	VerificationURIComplete string `json:"verification_uri_complete"`
+	ExpiresIn               int    `json:"expires_in"`
+	Interval                int    `json:"interval"`
+}
+
+func defaultDeviceAuthResponse() DeviceAuthResponse {
+	return DeviceAuthResponse{
+		ExpiresIn: 600,
+		Interval:  5,
+	}
+}
+
+type LauncherDataResponse struct {
+	Owner    string        `json:"owner"`
+	Profiles []GameProfile `json:"profiles"`
+}
+
+type GameProfile struct {
+	UUID     string `json:"uuid"`
+	Username string `json:"username"`
+}
+
+type GameSessionRequest struct {
+	UUID string `json:"uuid"`
+}
+type GameSessionResponse struct {
+	SessionToken  string `json:"sessionToken"`
+	IdentityToken string `json:"identityToken"`
+	ExpiresAt     string `json:"expiresAt"`
+}
+
+func OAuthFlow(config config.Config, httpClient *http.Client) (TokenResponse, error) {
+	deviceAuthResponse, err := startDeviceAuth(config, httpClient)
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("failed to start device auth: %v", err)
+	}
+
+	fmt.Printf("Please visit %s and enter the code: %s\n", deviceAuthResponse.VerificationURI, deviceAuthResponse.UserCode)
+
+	tokenResponse, err := pollForToken(config, httpClient, deviceAuthResponse)
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("failed to poll for token: %v", err)
+	}
+
+	return tokenResponse, nil
+}
+
+func startDeviceAuth(config config.Config, httpClient *http.Client) (DeviceAuthResponse, error) {
+	params := url.Values{}
+	params.Add("client_id", config.Auth.ClientID)
+	params.Add("scope", config.Auth.Scope)
+
+	resp, err := httpClient.PostForm(config.Auth.DeviceAuth, params)
+	if err != nil {
+		return DeviceAuthResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return DeviceAuthResponse{}, err
+	}
+
+	deviceAuthResponse := defaultDeviceAuthResponse()
+	err = json.Unmarshal(body, &deviceAuthResponse)
+	if err != nil {
+		return DeviceAuthResponse{}, err
+	}
+
+	return deviceAuthResponse, nil
+}
+
+func pollForToken(config config.Config, httpClient *http.Client, deviceAuthResponse DeviceAuthResponse) (TokenResponse, error) {
+	params := url.Values{}
+	params.Add("client_id", config.Auth.ClientID)
+	params.Add("device_code", deviceAuthResponse.DeviceCode)
+	params.Add("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
+
+	ticker := time.NewTicker(time.Duration(deviceAuthResponse.Interval) * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.After(time.Duration(deviceAuthResponse.ExpiresIn) * time.Second)
+
+	for {
+		select {
+		case <-ticker.C:
+			resp, err := httpClient.PostForm(config.Auth.Token, params)
+			if err != nil {
+				return TokenResponse{}, err
+			}
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return TokenResponse{}, err
+			}
+
+			var tokenResponse TokenResponse
+			err = json.Unmarshal(body, &tokenResponse)
+			if err != nil {
+				return TokenResponse{}, err
+			}
+
+			if tokenResponse.Error == "" {
+				return tokenResponse, nil
+			}
+
+		case <-timeout:
+			return TokenResponse{}, fmt.Errorf("timeout waiting for token")
+		}
+	}
+}
+
+func GetAccountProfiles(accessToken string, config config.Config, httpClient *http.Client) (LauncherDataResponse, error) {
+	req, err := http.NewRequest("GET", config.Auth.Profiles, nil)
+	if err != nil {
+		return LauncherDataResponse{}, err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return LauncherDataResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return LauncherDataResponse{}, err
+	}
+
+	var launcherDataResponse LauncherDataResponse
+	err = json.Unmarshal(body, &launcherDataResponse)
+	if err != nil {
+		return LauncherDataResponse{}, err
+	}
+
+	return launcherDataResponse, nil
+}
+
+func CreateGameSession(accessToken string, uuid string, config config.Config, httpClient *http.Client) (GameSessionResponse, error) {
+	requestBody, err := json.Marshal(GameSessionRequest{UUID: uuid})
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	req, err := http.NewRequest("POST", config.Auth.CreateGameSession, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	var gameSessionResponse GameSessionResponse
+	err = json.Unmarshal(body, &gameSessionResponse)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	return gameSessionResponse, nil
+}
+
+func RefreshGameSession(sessionToken string, uuid string, config config.Config, httpClient *http.Client) (GameSessionResponse, error) {
+	req, err := http.NewRequest("POST", config.Auth.RefreshGameSession, nil)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", sessionToken))
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	var gameSessionResponse GameSessionResponse
+	err = json.Unmarshal(body, &gameSessionResponse)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	return gameSessionResponse, nil
+}

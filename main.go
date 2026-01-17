@@ -1,12 +1,14 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
+	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/cmd"
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
@@ -28,6 +30,12 @@ func main() {
 	log.Println("Connected to valkey")
 
 	httpClient := initHTTP(config)
+
+	gameSession, err := initAuth(config, httpClient)
+	if err != nil {
+		log.Fatalf("Auth error: %v", err)
+	}
+	log.Println("Created game session, expires at: " + gameSession.ExpiresAt)
 
 	feeds, err := hytale.NewHytaleFeeds(config, *database, *httpClient)
 	if err != nil {
@@ -78,6 +86,31 @@ func initHTTP(config config.Config) *http.Client {
 		Transport: tr,
 		Timeout:   time.Duration(config.HTTP.Timeout) * time.Second,
 	}
+}
+
+func initAuth(config config.Config, httpClient *http.Client) (*auth.GameSessionResponse, error) {
+	tokenResponse, err := auth.OAuthFlow(config, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	profiles, err := auth.GetAccountProfiles(tokenResponse.AccessToken, config, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	if len(profiles.Profiles) <= 0 {
+		return nil, errors.New("No profiles found!")
+	}
+	log.Println("Found profiles:")
+	for _, profile := range profiles.Profiles {
+		log.Printf("%s - %s", profile.UUID, profile.Username)
+	}
+	uuid := profiles.Profiles[0].UUID
+	log.Println("Using profile " + uuid)
+	session, err := auth.CreateGameSession(tokenResponse.AccessToken, uuid, config, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	return &session, err
 }
 
 func pollFeeds(s *discordgo.Session, config config.Config, feeds hytale.HytaleFeeds) {

@@ -14,6 +14,15 @@ type Config struct {
 		Port     int    `json:"port"`
 		Password string `json:"password"`
 	} `json:"valkey"`
+	Auth struct {
+		ClientID           string `json:"client_id"`
+		Scope              string `json:"scope"`
+		DeviceAuth         string `json:"device_auth"`
+		Token              string `json:"token"`
+		Profiles           string `json:"profiles"`
+		CreateGameSession  string `json:"create_game_session"`
+		RefreshGameSession string `json:"refresh_game_session"`
+	} `json:"auth"`
 	Feeds struct {
 		PollOnStartup      bool   `json:"poll_on_startup"`
 		Interval           int    `json:"interval"` // in seconds

@@ -6,6 +6,15 @@
     "port": 6379,
     "password": ""
   },
+  "auth": {
+    "client_id": "hytale-server",
+    "scope": "openid offline auth:server",
+    "device_auth": "https://oauth.accounts.hytale.com/oauth2/device/auth",
+    "token": "https://oauth.accounts.hytale.com/oauth2/token",
+    "profiles": "https://account-data.hytale.com/my-account/get-profiles",
+    "create_game_session": "https://sessions.hytale.com/game-session/new",
+    "refresh_game_session": "https://sessions.hytale.com/game-session/refresh"
+  },
   "feeds": {
     "poll_on_startup": false,
     "interval": 500,
@@ -14,7 +23,7 @@
     "article_image_prefix": "https://launcher.hytale.com/launcher-feed/release/"
   },
   "http": {
-    "timeout": 10,
+    "timeout": 5,
     "max_idle_conns": 10
   }
 }
