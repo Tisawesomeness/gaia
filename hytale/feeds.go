@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"unicode"
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
@@ -53,7 +54,7 @@ const (
 type Feed interface {
 	GetID() string
 	GetDisplayName() string
-	BuildMessage() string
+	BuildMessage(s *discordgo.Session) *discordgo.MessageEmbed
 	GetVersion() string
 }
 
@@ -69,8 +70,41 @@ func (f *LauncherReleaseFeed) GetDisplayName() string {
 	return LauncherReleaseFeedDisplay
 }
 
-func (f *LauncherReleaseFeed) BuildMessage() string {
-	return "new version: " + f.Release.Version
+func (f *LauncherReleaseFeed) BuildMessage(s *discordgo.Session) *discordgo.MessageEmbed {
+	// Prepare the embed with version and download links
+	embed := &discordgo.MessageEmbed{
+		Title:       "Latest Hytale Version",
+		Description: fmt.Sprintf("**%s**", f.GetVersion()),
+		Color:       0x00FF00,
+	}
+
+	// Add download links for each platform
+	if f.Release != nil && f.Release.DownloadURLs != nil {
+		fields := []*discordgo.MessageEmbedField{}
+		for platform, urls := range f.Release.DownloadURLs {
+			for arch, downloadURL := range urls {
+				platformName := capitalizeFirstLetter(platform)
+				fieldName := fmt.Sprintf("%s (%s)", platformName, arch)
+				fields = append(fields, &discordgo.MessageEmbedField{
+					Name:   fieldName,
+					Value:  fmt.Sprintf("[Download](%s)", downloadURL.URL),
+					Inline: false,
+				})
+			}
+		}
+		embed.Fields = fields
+	}
+
+	return embed
+}
+
+func capitalizeFirstLetter(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	runes := []rune(s)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
 
 func (f *LauncherReleaseFeed) GetVersion() string {
@@ -89,11 +123,19 @@ func (f *LauncherPostFeed) GetDisplayName() string {
 	return LauncherPostFeedDisplay
 }
 
-func (f *LauncherPostFeed) BuildMessage() string {
+func (f *LauncherPostFeed) BuildMessage(s *discordgo.Session) *discordgo.MessageEmbed {
 	if len(f.Articles.Articles) <= 0 {
-		return ""
+		return &discordgo.MessageEmbed{
+			Title:       "Hytale Articles",
+			Description: "No articles yet...",
+			Color:       0xFF0000,
+		}
 	}
-	return "new post: " + f.Articles.Articles[0].Title
+	return &discordgo.MessageEmbed{
+		Title:       "Hytale Articles",
+		Description: "TODO",
+		Color:       0x00FF00,
+	}
 }
 
 func (f *LauncherPostFeed) GetVersion() string {
@@ -210,11 +252,8 @@ func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
 					log.Printf("Error accessing channel, removing: %v", err)
 					feeds.removeAllSubscriptions(channelId)
 				} else {
-					message := feed.BuildMessage()
-					if message == "" {
-						continue
-					}
-					_, err = s.ChannelMessageSend(channelId, message)
+					message := feed.BuildMessage(s)
+					_, err = s.ChannelMessageSendEmbed(channelId, message)
 					if err != nil {
 						log.Printf("Cannot send feed update: %v", err)
 						continue

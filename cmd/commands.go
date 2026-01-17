@@ -27,6 +27,7 @@ var commands = []*Command{
 	{SubscribeCommand, subscribeCommand},
 	{ListCommand, listCommand},
 	{UnsubscribeCommand, unsubscribeCommand},
+	{VersionCommand, versionCommand},
 }
 
 func HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
