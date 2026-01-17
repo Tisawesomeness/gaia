@@ -27,7 +27,9 @@ func main() {
 	defer database.Close()
 	log.Println("Connected to valkey")
 
-	feeds, err := hytale.NewHytaleFeeds(config, *database)
+	httpClient := initHTTP(config)
+
+	feeds, err := hytale.NewHytaleFeeds(config, *database, *httpClient)
 	if err != nil {
 		log.Fatalf("Error creating Hytale feeds: %v", err)
 	}
@@ -41,7 +43,7 @@ func main() {
 	ctx := &cmd.CommandContext{
 		Config:      config,
 		DB:          *database,
-		HTTP:        *initHTTP(),
+		HTTP:        *httpClient,
 		HytaleFeeds: *feeds,
 	}
 	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -68,13 +70,14 @@ func main() {
 	log.Println("Bot shut down")
 }
 
-func initHTTP() *http.Client {
+func initHTTP(config config.Config) *http.Client {
 	tr := &http.Transport{
-		MaxIdleConns:       10,
-		IdleConnTimeout:    30 * time.Second,
-		DisableCompression: true,
+		MaxIdleConns: config.HTTP.MaxIdleConns,
 	}
-	return &http.Client{Transport: tr}
+	return &http.Client{
+		Transport: tr,
+		Timeout:   time.Duration(config.HTTP.Timeout) * time.Second,
+	}
 }
 
 func pollFeeds(s *discordgo.Session, config config.Config, feeds hytale.HytaleFeeds) {

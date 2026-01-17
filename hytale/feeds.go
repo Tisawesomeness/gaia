@@ -56,12 +56,14 @@ type HytaleFeeds struct {
 	LauncherRelease *HytaleRelease
 	config          config.Config
 	db              db.DB
+	http            http.Client
 }
 
-func NewHytaleFeeds(config config.Config, db db.DB) (*HytaleFeeds, error) {
+func NewHytaleFeeds(config config.Config, db db.DB, http http.Client) (*HytaleFeeds, error) {
 	feeds := &HytaleFeeds{
 		config: config,
 		db:     db,
+		http:   http,
 	}
 
 	release, err := getStoredLauncherRelease(db)
@@ -116,7 +118,7 @@ func (feeds *HytaleFeeds) Poll() error {
 }
 
 func (feeds HytaleFeeds) fetchLauncherRelease() (*HytaleRelease, error) {
-	resp, err := http.Get(feeds.config.Feeds.LauncherRelease)
+	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherRelease)
 	if err != nil {
 		return nil, err
 	}

@@ -8,5 +8,9 @@
   "feeds": {
     "interval": 60,
     "launcher_release": "https://launcher.hytale.com/version/release/launcher.json"
+  },
+  "http": {
+    "timeout": 10,
+    "max_idle_conns": 10
   }
 }

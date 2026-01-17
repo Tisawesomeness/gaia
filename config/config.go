@@ -13,9 +13,13 @@ type Config struct {
 		Password string `json:"password"`
 	} `json:"valkey"`
 	Feeds struct {
-		Interval        int    `json:"interval"` // Interval in seconds
+		Interval        int    `json:"interval"` // in seconds
 		LauncherRelease string `json:"launcher_release"`
 	} `json:"feeds"`
+	HTTP struct {
+		Timeout      int `json:"timeout"` // in seconds
+		MaxIdleConns int `json:"max_idle_conns"`
+	} `json:"http"`
 }
 
 func LoadConfig() (Config, error) {
