@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 )
 
@@ -38,10 +39,16 @@ func LoadConfig() (Config, error) {
 	}
 
 	if envToken, exists := os.LookupEnv("GAIA_DISCORD_TOKEN"); exists {
+		log.Println("Overridden discord token from env vars")
 		config.Token = envToken
 	}
 	if envToken, exists := os.LookupEnv("GAIA_TEST_SERVER"); exists {
+		log.Println("Overridden test server from env vars")
 		config.TestServer = envToken
+	}
+	if envToken, exists := os.LookupEnv("GAIA_VALKEY_PASS"); exists {
+		log.Println("Overridden valkey password from env vars")
+		config.Valkey.Password = envToken
 	}
 
 	return config, nil
