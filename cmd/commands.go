@@ -18,21 +18,30 @@ type CommandContext struct {
 	HytaleFeeds hytale.HytaleFeeds
 }
 
+type Category struct {
+	name     string
+	commands []*Command
+}
+
 type Command struct {
 	discord *discordgo.ApplicationCommand
 	handler func(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext)
 }
 
-var commands []*Command
+var categories []*Category
 
 func init() {
-	commands = []*Command{
-		{HelpCommand, helpCommand},
-		{VersionCommand, versionCommand},
-		{ArticlesCommand, articlesCommand},
-		{SubscribeCommand, subscribeCommand},
-		{ListCommand, listCommand},
-		{UnsubscribeCommand, unsubscribeCommand},
+	categories = []*Category{
+		{"Core", []*Command{
+			{HelpCommand, helpCommand},
+		}},
+		{"Updates", []*Command{
+			{VersionCommand, versionCommand},
+			{ArticlesCommand, articlesCommand},
+			{SubscribeCommand, subscribeCommand},
+			{ListCommand, listCommand},
+			{UnsubscribeCommand, unsubscribeCommand},
+		}},
 	}
 }
 
@@ -41,35 +50,35 @@ func HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 	commandName := strings.TrimPrefix(i.ApplicationCommandData().Name, "test-")
-	for _, command := range commands {
-		if commandName == command.discord.Name {
-			command.handler(s, i, ctx)
-			return
+	for _, category := range categories {
+		for _, command := range category.commands {
+			if commandName == command.discord.Name {
+				command.handler(s, i, ctx)
+				return
+			}
 		}
 	}
 }
 
 func InitCommands(session *discordgo.Session, config config.Config) error {
-	// Register global commands
-	for _, command := range commands {
-		_, err := session.ApplicationCommandCreate(session.State.User.ID, "", command.discord)
-		if err != nil {
-			return fmt.Errorf("Could not deploy global '%v' command: %v", command.discord.Name, err)
-		}
-	}
+	for _, category := range categories {
+		for _, command := range category.commands {
+			// Register global commands
+			_, err := session.ApplicationCommandCreate(session.State.User.ID, "", command.discord)
+			if err != nil {
+				return fmt.Errorf("Could not deploy global '%v' command: %v", command.discord.Name, err)
+			}
 
-	// Register guild commands with the test- prefix
-	guildID := config.TestServer
-	if guildID == "" {
-		return nil
-	}
-
-	for _, command := range commands {
-		guildCommand := *command.discord
-		guildCommand.Name = "test-" + guildCommand.Name
-		_, err := session.ApplicationCommandCreate(session.State.User.ID, guildID, &guildCommand)
-		if err != nil {
-			return fmt.Errorf("Could not deploy guild '%v' command: %v", guildCommand.Name, err)
+			if config.TestServer == "" {
+				continue
+			}
+			// Register guild commands with the test- prefix
+			guildCommand := *command.discord
+			guildCommand.Name = "test-" + guildCommand.Name
+			_, err = session.ApplicationCommandCreate(session.State.User.ID, config.TestServer, &guildCommand)
+			if err != nil {
+				return fmt.Errorf("Could not deploy guild '%v' command: %v", guildCommand.Name, err)
+			}
 		}
 	}
 	return nil
