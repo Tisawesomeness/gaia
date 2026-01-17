@@ -1,9 +1,28 @@
 package cmd
 
 import (
+	"strings"
+	"time"
+
 	"github.com/Tisawesomeness/gaia/hytale"
 	"github.com/bwmarrin/discordgo"
 )
+
+// ArticleInteraction tracks the state of an article browsing session
+type ArticleInteraction struct {
+	CurrentIndex int
+	Articles     []*hytale.Article
+	LastUsed     time.Time // Track the last time the interaction was used
+}
+
+// Global map to track article interactions
+var articleInteractions = make(map[string]*ArticleInteraction)
+
+// CleanupInterval defines how often to clean up old interactions
+const CleanupInterval = 5 * time.Minute
+
+// InteractionExpiry defines how long an interaction can be inactive before being removed
+const InteractionExpiry = 30 * time.Minute
 
 var (
 	VersionCommand = &discordgo.ApplicationCommand{
@@ -16,6 +35,26 @@ var (
 		Description: "Get the latest Hytale article",
 	}
 )
+
+// StartCleanup starts a background goroutine to periodically clean up old interactions
+func StartCleanup() {
+	ticker := time.NewTicker(CleanupInterval)
+	go func() {
+		for range ticker.C {
+			cleanupOldInteractions()
+		}
+	}()
+}
+
+// cleanupOldInteractions removes interactions that have expired
+func cleanupOldInteractions() {
+	now := time.Now()
+	for id, interaction := range articleInteractions {
+		if now.Sub(interaction.LastUsed) > InteractionExpiry {
+			delete(articleInteractions, id)
+		}
+	}
+}
 
 func versionCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	// Get the launcher release feed
@@ -79,12 +118,124 @@ func articlesCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *
 		})
 		return
 	}
+	// Get all articles
+	articles := launcherPostFeed.Articles.Articles
+	if len(articles) == 0 {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "No articles found.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
 
-	// Respond with the embed
+	// Store the interaction and current article index
+	interactionID := i.Interaction.ID
+	articleInteractions[interactionID] = &ArticleInteraction{
+		CurrentIndex: 0,
+		Articles:     articles,
+		LastUsed:     time.Now(),
+	}
+
+	// Build the message embed for the latest article
+	latestArticle := articles[0]
+	embed := latestArticle.BuildMessage(s, ctx.Config)
+
+	// Add buttons
+	backButton := discordgo.Button{
+		Label:    "Back",
+		Style:    discordgo.SecondaryButton,
+		CustomID: "article_back_" + interactionID,
+		Disabled: len(articles) <= 1, // Disable if there's only one article
+	}
+
+	forwardButton := discordgo.Button{
+		Label:    "Forward",
+		Style:    discordgo.SecondaryButton,
+		CustomID: "article_forward_" + interactionID,
+		Disabled: true, // Disable if it's the first article
+	}
+
+	// Respond with the embed and buttons
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{launcherPostFeed.BuildMessage(s, ctx.Config)},
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{backButton, forwardButton},
+				},
+			},
+		},
+	})
+}
+
+func isArticleInteraction(customID string) bool {
+	return strings.HasPrefix(customID, "article_back_") || strings.HasPrefix(customID, "article_forward_")
+}
+
+// HandleArticleButton handles button clicks for navigating articles
+func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+	customID := i.MessageComponentData().CustomID
+	interactionID := strings.TrimPrefix(customID, "article_back_")
+	interactionID = strings.TrimPrefix(interactionID, "article_forward_")
+
+	// Get the interaction data
+	interaction, exists := articleInteractions[interactionID]
+	if !exists {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "This interaction has expired.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	// Update the last used time
+	interaction.LastUsed = time.Now()
+
+	// Update the current index based on the button clicked
+	if strings.HasPrefix(customID, "article_back_") {
+		interaction.CurrentIndex++
+	} else if strings.HasPrefix(customID, "article_forward_") {
+		interaction.CurrentIndex--
+	}
+
+	// Get the current article
+	currentArticle := interaction.Articles[interaction.CurrentIndex]
+
+	// Build the message embed for the current article
+	embed := currentArticle.BuildMessage(s, ctx.Config)
+
+	// Update the buttons
+	backButton := discordgo.Button{
+		Label:    "Back",
+		Style:    discordgo.SecondaryButton,
+		CustomID: "article_back_" + interactionID,
+		Disabled: interaction.CurrentIndex == len(interaction.Articles)-1,
+	}
+
+	forwardButton := discordgo.Button{
+		Label:    "Forward",
+		Style:    discordgo.SecondaryButton,
+		CustomID: "article_forward_" + interactionID,
+		Disabled: interaction.CurrentIndex == 0,
+	}
+
+	// Edit the original message
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{backButton, forwardButton},
+				},
+			},
 		},
 	})
 }

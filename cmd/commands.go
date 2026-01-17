@@ -46,16 +46,22 @@ func init() {
 }
 
 func HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
-	if i.Type != discordgo.InteractionApplicationCommand {
-		return
-	}
-	commandName := strings.TrimPrefix(i.ApplicationCommandData().Name, "test-")
-	for _, category := range categories {
-		for _, command := range category.commands {
-			if commandName == command.discord.Name {
-				command.handler(s, i, ctx)
-				return
+	switch i.Type {
+	case discordgo.InteractionApplicationCommand:
+		commandName := strings.TrimPrefix(i.ApplicationCommandData().Name, "test-")
+		for _, category := range categories {
+			for _, command := range category.commands {
+				if commandName == command.discord.Name {
+					command.handler(s, i, ctx)
+					return
+				}
 			}
+		}
+	case discordgo.InteractionMessageComponent:
+		// Handle button interactions
+		customID := i.MessageComponentData().CustomID
+		if isArticleInteraction(customID) {
+			HandleArticleButton(s, i, ctx)
 		}
 	}
 }
@@ -81,5 +87,6 @@ func InitCommands(session *discordgo.Session, config config.Config) error {
 			}
 		}
 	}
+	StartCleanup()
 	return nil
 }

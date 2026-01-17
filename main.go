@@ -87,11 +87,8 @@ func pollFeeds(s *discordgo.Session, config config.Config, feeds hytale.HytaleFe
 	if config.Feeds.PollOnStartup {
 		poll(s, feeds)
 	}
-	for {
-		select {
-		case <-ticker.C:
-			poll(s, feeds)
-		}
+	for range ticker.C {
+		poll(s, feeds)
 	}
 }
 
