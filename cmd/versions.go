@@ -5,15 +5,17 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var VersionCommand = &discordgo.ApplicationCommand{
-	Name:        "version",
-	Description: "Get the latest Hytale version",
-}
+var (
+	VersionCommand = &discordgo.ApplicationCommand{
+		Name:        "version",
+		Description: "Get the latest Hytale version",
+	}
 
-var ArticlesCommand = &discordgo.ApplicationCommand{
-	Name:        "articles",
-	Description: "Get the latest Hytale article",
-}
+	ArticlesCommand = &discordgo.ApplicationCommand{
+		Name:        "articles",
+		Description: "Get the latest Hytale article",
+	}
+)
 
 func versionCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	// Get the launcher release feed

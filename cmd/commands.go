@@ -23,12 +23,17 @@ type Command struct {
 	handler func(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext)
 }
 
-var commands = []*Command{
-	{SubscribeCommand, subscribeCommand},
-	{ListCommand, listCommand},
-	{UnsubscribeCommand, unsubscribeCommand},
-	{VersionCommand, versionCommand},
-	{ArticlesCommand, articlesCommand},
+var commands []*Command
+
+func init() {
+	commands = []*Command{
+		{HelpCommand, helpCommand},
+		{VersionCommand, versionCommand},
+		{ArticlesCommand, articlesCommand},
+		{SubscribeCommand, subscribeCommand},
+		{ListCommand, listCommand},
+		{UnsubscribeCommand, unsubscribeCommand},
+	}
 }
 
 func HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {

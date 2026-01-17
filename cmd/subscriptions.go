@@ -41,7 +41,7 @@ var (
 
 	ListCommand = &discordgo.ApplicationCommand{
 		Name:        "list-subscriptions",
-		Description: "List all subscriptions for channels in your guild",
+		Description: "List all subscriptions",
 	}
 
 	UnsubscribeCommand = &discordgo.ApplicationCommand{
