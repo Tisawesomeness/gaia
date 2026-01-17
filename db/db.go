@@ -65,6 +65,6 @@ func (db DB) GetLatestPost(subType string) ([]byte, error) {
 }
 
 func (db DB) SetLatestPost(subType string, content string) error {
-	command := db.v.B().Set().Key("launcher_release:latest").Value(content).Build()
+	command := db.v.B().Set().Key(subType + ":latest").Value(content).Build()
 	return db.v.Do(context.Background(), command).Error()
 }

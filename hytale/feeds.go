@@ -49,6 +49,7 @@ const (
 	LauncherReleaseFeedDisplay = "New Versions"
 	LauncherPostFeedID         = "launcher_post"
 	LauncherPostFeedDisplay    = "Launcher Posts"
+	expectedFeeds              = 2
 )
 
 type Feed interface {
@@ -166,7 +167,7 @@ func NewHytaleFeeds(config config.Config, db db.DB, http http.Client) (*HytaleFe
 		return nil, err
 	}
 
-	if len(feeds.Feeds) == 0 {
+	if len(feeds.Feeds) < expectedFeeds {
 		log.Println("Feeds have not been stored yet, fetching...")
 		err = feeds.Poll()
 		if err != nil {
@@ -174,7 +175,7 @@ func NewHytaleFeeds(config config.Config, db db.DB, http http.Client) (*HytaleFe
 		}
 	}
 
-	if len(feeds.Feeds) == 0 {
+	if len(feeds.Feeds) < expectedFeeds {
 		return nil, errors.New("feed state was not initialized")
 	}
 	return feeds, nil
