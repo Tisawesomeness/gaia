@@ -21,12 +21,12 @@ var (
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{
-						Name:  hytale.FriendlyFeedName(hytale.LauncherReleaseFeed),
-						Value: hytale.LauncherReleaseFeed,
+						Name:  hytale.LauncherReleaseFeedDisplay,
+						Value: hytale.LauncherReleaseFeedID,
 					},
 					{
-						Name:  hytale.FriendlyFeedName(hytale.LauncherPostFeed),
-						Value: hytale.LauncherPostFeed,
+						Name:  hytale.LauncherPostFeedDisplay,
+						Value: hytale.LauncherPostFeedID,
 					},
 				},
 			},
@@ -68,7 +68,20 @@ func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx 
 	subType := optionMap["type"].StringValue()
 	channel := optionMap["channel"].ChannelValue(s)
 
-	err := ctx.DB.AddOrUpdateSubscription(subType, channel.ID, ctx.HytaleFeeds.LauncherRelease.Version)
+	// Get the feed from the HytaleFeeds map
+	feed, exists := ctx.HytaleFeeds.Feeds[subType]
+	if !exists {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Invalid feed type.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	err := ctx.DB.AddOrUpdateSubscription(feed.GetID(), channel.ID, feed.GetVersion())
 	var response discordgo.InteractionResponseData
 	if err != nil {
 		log.Printf("Error saving subscription to Valkey: %v", err)
@@ -78,7 +91,7 @@ func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx 
 		}
 	} else {
 		response = discordgo.InteractionResponseData{
-			Content: "Subscribed to " + hytale.FriendlyFeedName(subType) + " channel: " + channel.Mention(),
+			Content: "Subscribed to " + feed.GetDisplayName() + " channel: " + channel.Mention(),
 		}
 	}
 
@@ -125,16 +138,16 @@ func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 	}
 
 	channelSubscriptions := make(map[string][]string)
-	for _, feedType := range hytale.Feeds {
-		members, err := ctx.DB.GetSubscriptions(feedType)
+	for feedID, _ := range ctx.HytaleFeeds.Feeds {
+		members, err := ctx.DB.GetSubscriptions(feedID)
 		if err != nil {
-			log.Printf("Error fetching subscriptions for %s: %v", feedType, err)
+			log.Printf("Error fetching subscriptions for %s: %v", feedID, err)
 			continue
 		}
 
 		for member := range members {
 			if channel, exists := channelMap[member]; exists {
-				channelSubscriptions[channel.ID] = append(channelSubscriptions[channel.ID], feedType)
+				channelSubscriptions[channel.ID] = append(channelSubscriptions[channel.ID], feedID)
 			}
 		}
 	}
@@ -158,7 +171,9 @@ func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 			if channel, exists := channelMap[channelID]; exists {
 				subscriptionNames := make([]string, len(subscriptions))
 				for i, sub := range subscriptions {
-					subscriptionNames[i] = hytale.FriendlyFeedName(sub)
+					if feed, exists := ctx.HytaleFeeds.Feeds[sub]; exists {
+						subscriptionNames[i] = feed.GetDisplayName()
+					}
 				}
 				description = append(description, "- "+channel.Mention()+" - **"+strings.Join(subscriptionNames, ", ")+"**")
 			}
@@ -202,9 +217,9 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 	var response discordgo.InteractionResponseData
 	if channelID != "" {
 		// Unsubscribe specific channel from all feeds
-		for _, feedType := range hytale.Feeds {
-			if err := ctx.DB.RemoveSubscription(feedType, channelID); err != nil {
-				log.Printf("Error removing subscription for %s: %v", feedType, err)
+		for feedID, _ := range ctx.HytaleFeeds.Feeds {
+			if err := ctx.DB.RemoveSubscription(feedID, channelID); err != nil {
+				log.Printf("Error removing subscription for %s: %v", feedID, err)
 			}
 		}
 		channel := optionMap["channel"].ChannelValue(s)
@@ -227,9 +242,9 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 		}
 
 		for _, channel := range channels {
-			for _, feedType := range hytale.Feeds {
-				if err := ctx.DB.RemoveSubscription(feedType, channel.ID); err != nil {
-					log.Printf("Error removing subscription for %s in channel %s: %v", feedType, channel.ID, err)
+			for feedID, _ := range ctx.HytaleFeeds.Feeds {
+				if err := ctx.DB.RemoveSubscription(feedID, channel.ID); err != nil {
+					log.Printf("Error removing subscription for %s in channel %s: %v", feedID, channel.ID, err)
 				}
 			}
 		}

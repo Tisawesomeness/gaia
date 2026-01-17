@@ -44,31 +44,70 @@ type ArticleFeed struct {
 }
 
 const (
-	LauncherReleaseFeed = "launcher_release"
-	LauncherPostFeed    = "launcher_post"
+	LauncherReleaseFeedID      = "launcher_release"
+	LauncherReleaseFeedDisplay = "New Versions"
+	LauncherPostFeedID         = "launcher_post"
+	LauncherPostFeedDisplay    = "Launcher Posts"
 )
 
-var (
-	Feeds = []string{LauncherReleaseFeed, LauncherPostFeed}
-)
+type Feed interface {
+	GetID() string
+	GetDisplayName() string
+	BuildMessage() string
+	GetVersion() string
+}
 
-func FriendlyFeedName(feedId string) string {
-	switch feedId {
-	case LauncherReleaseFeed:
-		return "New Versions"
-	case LauncherPostFeed:
-		return "Launcher Posts"
-	default:
-		return feedId
+type LauncherReleaseFeed struct {
+	Release *HytaleRelease
+}
+
+func (f *LauncherReleaseFeed) GetID() string {
+	return LauncherReleaseFeedID
+}
+
+func (f *LauncherReleaseFeed) GetDisplayName() string {
+	return LauncherReleaseFeedDisplay
+}
+
+func (f *LauncherReleaseFeed) BuildMessage() string {
+	return "new version: " + f.Release.Version
+}
+
+func (f *LauncherReleaseFeed) GetVersion() string {
+	return f.Release.Version
+}
+
+type LauncherPostFeed struct {
+	Articles *ArticleFeed
+}
+
+func (f *LauncherPostFeed) GetID() string {
+	return LauncherPostFeedID
+}
+
+func (f *LauncherPostFeed) GetDisplayName() string {
+	return LauncherPostFeedDisplay
+}
+
+func (f *LauncherPostFeed) BuildMessage() string {
+	if len(f.Articles.Articles) <= 0 {
+		return ""
 	}
+	return "new post: " + f.Articles.Articles[0].Title
+}
+
+func (f *LauncherPostFeed) GetVersion() string {
+	if len(f.Articles.Articles) <= 0 {
+		return ""
+	}
+	return f.Articles.Articles[0].DestURL
 }
 
 type HytaleFeeds struct {
-	LauncherRelease *HytaleRelease
-	Articles        *ArticleFeed
-	config          config.Config
-	db              db.DB
-	http            http.Client
+	Feeds  map[string]Feed
+	config config.Config
+	db     db.DB
+	http   http.Client
 }
 
 func NewHytaleFeeds(config config.Config, db db.DB, http http.Client) (*HytaleFeeds, error) {
@@ -76,40 +115,120 @@ func NewHytaleFeeds(config config.Config, db db.DB, http http.Client) (*HytaleFe
 		config: config,
 		db:     db,
 		http:   http,
+		Feeds:  make(map[string]Feed),
 	}
 
-	// Initialize release
-	release, err := getStoredLauncherRelease(db)
+	// Initialize feeds
+	err := feeds.initializeFeeds()
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize articles
-	articles, err := getStoredArticles(db)
-	if err != nil {
-		return nil, err
-	}
-
-	if release == nil || articles == nil {
-		// If db is missing values, Poll() will update our in-memory copy
-		log.Println("A feed has not been stored yet, fetching...")
+	if len(feeds.Feeds) == 0 {
+		log.Println("Feeds have not been stored yet, fetching...")
 		err = feeds.Poll()
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		feeds.LauncherRelease = release
-		feeds.Articles = articles
 	}
 
-	if feeds.LauncherRelease == nil || feeds.Articles == nil {
+	if len(feeds.Feeds) == 0 {
 		return nil, errors.New("feed state was not initialized")
 	}
 	return feeds, nil
 }
 
+func (feeds *HytaleFeeds) initializeFeeds() error {
+	// Initialize launcher release feed
+	release, err := getStoredLauncherRelease(feeds.db)
+	if err != nil {
+		return err
+	}
+	if release != nil {
+		feeds.Feeds[LauncherReleaseFeedID] = &LauncherReleaseFeed{Release: release}
+	}
+
+	// Initialize articles feed
+	articles, err := getStoredArticles(feeds.db)
+	if err != nil {
+		return err
+	}
+	if articles != nil {
+		feeds.Feeds[LauncherPostFeedID] = &LauncherPostFeed{Articles: articles}
+	}
+
+	return nil
+}
+
+func (feeds *HytaleFeeds) Poll() error {
+	// Handle launcher release
+	release, err := feeds.fetchLauncherRelease()
+	if err != nil {
+		return err
+	}
+	releaseStr, _ := json.Marshal(release)
+	err = feeds.db.SetLatestPost(LauncherReleaseFeedID, string(releaseStr))
+	if err != nil {
+		return err
+	}
+
+	// Update or add launcher release feed
+	feeds.updateOrAddFeed(&LauncherReleaseFeed{Release: release})
+
+	// Handle articles
+	articles, err := feeds.fetchArticles()
+	if err != nil {
+		return err
+	}
+	articlesStr, _ := json.Marshal(articles)
+	err = feeds.db.SetLatestPost(LauncherPostFeedID, string(articlesStr))
+	if err != nil {
+		return err
+	}
+
+	// Update or add articles feed
+	feeds.updateOrAddFeed(&LauncherPostFeed{Articles: articles})
+
+	return nil
+}
+
+func (feeds *HytaleFeeds) updateOrAddFeed(newFeed Feed) {
+	feeds.Feeds[newFeed.GetID()] = newFeed
+}
+
+func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
+	for feedID, feed := range feeds.Feeds {
+		subs, err := feeds.db.GetSubscriptions(feedID)
+		if err != nil {
+			return err
+		}
+
+		for channelId, lastKnownVersion := range subs {
+			if lastKnownVersion != feed.GetVersion() {
+				_, err = s.Channel(channelId)
+				if err != nil {
+					log.Printf("Error accessing channel, removing: %v", err)
+					feeds.removeAllSubscriptions(channelId)
+				} else {
+					message := feed.BuildMessage()
+					if message == "" {
+						continue
+					}
+					_, err = s.ChannelMessageSend(channelId, message)
+					if err != nil {
+						log.Printf("Cannot send feed update: %v", err)
+						continue
+					}
+					feeds.db.AddOrUpdateSubscription(feedID, channelId, feed.GetVersion())
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func getStoredLauncherRelease(db db.DB) (*HytaleRelease, error) {
-	raw, err := db.GetLatestPost(LauncherReleaseFeed)
+	raw, err := db.GetLatestPost(LauncherReleaseFeedID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +242,7 @@ func getStoredLauncherRelease(db db.DB) (*HytaleRelease, error) {
 }
 
 func getStoredArticles(db db.DB) (*ArticleFeed, error) {
-	raw, err := db.GetLatestPost(LauncherPostFeed)
+	raw, err := db.GetLatestPost(LauncherPostFeedID)
 	if err != nil {
 		return nil, err
 	}
@@ -134,47 +253,6 @@ func getStoredArticles(db db.DB) (*ArticleFeed, error) {
 	var articles ArticleFeed
 	err = json.Unmarshal(raw, &articles)
 	return &articles, err
-}
-
-func (feeds *HytaleFeeds) Poll() error {
-	// Handle launcher release
-	release, err := feeds.fetchLauncherRelease()
-	if err != nil {
-		return err
-	}
-	releaseStr, _ := json.Marshal(release)
-	err = feeds.db.SetLatestPost(LauncherReleaseFeed, string(releaseStr))
-	if err != nil {
-		return err
-	}
-
-	if feeds.LauncherRelease == nil || feeds.LauncherRelease.Version != release.Version {
-		feeds.LauncherRelease = release
-	}
-
-	// Handle articles
-	articles, err := feeds.fetchArticles()
-	if err != nil {
-		return err
-	}
-	articlesStr, _ := json.Marshal(articles)
-	err = feeds.db.SetLatestPost(LauncherPostFeed, string(articlesStr))
-	if err != nil {
-		return err
-	}
-
-	if feeds.Articles == nil || latestArticleUrl(*feeds.Articles) != latestArticleUrl(*articles) {
-		feeds.Articles = articles
-	}
-
-	return nil
-}
-
-func latestArticleUrl(a ArticleFeed) string {
-	if len(a.Articles) <= 0 {
-		return ""
-	}
-	return a.Articles[0].DestURL
 }
 
 func (feeds HytaleFeeds) fetchLauncherRelease() (*HytaleRelease, error) {
@@ -209,47 +287,8 @@ func (feeds HytaleFeeds) fetchArticles() (*ArticleFeed, error) {
 	return &articles, err
 }
 
-func (feeds HytaleFeeds) NotifyLauncherReleaseFeeds(s *discordgo.Session) error {
-	subs, err := feeds.db.GetSubscriptions(LauncherReleaseFeed)
-	if err != nil {
-		return err
+func (feeds HytaleFeeds) removeAllSubscriptions(channelId string) {
+	for feedID, _ := range feeds.Feeds {
+		feeds.db.RemoveSubscription(feedID, channelId)
 	}
-	for channelId, lastKnownVersion := range subs {
-		if lastKnownVersion != feeds.LauncherRelease.Version {
-			_, err = s.Channel(channelId)
-			if err != nil {
-				log.Printf("Error accessing channel, removing: %v", err)
-				feeds.db.RemoveSubscription(LauncherReleaseFeed, channelId)
-			} else {
-				_, err = s.ChannelMessageSend(channelId, "new version: "+feeds.LauncherRelease.Version)
-				if err != nil {
-					log.Printf("Cannot send feed update: %v", err)
-				}
-			}
-		}
-	}
-
-	subs, err = feeds.db.GetSubscriptions(LauncherPostFeed)
-	if err != nil {
-		return err
-	}
-	for channelId, lastKnownVersion := range subs {
-		if lastKnownVersion != latestArticleUrl(*feeds.Articles) {
-			_, err = s.Channel(channelId)
-			if err != nil {
-				log.Printf("Error accessing channel, removing: %v", err)
-				feeds.db.RemoveSubscription(LauncherReleaseFeed, channelId)
-			} else {
-				if len(feeds.Articles.Articles) <= 0 {
-					continue
-				}
-				_, err = s.ChannelMessageSend(channelId, "new post: "+feeds.Articles.Articles[0].Title)
-				if err != nil {
-					log.Printf("Cannot send feed update: %v", err)
-				}
-			}
-		}
-	}
-
-	return nil
 }

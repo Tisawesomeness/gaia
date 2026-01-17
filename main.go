@@ -100,7 +100,7 @@ func poll(s *discordgo.Session, feeds hytale.HytaleFeeds) {
 		log.Printf("Error while polling launcher release: %v", err)
 		return
 	}
-	err = feeds.NotifyLauncherReleaseFeeds(s)
+	err = feeds.NotifyFeeds(s)
 	if err != nil {
 		log.Printf("Error while notifying channels: %v", err)
 	}
