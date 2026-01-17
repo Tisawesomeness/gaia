@@ -5,8 +5,8 @@
     "port": 6379,
     "password": ""
   },
-  "api": {
-    "endpoint": "https://launcher.hytale.com/version/release/launcher.json",
-    "interval": 60
+  "feeds": {
+    "interval": 60,
+    "launcher_release": "https://launcher.hytale.com/version/release/launcher.json"
   }
 }

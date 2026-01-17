@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"encoding/json"
@@ -12,10 +12,10 @@ type Config struct {
 		Port     int    `json:"port"`
 		Password string `json:"password"`
 	} `json:"valkey"`
-	API struct {
-		Endpoint string `json:"endpoint"`
-		Interval int    `json:"interval"` // Interval in seconds
-	} `json:"api"`
+	Feeds struct {
+		Interval        int    `json:"interval"` // Interval in seconds
+		LauncherRelease string `json:"launcher_release"`
+	} `json:"feeds"`
 }
 
 func LoadConfig() (Config, error) {

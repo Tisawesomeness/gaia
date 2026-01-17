@@ -1,30 +1,13 @@
-package main
+package cmd
 
 import (
-	"context"
 	"log"
 	"sort"
 	"strings"
 
+	"github.com/Tisawesomeness/gaia/hytale"
 	"github.com/bwmarrin/discordgo"
-	"github.com/valkey-io/valkey-go"
 )
-
-const (
-	launcherRelease = "launcher_release"
-	launcherFeed    = "launcher_feed"
-)
-
-func friendlyFeedName(feedId string) string {
-	switch feedId {
-	case launcherRelease:
-		return "New Versions"
-	case launcherFeed:
-		return "Launcher Posts"
-	default:
-		return feedId
-	}
-}
 
 var (
 	SubscribeCommand = &discordgo.ApplicationCommand{
@@ -38,12 +21,12 @@ var (
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{
-						Name:  friendlyFeedName(launcherRelease),
-						Value: launcherRelease,
+						Name:  hytale.FriendlyFeedName(hytale.LauncherReleaseFeed),
+						Value: hytale.LauncherReleaseFeed,
 					},
 					{
-						Name:  friendlyFeedName(launcherFeed),
-						Value: launcherFeed,
+						Name:  hytale.FriendlyFeedName(hytale.LauncherPostFeed),
+						Value: hytale.LauncherPostFeed,
 					},
 				},
 			},
@@ -85,7 +68,7 @@ func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx 
 	subType := optionMap["type"].StringValue()
 	channel := optionMap["channel"].ChannelValue(s)
 
-	err := addSubscription(ctx.valkeyClient, subType, channel.ID, ctx.hytale.LauncherRelease.Version)
+	err := ctx.DB.AddOrUpdateSubscription(subType, channel.ID, ctx.HytaleFeeds.LauncherRelease.Version)
 	var response discordgo.InteractionResponseData
 	if err != nil {
 		log.Printf("Error saving subscription to Valkey: %v", err)
@@ -95,7 +78,7 @@ func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx 
 		}
 	} else {
 		response = discordgo.InteractionResponseData{
-			Content: "Subscribed to " + friendlyFeedName(subType) + " channel: " + channel.Mention(),
+			Content: "Subscribed to " + hytale.FriendlyFeedName(subType) + " channel: " + channel.Mention(),
 		}
 	}
 
@@ -141,11 +124,9 @@ func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 		channelMap[channel.ID] = channel
 	}
 
-	feedTypes := []string{launcherRelease, launcherFeed}
 	channelSubscriptions := make(map[string][]string)
-
-	for _, feedType := range feedTypes {
-		members, err := getSubscriptions(ctx.valkeyClient, feedType)
+	for _, feedType := range hytale.Feeds {
+		members, err := ctx.DB.GetSubscriptions(feedType)
 		if err != nil {
 			log.Printf("Error fetching subscriptions for %s: %v", feedType, err)
 			continue
@@ -177,7 +158,7 @@ func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 			if channel, exists := channelMap[channelID]; exists {
 				subscriptionNames := make([]string, len(subscriptions))
 				for i, sub := range subscriptions {
-					subscriptionNames[i] = friendlyFeedName(sub)
+					subscriptionNames[i] = hytale.FriendlyFeedName(sub)
 				}
 				description = append(description, "- "+channel.Mention()+" - **"+strings.Join(subscriptionNames, ", ")+"**")
 			}
@@ -218,13 +199,11 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 		channelID = channel.ID
 	}
 
-	feedTypes := []string{launcherRelease, launcherFeed}
 	var response discordgo.InteractionResponseData
-
 	if channelID != "" {
 		// Unsubscribe specific channel from all feeds
-		for _, feedType := range feedTypes {
-			if err := removeSubscription(ctx.valkeyClient, feedType, channelID); err != nil {
+		for _, feedType := range hytale.Feeds {
+			if err := ctx.DB.RemoveSubscription(feedType, channelID); err != nil {
 				log.Printf("Error removing subscription for %s: %v", feedType, err)
 			}
 		}
@@ -248,8 +227,8 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 		}
 
 		for _, channel := range channels {
-			for _, feedType := range feedTypes {
-				if err := removeSubscription(ctx.valkeyClient, feedType, channel.ID); err != nil {
+			for _, feedType := range hytale.Feeds {
+				if err := ctx.DB.RemoveSubscription(feedType, channel.ID); err != nil {
 					log.Printf("Error removing subscription for %s in channel %s: %v", feedType, channel.ID, err)
 				}
 			}
@@ -264,42 +243,4 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &response,
 	})
-}
-
-func notifyLauncherReleaseFeeds(s *discordgo.Session, client *valkey.Client, api *HytaleAPI) error {
-	subs, err := getSubscriptions(client, launcherRelease)
-	if err != nil {
-		return err
-	}
-	for channelId, lastKnownVersion := range subs {
-		if lastKnownVersion != api.LauncherRelease.Version {
-			_, err = s.Channel(channelId)
-			if err != nil {
-				log.Printf("Error accessing channel, removing: %v", err)
-				removeSubscription(client, launcherRelease, channelId)
-			} else {
-				_, err = s.ChannelMessageSend(channelId, "new version: "+api.LauncherRelease.Version)
-				if err != nil {
-					log.Printf("Cannot send feed update: %v", err)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func addSubscription(client *valkey.Client, subType string, channelId string, currentVersion string) error {
-	command := (*client).B().Hset().Key(subType+":subs").FieldValue().FieldValue(channelId, currentVersion).Build()
-	return (*client).Do(context.Background(), command).Error()
-}
-
-// Returns a mapping of channel ID to last notified version
-func getSubscriptions(client *valkey.Client, subType string) (map[string]string, error) {
-	command := (*client).B().Hgetall().Key(subType + ":subs").Build()
-	return (*client).Do(context.Background(), command).AsStrMap()
-}
-
-func removeSubscription(client *valkey.Client, subType string, channelId string) error {
-	command := (*client).B().Hdel().Key(subType + ":subs").Field(channelId).Build()
-	return (*client).Do(context.Background(), command).Error()
 }
