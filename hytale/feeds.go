@@ -40,6 +40,16 @@ type Article struct {
 	ImageURL    string `json:"image_url"`
 }
 
+func (a *Article) BuildMessage(s *discordgo.Session, config config.Config) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       a.Title,
+		URL:         a.DestURL,
+		Description: a.Description,
+		Image:       &discordgo.MessageEmbedImage{URL: config.Feeds.ArticleImagePrefix + a.ImageURL},
+		Color:       0x00FF00,
+	}
+}
+
 type ArticleFeed struct {
 	Articles []*Article `json:"articles"`
 }
@@ -55,7 +65,7 @@ const (
 type Feed interface {
 	GetID() string
 	GetDisplayName() string
-	BuildMessage(s *discordgo.Session) *discordgo.MessageEmbed
+	BuildMessage(s *discordgo.Session, config config.Config) *discordgo.MessageEmbed
 	GetVersion() string
 }
 
@@ -71,7 +81,7 @@ func (f *LauncherReleaseFeed) GetDisplayName() string {
 	return LauncherReleaseFeedDisplay
 }
 
-func (f *LauncherReleaseFeed) BuildMessage(s *discordgo.Session) *discordgo.MessageEmbed {
+func (f *LauncherReleaseFeed) BuildMessage(s *discordgo.Session, config config.Config) *discordgo.MessageEmbed {
 	// Prepare the embed with version and download links
 	embed := &discordgo.MessageEmbed{
 		Title:       "Latest Hytale Version",
@@ -124,7 +134,7 @@ func (f *LauncherPostFeed) GetDisplayName() string {
 	return LauncherPostFeedDisplay
 }
 
-func (f *LauncherPostFeed) BuildMessage(s *discordgo.Session) *discordgo.MessageEmbed {
+func (f *LauncherPostFeed) BuildMessage(s *discordgo.Session, config config.Config) *discordgo.MessageEmbed {
 	if len(f.Articles.Articles) <= 0 {
 		return &discordgo.MessageEmbed{
 			Title:       "Hytale Articles",
@@ -132,11 +142,8 @@ func (f *LauncherPostFeed) BuildMessage(s *discordgo.Session) *discordgo.Message
 			Color:       0xFF0000,
 		}
 	}
-	return &discordgo.MessageEmbed{
-		Title:       "Hytale Articles",
-		Description: "TODO",
-		Color:       0x00FF00,
-	}
+	latestArticle := f.Articles.Articles[0]
+	return latestArticle.BuildMessage(s, config)
 }
 
 func (f *LauncherPostFeed) GetVersion() string {
@@ -253,7 +260,7 @@ func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
 					log.Printf("Error accessing channel, removing: %v", err)
 					feeds.removeAllSubscriptions(channelId)
 				} else {
-					message := feed.BuildMessage(s)
+					message := feed.BuildMessage(s, feeds.config)
 					_, err = s.ChannelMessageSendEmbed(channelId, message)
 					if err != nil {
 						log.Printf("Cannot send feed update: %v", err)

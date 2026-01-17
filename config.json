@@ -8,9 +8,10 @@
   },
   "feeds": {
     "poll_on_startup": false,
-    "interval": 60,
+    "interval": 500,
     "launcher_release": "https://launcher.hytale.com/version/release/launcher.json",
-    "launcher_articles": "https://launcher.hytale.com/launcher-feed/release/feed.json"
+    "launcher_articles": "https://launcher.hytale.com/launcher-feed/release/feed.json",
+    "article_image_prefix": "https://launcher.hytale.com/launcher-feed/release/"
   },
   "http": {
     "timeout": 10,
