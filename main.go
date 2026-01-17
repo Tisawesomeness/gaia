@@ -84,7 +84,9 @@ func pollFeeds(s *discordgo.Session, config config.Config, feeds hytale.HytaleFe
 	ticker := time.NewTicker(time.Duration(config.Feeds.Interval) * time.Second)
 	defer ticker.Stop()
 
-	poll(s, feeds)
+	if config.Feeds.PollOnStartup {
+		poll(s, feeds)
+	}
 	for {
 		select {
 		case <-ticker.C:

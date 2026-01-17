@@ -7,6 +7,7 @@
     "password": ""
   },
   "feeds": {
+    "poll_on_startup": false,
     "interval": 60,
     "launcher_release": "https://launcher.hytale.com/version/release/launcher.json",
     "launcher_articles": "https://launcher.hytale.com/launcher-feed/release/feed.json"

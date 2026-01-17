@@ -14,6 +14,7 @@ type Config struct {
 		Password string `json:"password"`
 	} `json:"valkey"`
 	Feeds struct {
+		PollOnStartup    bool   `json:"poll_on_startup"`
 		Interval         int    `json:"interval"` // in seconds
 		LauncherRelease  string `json:"launcher_release"`
 		LauncherArticles string `json:"launcher_articles"`
