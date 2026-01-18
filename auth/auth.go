@@ -59,7 +59,7 @@ type GameSessionResponse struct {
 	ExpiresAt     string `json:"expiresAt"`
 }
 
-func OAuthFlow(config config.Config, httpClient *http.Client) (TokenResponse, error) {
+func OAuthDeviceFlow(config config.Config, httpClient *http.Client) (TokenResponse, error) {
 	deviceAuthResponse, err := startDeviceAuth(config, httpClient)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to start device auth: %v", err)
@@ -141,14 +141,43 @@ func pollForToken(config config.Config, httpClient *http.Client, deviceAuthRespo
 	}
 }
 
-func GetAccountProfiles(accessToken string, config config.Config, httpClient *http.Client) (LauncherDataResponse, error) {
+func OAuthRefresh(oauthRefreshToken string, config config.Config, httpClient *http.Client) (TokenResponse, error) {
+	params := url.Values{}
+	params.Add("client_id", config.Auth.ClientID)
+	params.Add("refresh_token", oauthRefreshToken)
+	params.Add("grant_type", "refresh_token")
+
+	resp, err := httpClient.PostForm(config.Auth.Token, params)
+	if err != nil {
+		return TokenResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return TokenResponse{}, err
+	}
+
+	var tokenResponse TokenResponse
+	err = json.Unmarshal(body, &tokenResponse)
+	if err != nil {
+		return TokenResponse{}, err
+	}
+
+	if !tokenResponse.isSuccess() {
+		return TokenResponse{}, fmt.Errorf("failed to refresh token: %s", tokenResponse.Error)
+	}
+
+	return tokenResponse, nil
+}
+
+func GetAccountProfiles(oauthAccessToken string, config config.Config, httpClient *http.Client) (LauncherDataResponse, error) {
 	req, err := http.NewRequest("GET", config.Auth.Profiles, nil)
 	if err != nil {
 		return LauncherDataResponse{}, err
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", oauthAccessToken))
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return LauncherDataResponse{}, err
@@ -169,7 +198,7 @@ func GetAccountProfiles(accessToken string, config config.Config, httpClient *ht
 	return launcherDataResponse, nil
 }
 
-func CreateGameSession(accessToken string, uuid string, config config.Config, httpClient *http.Client) (GameSessionResponse, error) {
+func CreateGameSession(oauthAccessToken string, uuid string, config config.Config, httpClient *http.Client) (GameSessionResponse, error) {
 	requestBody, err := json.Marshal(GameSessionRequest{UUID: uuid})
 	if err != nil {
 		return GameSessionResponse{}, err
@@ -180,7 +209,7 @@ func CreateGameSession(accessToken string, uuid string, config config.Config, ht
 		return GameSessionResponse{}, err
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", oauthAccessToken))
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)
@@ -203,13 +232,13 @@ func CreateGameSession(accessToken string, uuid string, config config.Config, ht
 	return gameSessionResponse, nil
 }
 
-func RefreshGameSession(sessionToken string, uuid string, config config.Config, httpClient *http.Client) (GameSessionResponse, error) {
+func RefreshGameSession(gameSessionToken string, uuid string, config config.Config, httpClient *http.Client) (GameSessionResponse, error) {
 	req, err := http.NewRequest("POST", config.Auth.RefreshGameSession, nil)
 	if err != nil {
 		return GameSessionResponse{}, err
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", sessionToken))
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", gameSessionToken))
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)

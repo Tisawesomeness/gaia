@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/hytale"
@@ -15,6 +16,7 @@ type CommandContext struct {
 	Config      config.Config
 	DB          db.DB
 	HTTP        http.Client
+	AuthStore   auth.AuthStore
 	HytaleFeeds hytale.HytaleFeeds
 }
 

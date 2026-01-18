@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/valkey-io/valkey-go"
@@ -66,5 +67,101 @@ func (db DB) GetLatestPost(subType string) ([]byte, error) {
 
 func (db DB) SetLatestPost(subType string, content string) error {
 	command := db.v.B().Set().Key(subType + ":latest").Value(content).Build()
+	return db.v.Do(context.Background(), command).Error()
+}
+
+type OAuthToken struct {
+	AccessToken  string
+	RefreshToken string
+	ExpiresAt    time.Time
+}
+
+// May return nil!
+func (db DB) GetOAuthToken() (*OAuthToken, error) {
+	command := db.v.B().Hgetall().Key("oauth_token").Build()
+	result, err := db.v.Do(context.Background(), command).AsStrMap()
+	if err != nil {
+		return nil, err
+	}
+	if len(result) <= 0 {
+		return nil, nil
+	}
+
+	expiresAt, err := strconv.ParseInt(result["expires_at"], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &OAuthToken{
+		AccessToken:  result["access_token"],
+		RefreshToken: result["refresh_token"],
+		ExpiresAt:    time.Unix(expiresAt, 0),
+	}, nil
+}
+
+func (db DB) SetOAuthToken(oAuthToken OAuthToken) error {
+	command := db.v.B().Hset().Key("oauth_token").FieldValue().
+		FieldValue("access_token", oAuthToken.AccessToken).
+		FieldValue("refresh_token", oAuthToken.RefreshToken).
+		FieldValue("expires_at", strconv.FormatInt(oAuthToken.ExpiresAt.Unix(), 10)).
+		Build()
+	return db.v.Do(context.Background(), command).Error()
+}
+
+// May return empty!
+func (db DB) GetProfileUUID() (string, error) {
+	command := db.v.B().Get().Key("profile_uuid").Build()
+	resp := db.v.Do(context.Background(), command)
+	err := resp.Error()
+	if err != nil {
+		if valkey.IsValkeyNil(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	raw, err := resp.AsBytes()
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+func (db DB) SetProfileUUID(uuid string) error {
+	command := db.v.B().Set().Key("profile_uuid").Value(uuid).Build()
+	return db.v.Do(context.Background(), command).Error()
+}
+
+type GameSessionToken struct {
+	SessionToken string
+	ExpiresAt    time.Time
+}
+
+// May return nil!
+func (db DB) GetGameSession() (*GameSessionToken, error) {
+	command := db.v.B().Hgetall().Key("game_session").Build()
+	result, err := db.v.Do(context.Background(), command).AsStrMap()
+	if err != nil {
+		return nil, err
+	}
+	if len(result) <= 0 {
+		return nil, nil
+	}
+
+	expiresAt, err := strconv.ParseInt(result["expires_at"], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GameSessionToken{
+		SessionToken: result["session_token"],
+		ExpiresAt:    time.Unix(expiresAt, 0),
+	}, nil
+}
+
+func (db DB) SetGameSession(sessionToken GameSessionToken) error {
+	command := db.v.B().Hset().Key("game_session").FieldValue().
+		FieldValue("session_token", sessionToken.SessionToken).
+		FieldValue("expires_at", strconv.FormatInt(sessionToken.ExpiresAt.Unix(), 10)).
+		Build()
 	return db.v.Do(context.Background(), command).Error()
 }

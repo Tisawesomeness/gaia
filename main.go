@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -31,11 +30,10 @@ func main() {
 
 	httpClient := initHTTP(config)
 
-	gameSession, err := initAuth(config, httpClient)
+	authStore, err := auth.NewAuthStore(config, *database, httpClient)
 	if err != nil {
-		log.Fatalf("Auth error: %v", err)
+		log.Fatalf("Could not create auth store: %v", err)
 	}
-	log.Println("Created game session, expires at: " + gameSession.ExpiresAt)
 
 	feeds, err := hytale.NewHytaleFeeds(config, *database, *httpClient)
 	if err != nil {
@@ -52,6 +50,7 @@ func main() {
 		Config:      config,
 		DB:          *database,
 		HTTP:        *httpClient,
+		AuthStore:   *authStore,
 		HytaleFeeds: *feeds,
 	}
 	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -86,31 +85,6 @@ func initHTTP(config config.Config) *http.Client {
 		Transport: tr,
 		Timeout:   time.Duration(config.HTTP.Timeout) * time.Second,
 	}
-}
-
-func initAuth(config config.Config, httpClient *http.Client) (*auth.GameSessionResponse, error) {
-	tokenResponse, err := auth.OAuthFlow(config, httpClient)
-	if err != nil {
-		return nil, err
-	}
-	profiles, err := auth.GetAccountProfiles(tokenResponse.AccessToken, config, httpClient)
-	if err != nil {
-		return nil, err
-	}
-	if len(profiles.Profiles) <= 0 {
-		return nil, errors.New("No profiles found!")
-	}
-	log.Println("Found profiles:")
-	for _, profile := range profiles.Profiles {
-		log.Printf("%s - %s", profile.UUID, profile.Username)
-	}
-	uuid := profiles.Profiles[0].UUID
-	log.Println("Using profile " + uuid)
-	session, err := auth.CreateGameSession(tokenResponse.AccessToken, uuid, config, httpClient)
-	if err != nil {
-		return nil, err
-	}
-	return &session, err
 }
 
 func pollFeeds(s *discordgo.Session, config config.Config, feeds hytale.HytaleFeeds) {
