@@ -15,13 +15,15 @@ type Config struct {
 		Password string `json:"password"`
 	} `json:"valkey"`
 	Auth struct {
-		ClientID           string `json:"client_id"`
-		Scope              string `json:"scope"`
-		DeviceAuth         string `json:"device_auth"`
-		Token              string `json:"token"`
-		Profiles           string `json:"profiles"`
-		CreateGameSession  string `json:"create_game_session"`
-		RefreshGameSession string `json:"refresh_game_session"`
+		OAuthRefreshBuffer       int    `json:"oauth_refresh_buffer"`        // in seconds
+		GameSessionRefreshBuffer int    `json:"game_session_refresh_buffer"` // in seconds
+		ClientID                 string `json:"client_id"`
+		Scope                    string `json:"scope"`
+		DeviceAuth               string `json:"device_auth"`
+		Token                    string `json:"token"`
+		Profiles                 string `json:"profiles"`
+		CreateGameSession        string `json:"create_game_session"`
+		RefreshGameSession       string `json:"refresh_game_session"`
 	} `json:"auth"`
 	Feeds struct {
 		PollOnStartup      bool   `json:"poll_on_startup"`

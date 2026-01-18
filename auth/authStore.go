@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
@@ -11,12 +12,15 @@ import (
 )
 
 type AuthStore struct {
-	config      config.Config
-	db          db.DB
-	httpClient  *http.Client
-	oauthToken  db.OAuthToken
-	profileUUID string
-	gameSession db.GameSessionToken
+	config                  config.Config
+	db                      db.DB
+	httpClient              *http.Client
+	oauthToken              db.OAuthToken
+	profileUUID             string
+	gameSession             db.GameSessionToken
+	refreshMutex            *sync.Mutex
+	oauthRefreshTimer       *time.Timer
+	gameSessionRefreshTimer *time.Timer
 }
 
 // Authenticates to Hytale OAuth and creates a game session.
@@ -24,9 +28,10 @@ type AuthStore struct {
 // Otherwise, asks the user to complete the OAuth flow.
 func NewAuthStore(config config.Config, db db.DB, httpClient *http.Client) (*AuthStore, error) {
 	store := &AuthStore{
-		config:     config,
-		db:         db,
-		httpClient: httpClient,
+		config:       config,
+		db:           db,
+		httpClient:   httpClient,
+		refreshMutex: &sync.Mutex{},
 	}
 
 	err := store.initialize()
@@ -55,6 +60,9 @@ func (a *AuthStore) initialize() error {
 		return err
 	}
 	a.gameSession = gameSession
+
+	a.scheduleOAuthRefresh()
+	a.scheduleGameSessionRefresh()
 	return nil
 }
 
@@ -159,6 +167,10 @@ func (a AuthStore) fetchProfileUUIDAndStore(oAuthToken db.OAuthToken) (string, e
 }
 
 func (a AuthStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUUID string) (db.GameSessionToken, error) {
+	if time.Now().After(oAuthToken.ExpiresAt) {
+		return db.GameSessionToken{}, errors.New("Tried to create game session from expired OAuth token")
+	}
+
 	log.Println("Creating game session...")
 	sessionResponse, err := CreateGameSession(oAuthToken.AccessToken, profileUUID, a.config, a.httpClient)
 	if err != nil {
@@ -182,8 +194,8 @@ func (a AuthStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUU
 }
 
 // Refreshes the token if expired, otherwise returns the original token
-func (a *AuthStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
-	if time.Now().After(oAuthToken.ExpiresAt) {
+func (a AuthStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
+	if time.Now().Add(time.Duration(a.config.Auth.OAuthRefreshBuffer) * time.Second).After(oAuthToken.ExpiresAt) {
 		log.Println("Refreshing OAuth token...")
 		tokenResponse, err := OAuthRefresh(oAuthToken.RefreshToken, a.config, a.httpClient)
 		if err != nil {
@@ -199,8 +211,6 @@ func (a *AuthStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToke
 		if err != nil {
 			return db.OAuthToken{}, err
 		}
-
-		a.oauthToken = token
 		return token, nil
 	}
 
@@ -208,8 +218,8 @@ func (a *AuthStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToke
 }
 
 // Refreshes the token if expired, otherwise returns the original token
-func (a *AuthStore) ensureGameSessionRefreshed(oAuthToken db.OAuthToken, profileUUID string, gameSession db.GameSessionToken) (db.GameSessionToken, error) {
-	if time.Now().After(gameSession.ExpiresAt) {
+func (a AuthStore) ensureGameSessionRefreshed(oAuthToken db.OAuthToken, profileUUID string, gameSession db.GameSessionToken) (db.GameSessionToken, error) {
+	if time.Now().Add(time.Duration(a.config.Auth.GameSessionRefreshBuffer) * time.Second).After(gameSession.ExpiresAt) {
 		log.Println("Refreshing game session token...")
 		tokenResponse, err := a.ensureOAuthRefreshed(oAuthToken)
 		if err != nil {
@@ -220,20 +230,70 @@ func (a *AuthStore) ensureGameSessionRefreshed(oAuthToken db.OAuthToken, profile
 		if err != nil {
 			return db.GameSessionToken{}, err
 		}
-
-		a.gameSession = newSession
 		return newSession, nil
 	}
 
 	return gameSession, nil
 }
 
+func (a *AuthStore) scheduleOAuthRefresh() {
+	a.refreshMutex.Lock()
+	expiresAt := a.oauthToken.ExpiresAt
+	a.refreshMutex.Unlock()
+
+	timeUntilRefresh := max(time.Until(expiresAt)-time.Duration(a.config.Auth.OAuthRefreshBuffer)*time.Second, 0)
+
+	a.oauthRefreshTimer = time.AfterFunc(timeUntilRefresh, func() {
+		refreshedOAuthToken, err := a.ensureOAuthRefreshed(a.oauthToken)
+		if err != nil {
+			log.Printf("Error refreshing OAuth token: %v", err)
+			return
+		}
+
+		a.refreshMutex.Lock()
+		a.oauthToken = refreshedOAuthToken
+		a.refreshMutex.Unlock()
+
+		a.scheduleOAuthRefresh()
+	})
+}
+
+func (a *AuthStore) scheduleGameSessionRefresh() {
+	a.refreshMutex.Lock()
+	expiresAt := a.gameSession.ExpiresAt
+	a.refreshMutex.Unlock()
+
+	timeUntilRefresh := max(time.Until(expiresAt)-time.Duration(a.config.Auth.GameSessionRefreshBuffer)*time.Second, 0)
+
+	a.gameSessionRefreshTimer = time.AfterFunc(timeUntilRefresh, func() {
+		a.refreshMutex.Lock()
+		oauthToken := a.oauthToken
+		profileUUID := a.profileUUID
+		a.refreshMutex.Unlock()
+
+		newSession, err := a.createGameSessionAndStore(oauthToken, profileUUID)
+		if err != nil {
+			log.Printf("Error refreshing game session token: %v", err)
+			return
+		}
+
+		a.refreshMutex.Lock()
+		a.gameSession = newSession
+		a.refreshMutex.Unlock()
+
+		a.scheduleGameSessionRefresh()
+	})
+}
+
 // Retrieves the current game session token.
-// If expired, will block and request a new one.
+// Returns an error if the token is expired, as the background task should keep it up-to-date.
 func (a *AuthStore) GetGameSessionToken() (string, error) {
-	session, err := a.ensureGameSessionRefreshed(a.oauthToken, a.profileUUID, a.gameSession)
-	if err != nil {
-		return "", err
+	a.refreshMutex.Lock()
+	defer a.refreshMutex.Unlock()
+
+	if time.Now().After(a.gameSession.ExpiresAt) {
+		return "", errors.New("Game session token is expired")
 	}
-	return session.SessionToken, nil
+
+	return a.gameSession.SessionToken, nil
 }

@@ -7,6 +7,8 @@
     "password": ""
   },
   "auth": {
+    "oauth_refresh_buffer": 300,
+    "game_session_refresh_buffer": 300,
     "client_id": "hytale-server",
     "scope": "openid offline auth:server",
     "device_auth": "https://oauth.accounts.hytale.com/oauth2/device/auth",
