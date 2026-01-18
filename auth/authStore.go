@@ -19,7 +19,6 @@ type AuthStore struct {
 	profileUUID             string
 	gameSession             db.GameSessionToken
 	refreshMutex            *sync.Mutex
-	oauthRefreshTimer       *time.Timer
 	gameSessionRefreshTimer *time.Timer
 }
 
@@ -43,48 +42,91 @@ func NewAuthStore(config config.Config, db db.DB, httpClient *http.Client) (*Aut
 }
 
 func (a *AuthStore) initialize() error {
-	oAuthToken, err := a.initializeOAuth()
-	if err != nil {
-		return err
-	}
-	a.oauthToken = oAuthToken
+	// Read OAuth token from db
+	// If not present, do OAuth device flow
+	// If expired, we can refresh later
+	storedOAuthToken, err := a.db.GetOAuthToken()
+	if err != nil || storedOAuthToken == nil {
+		if err != nil {
+			return err
+		}
 
-	profileUUID, err := a.initializeProfile(oAuthToken)
-	if err != nil {
-		return err
+		newToken, err := a.performOAuthAndStore()
+		if err != nil {
+			return err
+		}
+		a.oauthToken = newToken
+	} else {
+		log.Println("Found stored OAuth token")
+		a.oauthToken = *storedOAuthToken
 	}
-	a.profileUUID = profileUUID
 
-	gameSession, err := a.initializeGameSession(oAuthToken, profileUUID)
+	// Unlike OAuth token, game session must be fresh
+	gameSession, profileUUID, err := a.initializeFreshGameSession()
 	if err != nil {
-		return err
-	}
-	a.gameSession = gameSession
+		log.Printf("Failed to initialize game session: %v", err)
+		log.Println("Falling back to OAuth")
+		// OAuth token from db might not be fresh, so refresh if needed
+		oAuthToken, err := a.ensureOAuthRefreshed(a.oauthToken)
+		if err != nil {
+			return err
+		}
+		a.oauthToken = oAuthToken
 
-	a.scheduleOAuthRefresh()
+		profileUUID, err = a.initializeProfile(oAuthToken)
+		if err != nil {
+			return err
+		}
+		a.profileUUID = profileUUID
+
+		gameSession, err = a.createGameSessionAndStore(oAuthToken, profileUUID)
+		if err != nil {
+			return err
+		}
+		a.gameSession = gameSession
+	} else {
+		a.gameSession = gameSession
+		a.profileUUID = profileUUID
+	}
+
 	a.scheduleGameSessionRefresh()
 	return nil
 }
 
-func (a *AuthStore) initializeOAuth() (db.OAuthToken, error) {
-	storedOAuthToken, err := a.db.GetOAuthToken()
-	if err != nil || storedOAuthToken == nil {
+// Attempts to initialize the game session token directly from storage
+// Refreshes if near expiry
+func (a *AuthStore) initializeFreshGameSession() (db.GameSessionToken, string, error) {
+	storedGameSession, err := a.db.GetGameSession()
+	if err != nil || storedGameSession == nil {
 		if err != nil {
-			log.Printf("Error getting stored OAuth token: %v", err)
+			log.Printf("Error getting stored game session token: %v", err)
 		}
-		newToken, err := a.performOAuthAndStore()
-		if err != nil {
-			return db.OAuthToken{}, err
-		}
-		return newToken, nil
-	} else {
-		log.Println("Found stored OAuth token")
-		updatedToken, err := a.ensureOAuthRefreshed(*storedOAuthToken)
-		if err != nil {
-			return db.OAuthToken{}, err
-		}
-		return updatedToken, nil
+		return db.GameSessionToken{}, "", errors.New("No stored game session token found")
 	}
+
+	log.Println("Found stored game session token")
+	storedProfileUUID, err := a.db.GetProfileUUID()
+	if err != nil || storedProfileUUID == "" {
+		if err != nil {
+			log.Printf("Error getting stored profile UUID: %v", err)
+		}
+		return db.GameSessionToken{}, "", errors.New("No stored profile UUID found")
+	}
+
+	refreshedSession, err := a.ensureGameSessionRefreshed(*storedGameSession, storedProfileUUID)
+	if err != nil {
+		return db.GameSessionToken{}, "", err
+	}
+
+	return refreshedSession, storedProfileUUID, nil
+}
+
+// Attempts to refresh the game session token using the stored profile UUID
+func (a *AuthStore) ensureGameSessionRefreshed(gameSession db.GameSessionToken, profileUUID string) (db.GameSessionToken, error) {
+	if time.Now().Add(time.Duration(a.config.Auth.GameSessionRefreshBuffer) * time.Second).After(gameSession.ExpiresAt) {
+		return a.refreshGameSessionAndStore(gameSession, profileUUID)
+	}
+	return gameSession, nil
 }
 
 func (a *AuthStore) initializeProfile(oAuthToken db.OAuthToken) (string, error) {
@@ -104,27 +146,6 @@ func (a *AuthStore) initializeProfile(oAuthToken db.OAuthToken) (string, error) 
 	}
 }
 
-func (a *AuthStore) initializeGameSession(oAuthToken db.OAuthToken, profileUUID string) (db.GameSessionToken, error) {
-	storedGameSession, err := a.db.GetGameSession()
-	if err != nil || storedGameSession == nil {
-		if err != nil {
-			log.Printf("Error getting stored game session token: %v", err)
-		}
-		newGameSession, err := a.createGameSessionAndStore(oAuthToken, profileUUID)
-		if err != nil {
-			return db.GameSessionToken{}, err
-		}
-		return newGameSession, nil
-	} else {
-		log.Println("Found stored game session token")
-		newGameSession, err := a.ensureGameSessionRefreshed(oAuthToken, profileUUID, *storedGameSession)
-		if err != nil {
-			return db.GameSessionToken{}, err
-		}
-		return newGameSession, nil
-	}
-}
-
 func (a AuthStore) performOAuthAndStore() (db.OAuthToken, error) {
 	tokenResponse, err := OAuthDeviceFlow(a.config, a.httpClient)
 	if err != nil {
@@ -136,6 +157,7 @@ func (a AuthStore) performOAuthAndStore() (db.OAuthToken, error) {
 		RefreshToken: tokenResponse.RefreshToken,
 		ExpiresAt:    time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second),
 	}
+
 	err = a.db.SetOAuthToken(token)
 	if err != nil {
 		return db.OAuthToken{}, err
@@ -196,66 +218,56 @@ func (a AuthStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUU
 // Refreshes the token if expired, otherwise returns the original token
 func (a AuthStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
 	if time.Now().Add(time.Duration(a.config.Auth.OAuthRefreshBuffer) * time.Second).After(oAuthToken.ExpiresAt) {
-		log.Println("Refreshing OAuth token...")
-		tokenResponse, err := OAuthRefresh(oAuthToken.RefreshToken, a.config, a.httpClient)
-		if err != nil {
-			return db.OAuthToken{}, err
-		}
-
-		token := db.OAuthToken{
-			AccessToken:  tokenResponse.AccessToken,
-			RefreshToken: tokenResponse.RefreshToken,
-			ExpiresAt:    time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second),
-		}
-		err = a.db.SetOAuthToken(token)
-		if err != nil {
-			return db.OAuthToken{}, err
-		}
-		return token, nil
+		return a.refreshOAuthAndStore(oAuthToken)
 	}
-
 	return oAuthToken, nil
 }
 
 // Refreshes the token if expired, otherwise returns the original token
-func (a AuthStore) ensureGameSessionRefreshed(oAuthToken db.OAuthToken, profileUUID string, gameSession db.GameSessionToken) (db.GameSessionToken, error) {
-	if time.Now().Add(time.Duration(a.config.Auth.GameSessionRefreshBuffer) * time.Second).After(gameSession.ExpiresAt) {
-		log.Println("Refreshing game session token...")
-		tokenResponse, err := a.ensureOAuthRefreshed(oAuthToken)
-		if err != nil {
-			return db.GameSessionToken{}, err
-		}
-
-		newSession, err := a.createGameSessionAndStore(tokenResponse, profileUUID)
-		if err != nil {
-			return db.GameSessionToken{}, err
-		}
-		return newSession, nil
+func (a AuthStore) refreshOAuthAndStore(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
+	log.Println("Refreshing OAuth token...")
+	tokenResponse, err := OAuthRefresh(oAuthToken.RefreshToken, a.config, a.httpClient)
+	if err != nil {
+		return db.OAuthToken{}, err
 	}
 
-	return gameSession, nil
+	token := db.OAuthToken{
+		AccessToken:  tokenResponse.AccessToken,
+		RefreshToken: tokenResponse.RefreshToken,
+		ExpiresAt:    time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second),
+	}
+
+	err = a.db.SetOAuthToken(token)
+	if err != nil {
+		return db.OAuthToken{}, err
+	}
+
+	return token, nil
 }
 
-func (a *AuthStore) scheduleOAuthRefresh() {
-	a.refreshMutex.Lock()
-	expiresAt := a.oauthToken.ExpiresAt
-	a.refreshMutex.Unlock()
+// Refreshes the token if expired, otherwise returns the original token
+func (a AuthStore) refreshGameSessionAndStore(gameSession db.GameSessionToken, profileUUID string) (db.GameSessionToken, error) {
+	log.Println("Refreshing game session token...")
+	sessionResponse, err := RefreshGameSession(gameSession.SessionToken, profileUUID, a.config, a.httpClient)
+	if err != nil {
+		return db.GameSessionToken{}, err
+	}
 
-	timeUntilRefresh := max(time.Until(expiresAt)-time.Duration(a.config.Auth.OAuthRefreshBuffer)*time.Second, 0)
+	expiresAt, err := time.Parse(time.RFC3339Nano, sessionResponse.ExpiresAt)
+	if err != nil {
+		return db.GameSessionToken{}, err
+	}
+	session := db.GameSessionToken{
+		SessionToken: sessionResponse.SessionToken,
+		ExpiresAt:    expiresAt,
+	}
 
-	a.oauthRefreshTimer = time.AfterFunc(timeUntilRefresh, func() {
-		refreshedOAuthToken, err := a.ensureOAuthRefreshed(a.oauthToken)
-		if err != nil {
-			log.Printf("Error refreshing OAuth token: %v", err)
-			return
-		}
+	err = a.db.SetGameSession(session)
+	if err != nil {
+		return db.GameSessionToken{}, err
+	}
 
-		a.refreshMutex.Lock()
-		a.oauthToken = refreshedOAuthToken
-		a.refreshMutex.Unlock()
-
-		a.scheduleOAuthRefresh()
-	})
+	return session, nil
 }
 
 func (a *AuthStore) scheduleGameSessionRefresh() {
@@ -267,18 +279,37 @@ func (a *AuthStore) scheduleGameSessionRefresh() {
 
 	a.gameSessionRefreshTimer = time.AfterFunc(timeUntilRefresh, func() {
 		a.refreshMutex.Lock()
-		oauthToken := a.oauthToken
-		profileUUID := a.profileUUID
+		gameSession := a.gameSession
 		a.refreshMutex.Unlock()
 
-		newSession, err := a.createGameSessionAndStore(oauthToken, profileUUID)
+		refreshedSessionToken, err := a.refreshGameSessionAndStore(gameSession, a.profileUUID)
 		if err != nil {
 			log.Printf("Error refreshing game session token: %v", err)
-			return
+			log.Println("Falling back to OAuth")
+
+			a.refreshMutex.Lock()
+			oauthToken := a.oauthToken
+			a.refreshMutex.Unlock()
+
+			refreshedOAuthToken, err := a.ensureOAuthRefreshed(oauthToken)
+			if err != nil {
+				log.Printf("Error refreshing OAuth token: %v", err)
+				return
+			}
+
+			a.refreshMutex.Lock()
+			a.oauthToken = refreshedOAuthToken
+			a.refreshMutex.Unlock()
+
+			refreshedSessionToken, err = a.createGameSessionAndStore(refreshedOAuthToken, a.profileUUID)
+			if err != nil {
+				log.Printf("error creating game session: %v", err)
+				return
+			}
 		}
 
 		a.refreshMutex.Lock()
-		a.gameSession = newSession
+		a.gameSession = refreshedSessionToken
 		a.refreshMutex.Unlock()
 
 		a.scheduleGameSessionRefresh()
