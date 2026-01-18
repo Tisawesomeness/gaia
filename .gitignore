@@ -20,3 +20,4 @@
 # Exclude program storage
 data
 !*.go
+*.log
