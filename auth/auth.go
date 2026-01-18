@@ -92,7 +92,7 @@ func startDeviceAuth(config config.Config, httpClient *http.Client) (DeviceAuthR
 	}
 
 	deviceAuthResponse := defaultDeviceAuthResponse()
-	err = json.Unmarshal(body, &deviceAuthResponse)
+	err = json.Unmarshal(trimBOM(body), &deviceAuthResponse)
 	if err != nil {
 		return DeviceAuthResponse{}, err
 	}
@@ -126,7 +126,7 @@ func pollForToken(config config.Config, httpClient *http.Client, deviceAuthRespo
 			}
 
 			var tokenResponse TokenResponse
-			err = json.Unmarshal(body, &tokenResponse)
+			err = json.Unmarshal(trimBOM(body), &tokenResponse)
 			if err != nil {
 				return TokenResponse{}, err
 			}
@@ -159,7 +159,7 @@ func OAuthRefresh(oauthRefreshToken string, config config.Config, httpClient *ht
 	}
 
 	var tokenResponse TokenResponse
-	err = json.Unmarshal(body, &tokenResponse)
+	err = json.Unmarshal(trimBOM(body), &tokenResponse)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -190,7 +190,7 @@ func GetAccountProfiles(oauthAccessToken string, config config.Config, httpClien
 	}
 
 	var launcherDataResponse LauncherDataResponse
-	err = json.Unmarshal(body, &launcherDataResponse)
+	err = json.Unmarshal(trimBOM(body), &launcherDataResponse)
 	if err != nil {
 		return LauncherDataResponse{}, err
 	}
@@ -224,7 +224,7 @@ func CreateGameSession(oauthAccessToken string, uuid string, config config.Confi
 	}
 
 	var gameSessionResponse GameSessionResponse
-	err = json.Unmarshal(body, &gameSessionResponse)
+	err = json.Unmarshal(trimBOM(body), &gameSessionResponse)
 	if err != nil {
 		return GameSessionResponse{}, err
 	}
@@ -253,10 +253,15 @@ func RefreshGameSession(gameSessionToken string, uuid string, config config.Conf
 	}
 
 	var gameSessionResponse GameSessionResponse
-	err = json.Unmarshal(body, &gameSessionResponse)
+	err = json.Unmarshal(trimBOM(body), &gameSessionResponse)
 	if err != nil {
 		return GameSessionResponse{}, err
 	}
 
 	return gameSessionResponse, nil
+}
+
+// Hytale APIs occasionally reply starting with a Byte Order Mark...
+func trimBOM(body []byte) []byte {
+	return bytes.TrimPrefix(body, []byte("\xef\xbb\xbf"))
 }
