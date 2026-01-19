@@ -57,9 +57,24 @@ func (ctx CommandContext) ReplyError(s *discordgo.Session, i *discordgo.Interact
 	if errors.As(err, &cmdErr) {
 		ctx.ReplyWarn(s, i, cmdErr.message)
 	} else {
-		log.Printf("Command error: %v", err)
 		ctx.ReplyEphemeral(s, i, ":boom: An error occurred: "+err.Error())
+
+		id := i.ApplicationCommandData().Name
+		options := formatCommandOptions(i.ApplicationCommandData().Options)
+		log.Printf("Error in command /%s options %s: %+v", id, options, err)
 	}
+}
+
+func formatCommandOptions(options []*discordgo.ApplicationCommandInteractionDataOption) string {
+	var parts []string
+	for _, option := range options {
+		value := option.Value
+		if option.Type == discordgo.ApplicationCommandOptionSubCommand {
+			value = formatCommandOptions(option.Options)
+		}
+		parts = append(parts, fmt.Sprintf("%s=%v", option.Name, value))
+	}
+	return strings.Join(parts, ", ")
 }
 
 type CommandError struct {
