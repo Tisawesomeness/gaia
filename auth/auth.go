@@ -87,6 +87,10 @@ func startDeviceAuth(config config.Config, httpClient *http.Client) (DeviceAuthR
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return DeviceAuthResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return DeviceAuthResponse{}, err
@@ -121,6 +125,10 @@ func pollForToken(config config.Config, httpClient *http.Client, deviceAuthRespo
 			}
 			defer resp.Body.Close()
 
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				return TokenResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+			}
+
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return TokenResponse{}, err
@@ -154,6 +162,10 @@ func OAuthRefresh(oauthRefreshToken string, config config.Config, httpClient *ht
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return TokenResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return TokenResponse{}, err
@@ -184,6 +196,10 @@ func GetAccountProfiles(oauthAccessToken string, config config.Config, httpClien
 		return LauncherDataResponse{}, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return LauncherDataResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -219,6 +235,10 @@ func CreateGameSession(oauthAccessToken string, uuid string, config config.Confi
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return GameSessionResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return GameSessionResponse{}, err
@@ -247,6 +267,10 @@ func RefreshGameSession(gameSessionToken string, uuid string, config config.Conf
 		return GameSessionResponse{}, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return GameSessionResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
