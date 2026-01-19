@@ -35,7 +35,7 @@ func main() {
 		log.Fatalf("Could not create auth store: %v", err)
 	}
 
-	feeds, err := hytale.NewHytaleFeeds(config, *database, *httpClient)
+	feeds, err := hytale.NewHytaleFeeds(&config, database, httpClient)
 	if err != nil {
 		log.Fatalf("Error creating Hytale feeds: %v", err)
 	}
@@ -46,9 +46,9 @@ func main() {
 	}
 	log.Println("Bot authenticated")
 
-	ctx := cmd.NewCommandContext(config, *database, *httpClient, *authStore, *feeds)
+	commandHandler := cmd.NewCommandHandler(&config, database, httpClient, authStore, feeds)
 	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		cmd.HandleInteractionCreate(s, i, ctx)
+		commandHandler.HandleInteractionCreate(s, i)
 	})
 
 	err = session.Open()

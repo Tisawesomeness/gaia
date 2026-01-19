@@ -40,7 +40,7 @@ type Article struct {
 	ImageURL    string `json:"image_url"`
 }
 
-func (a *Article) BuildMessage(s *discordgo.Session, config config.Config) *discordgo.MessageEmbed {
+func (a *Article) BuildMessage(s *discordgo.Session, config *config.Config) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       a.Title,
 		URL:         a.DestURL,
@@ -65,7 +65,7 @@ const (
 type Feed interface {
 	GetID() string
 	GetDisplayName() string
-	BuildMessage(s *discordgo.Session, config config.Config) *discordgo.MessageEmbed
+	BuildMessage(s *discordgo.Session, config *config.Config) *discordgo.MessageEmbed
 	GetVersion() string
 }
 
@@ -81,7 +81,7 @@ func (f *LauncherReleaseFeed) GetDisplayName() string {
 	return LauncherReleaseFeedDisplay
 }
 
-func (f *LauncherReleaseFeed) BuildMessage(s *discordgo.Session, config config.Config) *discordgo.MessageEmbed {
+func (f *LauncherReleaseFeed) BuildMessage(s *discordgo.Session, config *config.Config) *discordgo.MessageEmbed {
 	// Prepare the embed with version and download links
 	embed := &discordgo.MessageEmbed{
 		Title:       "Latest Hytale Version",
@@ -134,7 +134,7 @@ func (f *LauncherPostFeed) GetDisplayName() string {
 	return LauncherPostFeedDisplay
 }
 
-func (f *LauncherPostFeed) BuildMessage(s *discordgo.Session, config config.Config) *discordgo.MessageEmbed {
+func (f *LauncherPostFeed) BuildMessage(s *discordgo.Session, config *config.Config) *discordgo.MessageEmbed {
 	if len(f.Articles.Articles) <= 0 {
 		return &discordgo.MessageEmbed{
 			Title:       "Hytale Articles",
@@ -155,12 +155,12 @@ func (f *LauncherPostFeed) GetVersion() string {
 
 type HytaleFeeds struct {
 	Feeds  map[string]Feed
-	config config.Config
-	db     db.DB
-	http   http.Client
+	config *config.Config
+	db     *db.DB
+	http   *http.Client
 }
 
-func NewHytaleFeeds(config config.Config, db db.DB, http http.Client) (*HytaleFeeds, error) {
+func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client) (*HytaleFeeds, error) {
 	feeds := &HytaleFeeds{
 		config: config,
 		db:     db,
@@ -274,7 +274,7 @@ func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
 	return nil
 }
 
-func getStoredLauncherRelease(db db.DB) (*HytaleRelease, error) {
+func getStoredLauncherRelease(db *db.DB) (*HytaleRelease, error) {
 	raw, err := db.GetLatestPost(LauncherReleaseFeedID)
 	if err != nil {
 		return nil, err
@@ -288,7 +288,7 @@ func getStoredLauncherRelease(db db.DB) (*HytaleRelease, error) {
 	return &release, err
 }
 
-func getStoredArticles(db db.DB) (*ArticleFeed, error) {
+func getStoredArticles(db *db.DB) (*ArticleFeed, error) {
 	raw, err := db.GetLatestPost(LauncherPostFeedID)
 	if err != nil {
 		return nil, err
@@ -335,7 +335,7 @@ func (feeds HytaleFeeds) fetchArticles() (*ArticleFeed, error) {
 }
 
 func (feeds HytaleFeeds) removeAllSubscriptions(channelId string) {
-	for feedID, _ := range feeds.Feeds {
+	for feedID := range feeds.Feeds {
 		feeds.db.RemoveSubscription(feedID, channelId)
 	}
 }

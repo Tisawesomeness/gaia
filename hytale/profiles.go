@@ -27,15 +27,15 @@ type PublicGameProfile struct {
 	Username string
 }
 
-func FetchProfileFromUUID(uuid string, config config.Config, httpClient http.Client, authStore auth.AuthStore) (*PublicGameProfile, error) {
+func FetchProfileFromUUID(uuid string, config *config.Config, httpClient *http.Client, authStore *auth.AuthStore) (*PublicGameProfile, error) {
 	return fetchProfile(config.Profile.ByUUID+uuid, authStore, httpClient)
 }
 
-func FetchProfileFromUsername(username string, config config.Config, httpClient http.Client, authStore auth.AuthStore) (*PublicGameProfile, error) {
+func FetchProfileFromUsername(username string, config *config.Config, httpClient *http.Client, authStore *auth.AuthStore) (*PublicGameProfile, error) {
 	return fetchProfile(config.Profile.ByUsername+username, authStore, httpClient)
 }
 
-func fetchProfile(url string, authStore auth.AuthStore, httpClient http.Client) (*PublicGameProfile, error) {
+func fetchProfile(url string, authStore *auth.AuthStore, httpClient *http.Client) (*PublicGameProfile, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ const (
 	Unknown
 )
 
-func CheckAvailability(username string, config config.Config, httpClient http.Client) (Availability, error) {
+func CheckAvailability(username string, config *config.Config, httpClient *http.Client) (Availability, error) {
 	req, err := http.NewRequest("GET", config.Profile.Availability, nil)
 	if err != nil {
 		return 0, err

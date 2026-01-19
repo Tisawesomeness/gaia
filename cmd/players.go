@@ -201,32 +201,32 @@ func profileCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *C
 	var err error
 	uuid, isUUID := validateAndFormatUUID(identifier)
 	if isUUID {
-		ctx.DeferReply(s, i)
+		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
 	} else if usernameRegex.MatchString(identifier) {
-		ctx.DeferReply(s, i)
+		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
-		ctx.ReplyWarn(s, i, fmt.Sprintf("`%s` is not a valid username or UUID", identifier))
+		ctx.ReplyWarn(fmt.Sprintf("`%s` is not a valid username or UUID", identifier))
 		return
 	}
 
 	if err != nil {
 		log.Printf("Could not fetch profile %s: %v", identifier, err)
-		ctx.ReplyExternalError(s, i, "An error occurred while contacting Hytale servers.")
+		ctx.ReplyExternalError("An error occurred while contacting Hytale servers.")
 		return
 	}
 	if profile == nil {
 		if isUUID {
-			ctx.Reply(s, i, fmt.Sprintf("There is no player with the UUID `%s`.", identifier))
+			ctx.Reply(fmt.Sprintf("There is no player with the UUID `%s`.", identifier))
 			return
 		} else {
-			checkAvailability(identifier, s, i, ctx)
+			checkAvailability(identifier, ctx)
 			return
 		}
 	}
 
-	ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+	ctx.ReplyEmbed(&discordgo.MessageEmbed{
 		Title: "Profile for " + profile.Username,
 		Description: fmt.Sprintf("Short UUID: `%s`\nLong UUID: `%s`",
 			strings.ReplaceAll(profile.UUID, "-", ""),
@@ -235,7 +235,7 @@ func profileCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *C
 	})
 }
 
-func checkAvailability(username string, s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+func checkAvailability(username string, ctx *CommandContext) {
 	// Execute the availability check through the circuit breaker
 	_, err := ctx.Breakers.KratosSession.Execute(func() (any, error) {
 		availability, err := hytale.CheckAvailability(username, ctx.Config, ctx.HTTP)
@@ -245,25 +245,25 @@ func checkAvailability(username string, s *discordgo.Session, i *discordgo.Inter
 
 		switch availability {
 		case hytale.Available:
-			ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
 				Title:       "Profile for " + username,
 				Description: "Username available",
 				Color:       0xFFFFFF,
 			})
 		case hytale.Reserved:
-			ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
 				Title:       "Profile for " + username,
 				Description: "Username reserved",
 				Color:       0xFFFF00,
 			})
 		case hytale.HytaleReserved:
-			ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
 				Title:       "Profile for " + username,
 				Description: "Username reserved by the Hytale Team",
 				Color:       0x00FFFF,
 			})
 		case hytale.Prohibited:
-			ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
 				Title:       "Profile for " + username,
 				Description: "Username contains a prohibited word",
 				Color:       0x00FFFF,
@@ -272,9 +272,9 @@ func checkAvailability(username string, s *discordgo.Session, i *discordgo.Inter
 			// If profile returns 404 but username is in use,
 			// either Hytale is lying, or we got unlucky with timing
 			log.Printf("Username %s in use, but profile returned 404!", username)
-			ctx.ReplyExternalError(s, i, "An error occurred while contacting Hytale servers.")
+			ctx.ReplyExternalError("An error occurred while contacting Hytale servers.")
 		case hytale.Unknown:
-			ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
 				Title:       "Profile for " + username,
 				Description: "Username not in use (unknown status)",
 				Color:       0x000000,
@@ -286,7 +286,7 @@ func checkAvailability(username string, s *discordgo.Session, i *discordgo.Inter
 
 	if err != nil {
 		log.Printf("Error checking availability (circuit breaker): %v", err)
-		ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+		ctx.ReplyEmbed(&discordgo.MessageEmbed{
 			Title:       "Profile for " + username,
 			Description: "Username not in use (unknown status)",
 			Color:       0x000000,
@@ -302,26 +302,26 @@ func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 	var err error
 	uuid, isUUID := validateAndFormatUUID(identifier)
 	if isUUID {
-		ctx.DeferReply(s, i)
+		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
 	} else if usernameRegex.MatchString(identifier) {
-		ctx.DeferReply(s, i)
+		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
-		ctx.ReplyWarn(s, i, fmt.Sprintf("`%s` is not a valid username or UUID", identifier))
+		ctx.ReplyWarn(fmt.Sprintf("`%s` is not a valid username or UUID", identifier))
 		return
 	}
 
 	if err != nil {
 		log.Printf("Could not fetch profile %s: %v", identifier, err)
-		ctx.ReplyExternalError(s, i, "An error occurred while contacting Hytale servers.")
+		ctx.ReplyExternalError("An error occurred while contacting Hytale servers.")
 		return
 	}
 	if profile == nil {
 		if isUUID {
-			ctx.Reply(s, i, fmt.Sprintf("There is no player with the UUID `%s`.", identifier))
+			ctx.Reply(fmt.Sprintf("There is no player with the UUID `%s`.", identifier))
 		} else {
-			ctx.Reply(s, i, fmt.Sprintf("There is no player with the username `%s`.", identifier))
+			ctx.Reply(fmt.Sprintf("There is no player with the username `%s`.", identifier))
 		}
 		return
 	}
@@ -333,7 +333,7 @@ func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 
 	if len(profile.Skin) <= 0 {
 		embed.Description = "(no skin)"
-		ctx.ReplyEmbed(s, i, embed)
+		ctx.ReplyEmbed(embed)
 		return
 	}
 
@@ -371,5 +371,5 @@ func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 		}
 	}
 
-	ctx.ReplyEmbed(s, i, embed)
+	ctx.ReplyEmbed(embed)
 }

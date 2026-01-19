@@ -61,39 +61,39 @@ func versionCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *C
 	// Get the launcher release feed
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedID]
 	if !exists {
-		ctx.ReplyError(s, i, errors.New("Could not retrieve the latest Hytale Launcher version."))
+		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale Launcher version."))
 		return
 	}
 
 	// Get the version from the feed
 	launcherReleaseFeed, ok := feed.(*hytale.LauncherReleaseFeed)
 	if !ok {
-		ctx.ReplyError(s, i, errors.New("Could not retrieve the latest Hytale Launcher version."))
+		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale Launcher version."))
 		return
 	}
 
 	// Respond with the embed
-	ctx.ReplyEmbed(s, i, launcherReleaseFeed.BuildMessage(s, ctx.Config))
+	ctx.ReplyEmbed(launcherReleaseFeed.BuildMessage(s, ctx.Config))
 }
 
 func articlesCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	// Get the launcher post feed
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherPostFeedID]
 	if !exists {
-		ctx.ReplyError(s, i, errors.New("Could not retrieve the latest Hytale article."))
+		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale article."))
 		return
 	}
 
 	// Get the articles from the feed
 	launcherPostFeed, ok := feed.(*hytale.LauncherPostFeed)
 	if !ok {
-		ctx.ReplyError(s, i, errors.New("Could not retrieve the latest Hytale article."))
+		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale article."))
 		return
 	}
 	// Get all articles
 	articles := launcherPostFeed.Articles.Articles
 	if len(articles) == 0 {
-		ctx.ReplyEphemeral(s, i, "No articles found.")
+		ctx.ReplyEphemeral("No articles found.")
 		return
 	}
 
@@ -125,7 +125,7 @@ func articlesCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *
 	}
 
 	// Respond with the embed and buttons
-	ctx.ReplyComplex(s, i, &discordgo.InteractionResponseData{
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Embeds: []*discordgo.MessageEmbed{embed},
 		Components: []discordgo.MessageComponent{
 			discordgo.ActionsRow{
@@ -148,7 +148,7 @@ func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, c
 	// Get the interaction data
 	interaction, exists := articleInteractions[interactionID]
 	if !exists {
-		ctx.ReplyEphemeral(s, i, "This interaction has expired.")
+		ctx.ReplyEphemeral("This interaction has expired.")
 		return
 	}
 

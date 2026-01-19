@@ -16,18 +16,32 @@ import (
 	"github.com/sony/gobreaker"
 )
 
+type CommandHandler struct {
+	Config      *config.Config
+	DB          *db.DB
+	HTTP        *http.Client
+	AuthStore   *auth.AuthStore
+	HytaleFeeds *hytale.HytaleFeeds
+	Breakers    *Breakers
+}
+
 type Breakers struct {
 	HytaleSession *gobreaker.CircuitBreaker
 	KratosSession *gobreaker.CircuitBreaker
 }
 
-type CommandContext struct {
-	Config      config.Config
-	DB          db.DB
-	HTTP        http.Client
-	AuthStore   auth.AuthStore
-	HytaleFeeds hytale.HytaleFeeds
-	Breakers    Breakers
+func NewCommandHandler(config *config.Config, db *db.DB, httpClient *http.Client, authStore *auth.AuthStore, hytaleFeeds *hytale.HytaleFeeds) CommandHandler {
+	return CommandHandler{
+		Config:      config,
+		DB:          db,
+		HTTP:        httpClient,
+		AuthStore:   authStore,
+		HytaleFeeds: hytaleFeeds,
+		Breakers: &Breakers{
+			HytaleSession: makeBreaker("HytaleSession", config.Auth.Breaker),
+			KratosSession: makeBreaker("KratosSession", config.Kratos.Breaker),
+		},
+	}
 }
 
 func makeBreaker(name string, config config.BreakerConfig) *gobreaker.CircuitBreaker {
@@ -51,69 +65,102 @@ func makeBreaker(name string, config config.BreakerConfig) *gobreaker.CircuitBre
 	})
 }
 
-func NewCommandContext(config config.Config, db db.DB, httpClient http.Client, authStore auth.AuthStore, hytaleFeeds hytale.HytaleFeeds) *CommandContext {
+type CommandContext struct {
+	Config      *config.Config
+	DB          *db.DB
+	HTTP        *http.Client
+	AuthStore   *auth.AuthStore
+	HytaleFeeds *hytale.HytaleFeeds
+	Breakers    *Breakers
+
+	Session     *discordgo.Session
+	Interaction *discordgo.InteractionCreate
+	hasDeferred bool
+}
+
+func (ch CommandHandler) newCommandContext(s *discordgo.Session, i *discordgo.InteractionCreate) *CommandContext {
 	return &CommandContext{
-		Config:      config,
-		DB:          db,
-		HTTP:        httpClient,
-		AuthStore:   authStore,
-		HytaleFeeds: hytaleFeeds,
-		Breakers: Breakers{
-			HytaleSession: makeBreaker("HytaleSession", config.Auth.Breaker),
-			KratosSession: makeBreaker("KratosSession", config.Kratos.Breaker),
-		},
+		Config:      ch.Config,
+		DB:          ch.DB,
+		HTTP:        ch.HTTP,
+		AuthStore:   ch.AuthStore,
+		HytaleFeeds: ch.HytaleFeeds,
+		Breakers:    ch.Breakers,
+		Session:     s,
+		Interaction: i,
+		hasDeferred: false,
 	}
 }
 
-func (ctx CommandContext) DeferReply(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+func (ctx *CommandContext) DeferReply() {
+	ctx.hasDeferred = true
+	ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 }
 
-func (ctx CommandContext) Reply(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
-	ctx.ReplyComplex(s, i, &discordgo.InteractionResponseData{
+func (ctx *CommandContext) Reply(content string) {
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Content: content,
 	})
 }
 
-func (ctx CommandContext) ReplyEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
-	ctx.ReplyComplex(s, i, &discordgo.InteractionResponseData{
+func (ctx *CommandContext) ReplyEphemeral(content string) {
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Content: content,
 		Flags:   discordgo.MessageFlagsEphemeral,
 	})
 }
 
-func (ctx CommandContext) ReplyEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
-	ctx.ReplyComplex(s, i, &discordgo.InteractionResponseData{
+func (ctx *CommandContext) ReplyEmbed(embed *discordgo.MessageEmbed) {
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Embeds: []*discordgo.MessageEmbed{embed},
 	})
 }
 
-func (ctx CommandContext) ReplyComplex(s *discordgo.Session, i *discordgo.InteractionCreate, data *discordgo.InteractionResponseData) {
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: data,
-	})
+func (ctx *CommandContext) ReplyComplex(data *discordgo.InteractionResponseData) {
+	if ctx.hasDeferred {
+		var attachments []*discordgo.MessageAttachment
+		if data.Attachments == nil {
+			attachments = []*discordgo.MessageAttachment{}
+		} else {
+			attachments = *data.Attachments
+		}
+		ctx.Session.FollowupMessageCreate(ctx.Interaction.Interaction, false, &discordgo.WebhookParams{
+			Content:         data.Content,
+			Components:      data.Components,
+			Embeds:          data.Embeds,
+			TTS:             data.TTS,
+			Files:           data.Files,
+			Attachments:     attachments,
+			AllowedMentions: data.AllowedMentions,
+			Flags:           data.Flags,
+		})
+	} else {
+		ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: data,
+		})
+	}
 }
 
-func (ctx CommandContext) ReplyWarn(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
-	ctx.ReplyEphemeral(s, i, ":warning: "+content)
+func (ctx *CommandContext) ReplyWarn(content string) {
+	ctx.ReplyEphemeral(":warning: " + content)
 }
 
-func (ctx CommandContext) ReplyExternalError(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
-	ctx.ReplyEphemeral(s, i, ":x: "+content)
+func (ctx *CommandContext) ReplyExternalError(content string) {
+	ctx.ReplyEphemeral(":x: " + content)
 }
 
-func (ctx CommandContext) ReplyError(s *discordgo.Session, i *discordgo.InteractionCreate, err error) {
+func (ctx *CommandContext) ReplyError(err error) {
 	var userErr *UserError
 	if errors.As(err, &userErr) {
-		ctx.ReplyWarn(s, i, userErr.message)
+		ctx.ReplyWarn(userErr.message)
 	} else {
-		ctx.ReplyEphemeral(s, i, ":boom: An error occurred: "+err.Error())
+		ctx.ReplyEphemeral(":boom: An error occurred: " + err.Error())
 
-		id := i.ApplicationCommandData().Name
-		options := formatCommandOptions(i.ApplicationCommandData().Options)
+		id := ctx.Interaction.ApplicationCommandData().Name
+		options := formatCommandOptions(ctx.Interaction.ApplicationCommandData().Options)
 		log.Printf("Error in command /%s options %s: %+v", id, options, err)
 	}
 }
@@ -173,7 +220,9 @@ func init() {
 	}
 }
 
-func HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+func (ch CommandHandler) HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	ctx := ch.newCommandContext(s, i)
+
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
 		// https://www.youtube.com/watch?v=bLHL75H_VEM

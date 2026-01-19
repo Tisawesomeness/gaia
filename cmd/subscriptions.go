@@ -72,28 +72,28 @@ func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx 
 	// Get the feed from the HytaleFeeds map
 	feed, exists := ctx.HytaleFeeds.Feeds[subType]
 	if !exists {
-		ctx.ReplyWarn(s, i, "Invalid feed type.")
+		ctx.ReplyWarn("Invalid feed type.")
 		return
 	}
 
 	err := ctx.DB.AddOrUpdateSubscription(feed.GetID(), channel.ID, feed.GetVersion())
 	if err != nil {
-		ctx.ReplyError(s, i, fmt.Errorf("Error while trying to save subscription: %w", err))
+		ctx.ReplyError(fmt.Errorf("Error while trying to save subscription: %w", err))
 	} else {
-		ctx.Reply(s, i, fmt.Sprintf("Subscribed %s to %s", channel.Mention(), feed.GetDisplayName()))
+		ctx.Reply(fmt.Sprintf("Subscribed %s to %s", channel.Mention(), feed.GetDisplayName()))
 	}
 }
 
 func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	guildID := i.GuildID
 	if guildID == "" {
-		ctx.ReplyWarn(s, i, "This command can only be used in a guild.")
+		ctx.ReplyWarn("This command can only be used in a guild.")
 		return
 	}
 
 	channels, err := s.GuildChannels(guildID)
 	if err != nil {
-		ctx.ReplyError(s, i, fmt.Errorf("Error while trying fetch guild channels: %w", err))
+		ctx.ReplyError(fmt.Errorf("Error while trying fetch guild channels: %w", err))
 		return
 	}
 
@@ -151,13 +151,13 @@ func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 		embed.Description = strings.Join(description, "\n")
 	}
 
-	ctx.ReplyEmbed(s, i, embed)
+	ctx.ReplyEmbed(embed)
 }
 
 func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	guildID := i.GuildID
 	if guildID == "" {
-		ctx.ReplyWarn(s, i, "This command can only be used in a guild.")
+		ctx.ReplyWarn("This command can only be used in a guild.")
 		return
 	}
 
@@ -181,12 +181,12 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 			}
 		}
 		channel := optionMap["channel"].ChannelValue(s)
-		ctx.Reply(s, i, "Unsubscribed all feeds from channel: "+channel.Mention())
+		ctx.Reply("Unsubscribed all feeds from channel: " + channel.Mention())
 	} else {
 		// Unsubscribe all channels in the guild from all feeds
 		channels, err := s.GuildChannels(guildID)
 		if err != nil {
-			ctx.ReplyError(s, i, fmt.Errorf("Error while fetching guild channels: %w", err))
+			ctx.ReplyError(fmt.Errorf("Error while fetching guild channels: %w", err))
 			return
 		}
 
@@ -198,6 +198,6 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 			}
 		}
 
-		ctx.Reply(s, i, "Unsubscribed all feeds in this guild.")
+		ctx.Reply("Unsubscribed all feeds in this guild.")
 	}
 }

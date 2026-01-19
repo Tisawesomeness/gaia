@@ -33,5 +33,5 @@ func helpCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 		Fields: fields,
 	}
 
-	ctx.ReplyEmbed(s, i, embed)
+	ctx.ReplyEmbed(embed)
 }
