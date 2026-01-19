@@ -65,6 +65,12 @@ func NewCommandContext(config config.Config, db db.DB, httpClient http.Client, a
 	}
 }
 
+func (ctx CommandContext) DeferReply(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+}
+
 func (ctx CommandContext) Reply(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
 	ctx.ReplyComplex(s, i, &discordgo.InteractionResponseData{
 		Content: content,

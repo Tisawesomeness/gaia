@@ -201,8 +201,10 @@ func profileCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *C
 	var err error
 	uuid, isUUID := validateAndFormatUUID(identifier)
 	if isUUID {
+		ctx.DeferReply(s, i)
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
 	} else if usernameRegex.MatchString(identifier) {
+		ctx.DeferReply(s, i)
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
 		ctx.ReplyWarn(s, i, fmt.Sprintf("`%s` is not a valid username or UUID", identifier))
@@ -300,8 +302,10 @@ func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 	var err error
 	uuid, isUUID := validateAndFormatUUID(identifier)
 	if isUUID {
+		ctx.DeferReply(s, i)
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
 	} else if usernameRegex.MatchString(identifier) {
+		ctx.DeferReply(s, i)
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
 		ctx.ReplyWarn(s, i, fmt.Sprintf("`%s` is not a valid username or UUID", identifier))
