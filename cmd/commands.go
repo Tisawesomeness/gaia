@@ -37,6 +37,9 @@ func init() {
 		{"Core", []*Command{
 			{HelpCommand, helpCommand},
 		}},
+		{"Players", []*Command{
+			{ProfileCommand, profileCommand},
+		}},
 		{"Updates", []*Command{
 			{VersionCommand, versionCommand},
 			{ArticlesCommand, articlesCommand},

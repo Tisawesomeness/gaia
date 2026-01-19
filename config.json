@@ -17,6 +17,10 @@
     "create_game_session": "https://sessions.hytale.com/game-session/new",
     "refresh_game_session": "https://sessions.hytale.com/game-session/refresh"
   },
+  "profile": {
+    "by_uuid": "https://account-data.hytale.com/profile/uuid/",
+    "by_username": "https://account-data.hytale.com/profile/username/"
+  },
   "feeds": {
     "poll_on_startup": false,
     "interval": 500,

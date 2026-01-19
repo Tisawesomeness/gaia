@@ -25,6 +25,10 @@ type Config struct {
 		CreateGameSession        string `json:"create_game_session"`
 		RefreshGameSession       string `json:"refresh_game_session"`
 	} `json:"auth"`
+	Profile struct {
+		ByUUID     string `json:"by_uuid"`
+		ByUsername string `json:"by_username"`
+	} `json:"profile"`
 	Feeds struct {
 		PollOnStartup      bool   `json:"poll_on_startup"`
 		Interval           int    `json:"interval"` // in seconds
