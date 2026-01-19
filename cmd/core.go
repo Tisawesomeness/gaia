@@ -33,10 +33,5 @@ func helpCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 		Fields: fields,
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{embed},
-		},
-	})
+	ctx.ReplyEmbed(s, i, embed)
 }

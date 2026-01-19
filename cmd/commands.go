@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -18,6 +20,46 @@ type CommandContext struct {
 	HTTP        http.Client
 	AuthStore   auth.AuthStore
 	HytaleFeeds hytale.HytaleFeeds
+}
+
+func (ctx CommandContext) Reply(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	ctx.ReplyComplex(s, i, &discordgo.InteractionResponseData{
+		Content: content,
+	})
+}
+
+func (ctx CommandContext) ReplyEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	ctx.ReplyComplex(s, i, &discordgo.InteractionResponseData{
+		Content: content,
+		Flags:   discordgo.MessageFlagsEphemeral,
+	})
+}
+
+func (ctx CommandContext) ReplyEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
+	ctx.ReplyComplex(s, i, &discordgo.InteractionResponseData{
+		Embeds: []*discordgo.MessageEmbed{embed},
+	})
+}
+
+func (ctx CommandContext) ReplyComplex(s *discordgo.Session, i *discordgo.InteractionCreate, data *discordgo.InteractionResponseData) {
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: data,
+	})
+}
+
+func (ctx CommandContext) ReplyWarn(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	ctx.ReplyEphemeral(s, i, ":warning: "+content)
+}
+
+func (ctx CommandContext) ReplyError(s *discordgo.Session, i *discordgo.InteractionCreate, err error) {
+	var cmdErr *CommandError
+	if errors.As(err, &cmdErr) {
+		ctx.ReplyWarn(s, i, cmdErr.message)
+	} else {
+		log.Printf("Command error: %v", err)
+		ctx.ReplyEphemeral(s, i, ":boom: An error occurred: "+err.Error())
+	}
 }
 
 type CommandError struct {

@@ -197,23 +197,7 @@ func profileCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *C
 
 	profile, err := fetchProfile(identifier, ctx)
 	if err != nil {
-		if cmdErr, ok := err.(CommandError); ok {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: cmdErr.message,
-					Flags:   discordgo.MessageFlagsEphemeral,
-				},
-			})
-		} else {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "Failed to fetch profile: " + err.Error(),
-					Flags:   discordgo.MessageFlagsEphemeral,
-				},
-			})
-		}
+		ctx.ReplyError(s, i, err)
 		return
 	}
 
@@ -225,12 +209,7 @@ func profileCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *C
 		Color: 0x00FF00,
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{embed},
-		},
-	})
+	ctx.ReplyEmbed(s, i, embed)
 }
 
 func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
@@ -239,23 +218,7 @@ func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 
 	profile, err := fetchProfile(identifier, ctx)
 	if err != nil {
-		if cmdErr, ok := err.(CommandError); ok {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: cmdErr.message,
-					Flags:   discordgo.MessageFlagsEphemeral,
-				},
-			})
-		} else {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "Failed to fetch profile: " + err.Error(),
-					Flags:   discordgo.MessageFlagsEphemeral,
-				},
-			})
-		}
+		ctx.ReplyError(s, i, err)
 		return
 	}
 
@@ -298,10 +261,5 @@ func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 		}
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{embed},
-		},
-	})
+	ctx.ReplyEmbed(s, i, embed)
 }

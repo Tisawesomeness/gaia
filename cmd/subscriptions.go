@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"sort"
 	"strings"
@@ -71,59 +72,28 @@ func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx 
 	// Get the feed from the HytaleFeeds map
 	feed, exists := ctx.HytaleFeeds.Feeds[subType]
 	if !exists {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Invalid feed type.",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		ctx.ReplyWarn(s, i, "Invalid feed type.")
 		return
 	}
 
 	err := ctx.DB.AddOrUpdateSubscription(feed.GetID(), channel.ID, feed.GetVersion())
-	var response discordgo.InteractionResponseData
 	if err != nil {
-		log.Printf("Error saving subscription to Valkey: %v", err)
-		response = discordgo.InteractionResponseData{
-			Content: "An error occurred while trying to save your subscription",
-			Flags:   discordgo.MessageFlagsEphemeral,
-		}
+		ctx.ReplyError(s, i, fmt.Errorf("Error while trying to save subscription: %w", err))
 	} else {
-		response = discordgo.InteractionResponseData{
-			Content: "Subscribed to " + feed.GetDisplayName() + " channel: " + channel.Mention(),
-		}
+		ctx.Reply(s, i, fmt.Sprintf("Subscribed %s to %s", channel.Mention(), feed.GetDisplayName()))
 	}
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &response,
-	})
 }
 
 func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	guildID := i.GuildID
 	if guildID == "" {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "This command can only be used in a guild.",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		ctx.ReplyWarn(s, i, "This command can only be used in a guild.")
 		return
 	}
 
 	channels, err := s.GuildChannels(guildID)
 	if err != nil {
-		log.Printf("Error fetching guild channels: %v", err)
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "An error occurred while fetching guild channels.",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		ctx.ReplyError(s, i, fmt.Errorf("Error while trying fetch guild channels: %w", err))
 		return
 	}
 
@@ -138,7 +108,7 @@ func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 	}
 
 	channelSubscriptions := make(map[string][]string)
-	for feedID, _ := range ctx.HytaleFeeds.Feeds {
+	for feedID := range ctx.HytaleFeeds.Feeds {
 		members, err := ctx.DB.GetSubscriptions(feedID)
 		if err != nil {
 			log.Printf("Error fetching subscriptions for %s: %v", feedID, err)
@@ -181,24 +151,13 @@ func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 		embed.Description = strings.Join(description, "\n")
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{embed},
-		},
-	})
+	ctx.ReplyEmbed(s, i, embed)
 }
 
 func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	guildID := i.GuildID
 	if guildID == "" {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "This command can only be used in a guild.",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		ctx.ReplyWarn(s, i, "This command can only be used in a guild.")
 		return
 	}
 
@@ -214,7 +173,6 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 		channelID = channel.ID
 	}
 
-	var response discordgo.InteractionResponseData
 	if channelID != "" {
 		// Unsubscribe specific channel from all feeds
 		for feedID, _ := range ctx.HytaleFeeds.Feeds {
@@ -223,21 +181,12 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 			}
 		}
 		channel := optionMap["channel"].ChannelValue(s)
-		response = discordgo.InteractionResponseData{
-			Content: "Unsubscribed all feeds from channel: " + channel.Mention(),
-		}
+		ctx.Reply(s, i, "Unsubscribed all feeds from channel: "+channel.Mention())
 	} else {
 		// Unsubscribe all channels in the guild from all feeds
 		channels, err := s.GuildChannels(guildID)
 		if err != nil {
-			log.Printf("Error fetching guild channels: %v", err)
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "An error occurred while fetching guild channels.",
-					Flags:   discordgo.MessageFlagsEphemeral,
-				},
-			})
+			ctx.ReplyError(s, i, fmt.Errorf("Error while fetching guild channels: %w", err))
 			return
 		}
 
@@ -249,13 +198,6 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 			}
 		}
 
-		response = discordgo.InteractionResponseData{
-			Content: "Unsubscribed all feeds in this guild.",
-		}
+		ctx.Reply(s, i, "Unsubscribed all feeds in this guild.")
 	}
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &response,
-	})
 }
