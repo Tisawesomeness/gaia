@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
@@ -31,25 +32,30 @@ func (db DB) Close() {
 	db.v.Close()
 }
 
+// Prevents keys with ":" from being confused as sub-keys
+func sanitize(keyPart string) string {
+	return strings.ReplaceAll(keyPart, ":", ".")
+}
+
 func (db DB) AddOrUpdateSubscription(subType string, channelId string, currentVersion string) error {
-	command := db.v.B().Hset().Key(subType+":subs").FieldValue().FieldValue(channelId, currentVersion).Build()
+	command := db.v.B().Hset().Key(sanitize(subType)+":subs").FieldValue().FieldValue(channelId, currentVersion).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 
 // Returns a mapping of channel ID to last notified version
 func (db DB) GetSubscriptions(subType string) (map[string]string, error) {
-	command := db.v.B().Hgetall().Key(subType + ":subs").Build()
+	command := db.v.B().Hgetall().Key(sanitize(subType) + ":subs").Build()
 	return db.v.Do(context.Background(), command).AsStrMap()
 }
 
 func (db DB) RemoveSubscription(subType string, channelId string) error {
-	command := db.v.B().Hdel().Key(subType + ":subs").Field(channelId).Build()
+	command := db.v.B().Hdel().Key(sanitize(subType) + ":subs").Field(channelId).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 
 // May return nil!
 func (db DB) GetLatestPost(subType string) ([]byte, error) {
-	command := db.v.B().Get().Key(subType + ":latest").Build()
+	command := db.v.B().Get().Key(sanitize(subType) + ":latest").Build()
 	resp := db.v.Do(context.Background(), command)
 	err := resp.Error()
 	if err != nil {
@@ -66,7 +72,7 @@ func (db DB) GetLatestPost(subType string) ([]byte, error) {
 }
 
 func (db DB) SetLatestPost(subType string, content string) error {
-	command := db.v.B().Set().Key(subType + ":latest").Value(content).Build()
+	command := db.v.B().Set().Key(sanitize(subType) + ":latest").Value(content).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 
