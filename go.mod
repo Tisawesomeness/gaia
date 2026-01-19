@@ -9,6 +9,7 @@ require (
 
 require (
 	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/sony/gobreaker v1.0.0
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b // indirect
 	golang.org/x/sys v0.39.0 // indirect
 )

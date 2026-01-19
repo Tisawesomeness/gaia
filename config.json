@@ -7,11 +7,25 @@
     "password": ""
   },
   "kratos": {
-    "session_cookie": ""
+    "session_cookie": "",
+    "breaker": {
+      "enabled": true,
+      "max_half_open_requests": 3,
+      "reset_interval": 300,
+      "timeout": 30,
+      "failure_ratio": 0.6
+    }
   },
   "auth": {
     "oauth_refresh_buffer": 300,
     "game_session_refresh_buffer": 300,
+    "breaker": {
+      "enabled": true,
+      "max_half_open_requests": 3,
+      "reset_interval": 300,
+      "timeout": 30,
+      "failure_ratio": 0.6
+    },
     "client_id": "hytale-server",
     "scope": "openid offline auth:server",
     "device_auth": "https://oauth.accounts.hytale.com/oauth2/device/auth",

@@ -6,6 +6,14 @@ import (
 	"os"
 )
 
+type BreakerConfig struct {
+	Enabled             bool    `json:"enabled"`
+	MaxHalfOpenRequests uint32  `json:"max_half_open_requests"`
+	ResetInterval       int     `json:"reset_interval"`
+	Timeout             int     `json:"timeout"`
+	FailureRatio        float64 `json:"failure_ratio"`
+}
+
 type Config struct {
 	Token      string `json:"token"`
 	TestServer string `json:"test_server"`
@@ -15,18 +23,20 @@ type Config struct {
 		Password string `json:"password"`
 	} `json:"valkey"`
 	Kratos struct {
-		SessionCookie string `json:"initial_session_cookie"`
+		SessionCookie string        `json:"initial_session_cookie"`
+		Breaker       BreakerConfig `json:"breaker"`
 	} `json:"kratos"`
 	Auth struct {
-		OAuthRefreshBuffer       int    `json:"oauth_refresh_buffer"`        // in seconds
-		GameSessionRefreshBuffer int    `json:"game_session_refresh_buffer"` // in seconds
-		ClientID                 string `json:"client_id"`
-		Scope                    string `json:"scope"`
-		DeviceAuth               string `json:"device_auth"`
-		Token                    string `json:"token"`
-		Profiles                 string `json:"profiles"`
-		CreateGameSession        string `json:"create_game_session"`
-		RefreshGameSession       string `json:"refresh_game_session"`
+		OAuthRefreshBuffer       int           `json:"oauth_refresh_buffer"`
+		GameSessionRefreshBuffer int           `json:"game_session_refresh_buffer"`
+		Breaker                  BreakerConfig `json:"breaker"`
+		ClientID                 string        `json:"client_id"`
+		Scope                    string        `json:"scope"`
+		DeviceAuth               string        `json:"device_auth"`
+		Token                    string        `json:"token"`
+		Profiles                 string        `json:"profiles"`
+		CreateGameSession        string        `json:"create_game_session"`
+		RefreshGameSession       string        `json:"refresh_game_session"`
 	} `json:"auth"`
 	Profile struct {
 		ByUUID       string `json:"by_uuid"`
@@ -35,13 +45,13 @@ type Config struct {
 	} `json:"profile"`
 	Feeds struct {
 		PollOnStartup      bool   `json:"poll_on_startup"`
-		Interval           int    `json:"interval"` // in seconds
+		Interval           int    `json:"interval"`
 		LauncherRelease    string `json:"launcher_release"`
 		LauncherArticles   string `json:"launcher_articles"`
 		ArticleImagePrefix string `json:"article_image_prefix"`
 	} `json:"feeds"`
 	HTTP struct {
-		Timeout      int `json:"timeout"` // in seconds
+		Timeout      int `json:"timeout"`
 		MaxIdleConns int `json:"max_idle_conns"`
 	} `json:"http"`
 }

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"unicode"
+
+	"github.com/sony/gobreaker"
 )
 
 // Hytale APIs occasionally reply starting with a Byte Order Mark...
@@ -32,4 +34,14 @@ func ToCapitalizedSpacedWords(s string) string {
 		}
 	}
 	return builder.String()
+}
+
+func Execute[T any](breaker *gobreaker.CircuitBreaker, req func() (T, error)) (T, error) {
+	var result T
+	_, err := breaker.Execute(func() (any, error) {
+		innerResult, innerErr := req()
+		result = innerResult
+		return nil, innerErr
+	})
+	return result, err
 }

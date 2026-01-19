@@ -46,13 +46,7 @@ func main() {
 	}
 	log.Println("Bot authenticated")
 
-	ctx := &cmd.CommandContext{
-		Config:      config,
-		DB:          *database,
-		HTTP:        *httpClient,
-		AuthStore:   *authStore,
-		HytaleFeeds: *feeds,
-	}
+	ctx := cmd.NewCommandContext(config, *database, *httpClient, *authStore, *feeds)
 	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		cmd.HandleInteractionCreate(s, i, ctx)
 	})

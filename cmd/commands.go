@@ -6,13 +6,20 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/hytale"
 	"github.com/bwmarrin/discordgo"
+	"github.com/sony/gobreaker"
 )
+
+type Breakers struct {
+	HytaleSession *gobreaker.CircuitBreaker
+	KratosSession *gobreaker.CircuitBreaker
+}
 
 type CommandContext struct {
 	Config      config.Config
@@ -20,6 +27,42 @@ type CommandContext struct {
 	HTTP        http.Client
 	AuthStore   auth.AuthStore
 	HytaleFeeds hytale.HytaleFeeds
+	Breakers    Breakers
+}
+
+func makeBreaker(name string, config config.BreakerConfig) *gobreaker.CircuitBreaker {
+	return gobreaker.NewCircuitBreaker(gobreaker.Settings{
+		Name:        name,
+		MaxRequests: config.MaxHalfOpenRequests,
+		Interval:    time.Duration(config.ResetInterval) * time.Second,
+		Timeout:     time.Duration(config.Timeout) * time.Second,
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+			return config.Enabled && counts.Requests >= config.MaxHalfOpenRequests && failureRatio >= config.FailureRatio
+		},
+
+		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
+			log.Printf("Circuit breaker %s %s -> %s", name, from.String(), to.String())
+		},
+		IsSuccessful: func(err error) bool {
+			var userErr *UserError
+			return errors.As(err, &userErr)
+		},
+	})
+}
+
+func NewCommandContext(config config.Config, db db.DB, httpClient http.Client, authStore auth.AuthStore, hytaleFeeds hytale.HytaleFeeds) *CommandContext {
+	return &CommandContext{
+		Config:      config,
+		DB:          db,
+		HTTP:        httpClient,
+		AuthStore:   authStore,
+		HytaleFeeds: hytaleFeeds,
+		Breakers: Breakers{
+			HytaleSession: makeBreaker("HytaleSession", config.Auth.Breaker),
+			KratosSession: makeBreaker("KratosSession", config.Kratos.Breaker),
+		},
+	}
 }
 
 func (ctx CommandContext) Reply(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
