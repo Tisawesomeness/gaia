@@ -127,6 +127,15 @@ func init() {
 func HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
+		// https://www.youtube.com/watch?v=bLHL75H_VEM
+		defer func() {
+			if r := recover(); r != nil {
+				id := i.ApplicationCommandData().Name
+				options := formatCommandOptions(i.ApplicationCommandData().Options)
+				log.Printf("Panic in command /%s options %s:\n%v", id, options, r)
+			}
+		}()
+
 		commandName := strings.TrimPrefix(i.ApplicationCommandData().Name, "test-")
 		for _, category := range categories {
 			for _, command := range category.commands {
@@ -136,9 +145,16 @@ func HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 				}
 			}
 		}
+
 	case discordgo.InteractionMessageComponent:
-		// Handle button interactions
 		customID := i.MessageComponentData().CustomID
+
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Panic in interaction %s:\n%v", customID, r)
+			}
+		}()
+
 		if isArticleInteraction(customID) {
 			HandleArticleButton(s, i, ctx)
 		}
