@@ -52,10 +52,14 @@ func (ctx CommandContext) ReplyWarn(s *discordgo.Session, i *discordgo.Interacti
 	ctx.ReplyEphemeral(s, i, ":warning: "+content)
 }
 
+func (ctx CommandContext) ReplyExternalError(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	ctx.ReplyEphemeral(s, i, ":x: "+content)
+}
+
 func (ctx CommandContext) ReplyError(s *discordgo.Session, i *discordgo.InteractionCreate, err error) {
-	var cmdErr *CommandError
-	if errors.As(err, &cmdErr) {
-		ctx.ReplyWarn(s, i, cmdErr.message)
+	var userErr *UserError
+	if errors.As(err, &userErr) {
+		ctx.ReplyWarn(s, i, userErr.message)
 	} else {
 		ctx.ReplyEphemeral(s, i, ":boom: An error occurred: "+err.Error())
 
@@ -77,16 +81,16 @@ func formatCommandOptions(options []*discordgo.ApplicationCommandInteractionData
 	return strings.Join(parts, ", ")
 }
 
-type CommandError struct {
+type UserError struct {
 	message string
 }
 
-func (ce CommandError) Error() string {
+func (ce UserError) Error() string {
 	return ce.message
 }
 
-func NewCommandError(message string) CommandError {
-	return CommandError{message: message}
+func NewUserError(message string) UserError {
+	return UserError{message: message}
 }
 
 type Category struct {

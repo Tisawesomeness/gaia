@@ -6,6 +6,9 @@
     "port": 6379,
     "password": ""
   },
+  "kratos": {
+    "session_cookie": ""
+  },
   "auth": {
     "oauth_refresh_buffer": 300,
     "game_session_refresh_buffer": 300,
@@ -19,7 +22,8 @@
   },
   "profile": {
     "by_uuid": "https://account-data.hytale.com/profile/uuid/",
-    "by_username": "https://account-data.hytale.com/profile/username/"
+    "by_username": "https://account-data.hytale.com/profile/username/",
+    "availability": "https://accounts.hytale.com/api/account/username-reservations/availability"
   },
   "feeds": {
     "poll_on_startup": false,

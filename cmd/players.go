@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 
@@ -180,51 +181,135 @@ func validateAndFormatUUID(uuid string) (string, bool) {
 	return fmt.Sprintf("%s-%s-%s-%s-%s", matches[1], matches[2], matches[3], matches[4], matches[5]), true
 }
 
-func fetchProfile(identifier string, ctx *CommandContext) (hytale.PublicGameProfile, error) {
-	uuid, isUUID := validateAndFormatUUID(identifier)
-	if isUUID {
-		return hytale.FetchProfileFromUUID(uuid, ctx.Config, ctx.HTTP, ctx.AuthStore)
-	} else if usernameRegex.MatchString(identifier) {
-		return hytale.FetchProfileFromUsername(identifier, ctx.Config, ctx.HTTP, ctx.AuthStore)
-	} else {
-		return hytale.PublicGameProfile{}, NewCommandError(identifier + " is not a valid username or UUID")
-	}
-}
-
 func profileCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	options := i.ApplicationCommandData().Options
 	identifier := options[0].Value.(string)
 
-	profile, err := fetchProfile(identifier, ctx)
-	if err != nil {
-		ctx.ReplyError(s, i, err)
+	var profile *hytale.PublicGameProfile
+	var err error
+	uuid, isUUID := validateAndFormatUUID(identifier)
+	if isUUID {
+		profile, err = hytale.FetchProfileFromUUID(uuid, ctx.Config, ctx.HTTP, ctx.AuthStore)
+	} else if usernameRegex.MatchString(identifier) {
+		profile, err = hytale.FetchProfileFromUsername(identifier, ctx.Config, ctx.HTTP, ctx.AuthStore)
+	} else {
+		ctx.ReplyWarn(s, i, fmt.Sprintf("`%s` is not a valid username or UUID", identifier))
 		return
 	}
 
-	embed := &discordgo.MessageEmbed{
+	if err != nil {
+		log.Printf("Could not fetch profile %s: %v", identifier, err)
+		ctx.ReplyExternalError(s, i, "An error occurred while contacting Hytale servers.")
+		return
+	}
+	if profile == nil {
+		if isUUID {
+			ctx.Reply(s, i, fmt.Sprintf("There is no player with the UUID `%s`.", identifier))
+			return
+		} else {
+			checkAvailability(identifier, s, i, ctx)
+			return
+		}
+	}
+
+	ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
 		Title: "Profile for " + profile.Username,
 		Description: fmt.Sprintf("Short UUID: `%s`\nLong UUID: `%s`",
 			strings.ReplaceAll(profile.UUID, "-", ""),
 			profile.UUID),
 		Color: 0x00FF00,
-	}
+	})
+}
 
-	ctx.ReplyEmbed(s, i, embed)
+func checkAvailability(username string, s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+	availability, err := hytale.CheckAvailability(username, ctx.Config, ctx.HTTP)
+	if err != nil {
+		log.Printf("Error checking availability: %v", err)
+		ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			Title:       "Profile for " + username,
+			Description: "Username not in use (unknown status)",
+			Color:       0x000000,
+		})
+		return
+	}
+	switch availability {
+	case hytale.Available:
+		ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			Title:       "Profile for " + username,
+			Description: "Username available",
+			Color:       0xFFFFFF,
+		})
+	case hytale.Reserved:
+		ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			Title:       "Profile for " + username,
+			Description: "Username reserved",
+			Color:       0xFFFF00,
+		})
+	case hytale.HytaleReserved:
+		ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			Title:       "Profile for " + username,
+			Description: "Username reserved by the Hytale Team",
+			Color:       0x00FFFF,
+		})
+	case hytale.Prohibited:
+		ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			Title:       "Profile for " + username,
+			Description: "Username contains a prohibited word",
+			Color:       0x00FFFF,
+		})
+	case hytale.InUse:
+		// If profile returns 404 but username is in use,
+		// either Hytale is lying, or we got unlucky with timing
+		log.Printf("Username %s in use, but profile returned 404!", username)
+		ctx.ReplyExternalError(s, i, "An error occurred while contacting Hytale servers.")
+	case hytale.Unknown:
+		ctx.ReplyEmbed(s, i, &discordgo.MessageEmbed{
+			Title:       "Profile for " + username,
+			Description: "Username not in use (unknown status)",
+			Color:       0x000000,
+		})
+	}
 }
 
 func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	options := i.ApplicationCommandData().Options
 	identifier := options[0].Value.(string)
 
-	profile, err := fetchProfile(identifier, ctx)
+	var profile *hytale.PublicGameProfile
+	var err error
+	uuid, isUUID := validateAndFormatUUID(identifier)
+	if isUUID {
+		profile, err = hytale.FetchProfileFromUUID(uuid, ctx.Config, ctx.HTTP, ctx.AuthStore)
+	} else if usernameRegex.MatchString(identifier) {
+		profile, err = hytale.FetchProfileFromUsername(identifier, ctx.Config, ctx.HTTP, ctx.AuthStore)
+	} else {
+		ctx.ReplyWarn(s, i, fmt.Sprintf("`%s` is not a valid username or UUID", identifier))
+		return
+	}
+
 	if err != nil {
-		ctx.ReplyError(s, i, err)
+		log.Printf("Could not fetch profile %s: %v", identifier, err)
+		ctx.ReplyExternalError(s, i, "An error occurred while contacting Hytale servers.")
+		return
+	}
+	if profile == nil {
+		if isUUID {
+			ctx.Reply(s, i, fmt.Sprintf("There is no player with the UUID `%s`.", identifier))
+		} else {
+			ctx.Reply(s, i, fmt.Sprintf("There is no player with the username `%s`.", identifier))
+		}
 		return
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Title: "Skin Details for " + profile.Username,
 		Color: 0x00FF00,
+	}
+
+	if len(profile.Skin) <= 0 {
+		embed.Description = "(no skin)"
+		ctx.ReplyEmbed(s, i, embed)
+		return
 	}
 
 	for _, group := range cosmeticGroups {

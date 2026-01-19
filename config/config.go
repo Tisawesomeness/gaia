@@ -14,6 +14,9 @@ type Config struct {
 		Port     int    `json:"port"`
 		Password string `json:"password"`
 	} `json:"valkey"`
+	Kratos struct {
+		SessionCookie string `json:"initial_session_cookie"`
+	} `json:"kratos"`
 	Auth struct {
 		OAuthRefreshBuffer       int    `json:"oauth_refresh_buffer"`        // in seconds
 		GameSessionRefreshBuffer int    `json:"game_session_refresh_buffer"` // in seconds
@@ -26,8 +29,9 @@ type Config struct {
 		RefreshGameSession       string `json:"refresh_game_session"`
 	} `json:"auth"`
 	Profile struct {
-		ByUUID     string `json:"by_uuid"`
-		ByUsername string `json:"by_username"`
+		ByUUID       string `json:"by_uuid"`
+		ByUsername   string `json:"by_username"`
+		Availability string `json:"availability"`
 	} `json:"profile"`
 	Feeds struct {
 		PollOnStartup      bool   `json:"poll_on_startup"`
@@ -64,6 +68,10 @@ func LoadConfig() (Config, error) {
 	if envToken, exists := os.LookupEnv("GAIA_VALKEY_PASS"); exists {
 		log.Println("Overridden valkey password from env vars")
 		config.Valkey.Password = envToken
+	}
+	if envToken, exists := os.LookupEnv("GAIA_KRATOS_COOKIE"); exists {
+		log.Println("Overridden kratos session cookie from env vars")
+		config.Kratos.SessionCookie = envToken
 	}
 
 	return config, nil
