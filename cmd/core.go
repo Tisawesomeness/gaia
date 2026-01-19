@@ -31,7 +31,7 @@ var (
 	donateLine = fmt.Sprintf(":sparkles: **[Donate](%s)** :sparkles: to support development", donateOriginal)
 )
 
-func helpCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+func helpCommand(ctx *CommandContext) {
 	fields := []*discordgo.MessageEmbedField{}
 	for _, category := range categories {
 		var description strings.Builder
@@ -55,7 +55,7 @@ func helpCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 	ctx.ReplyEmbed(embed)
 }
 
-func creditsCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+func creditsCommand(ctx *CommandContext) {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Gaia Credits",
 		Description: "Thanks to all these great people who helped to make the bot possible. :heart:",

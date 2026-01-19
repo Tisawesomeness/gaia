@@ -193,9 +193,8 @@ func tryFetchProfileFromUsername(username string, ctx *CommandContext) (*hytale.
 	})
 }
 
-func profileCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
-	options := i.ApplicationCommandData().Options
-	identifier := options[0].Value.(string)
+func profileCommand(ctx *CommandContext) {
+	identifier := ctx.Options()["player"].StringValue()
 
 	var profile *hytale.PublicGameProfile
 	var err error
@@ -294,9 +293,8 @@ func checkAvailability(username string, ctx *CommandContext) {
 	}
 }
 
-func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
-	options := i.ApplicationCommandData().Options
-	identifier := options[0].Value.(string)
+func skinCommand(ctx *CommandContext) {
+	identifier := ctx.Options()["player"].StringValue()
 
 	var profile *hytale.PublicGameProfile
 	var err error

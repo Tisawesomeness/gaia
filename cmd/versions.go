@@ -57,7 +57,7 @@ func cleanupOldInteractions() {
 	}
 }
 
-func versionCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+func versionCommand(ctx *CommandContext) {
 	// Get the launcher release feed
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedID]
 	if !exists {
@@ -73,10 +73,10 @@ func versionCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *C
 	}
 
 	// Respond with the embed
-	ctx.ReplyEmbed(launcherReleaseFeed.BuildMessage(s, ctx.Config))
+	ctx.ReplyEmbed(launcherReleaseFeed.BuildMessage(ctx.Config))
 }
 
-func articlesCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+func articlesCommand(ctx *CommandContext) {
 	// Get the launcher post feed
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherPostFeedID]
 	if !exists {
@@ -98,7 +98,7 @@ func articlesCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *
 	}
 
 	// Store the interaction and current article index
-	interactionID := i.Interaction.ID
+	interactionID := ctx.Interaction.Interaction.ID
 	articleInteractions[interactionID] = &ArticleInteraction{
 		CurrentIndex: 0,
 		Articles:     articles,
@@ -107,7 +107,7 @@ func articlesCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *
 
 	// Build the message embed for the latest article
 	latestArticle := articles[0]
-	embed := latestArticle.BuildMessage(s, ctx.Config)
+	embed := latestArticle.BuildMessage(ctx.Config)
 
 	// Add buttons
 	backButton := discordgo.Button{
@@ -166,7 +166,7 @@ func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, c
 	currentArticle := interaction.Articles[interaction.CurrentIndex]
 
 	// Build the message embed for the current article
-	embed := currentArticle.BuildMessage(s, ctx.Config)
+	embed := currentArticle.BuildMessage(ctx.Config)
 
 	// Update the buttons
 	backButton := discordgo.Button{

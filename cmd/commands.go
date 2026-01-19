@@ -16,7 +16,7 @@ import (
 	"github.com/sony/gobreaker"
 )
 
-type CommandHandler struct {
+type CommandExecutor struct {
 	Config      *config.Config
 	DB          *db.DB
 	HTTP        *http.Client
@@ -30,8 +30,8 @@ type Breakers struct {
 	KratosSession *gobreaker.CircuitBreaker
 }
 
-func NewCommandHandler(config *config.Config, db *db.DB, httpClient *http.Client, authStore *auth.AuthStore, hytaleFeeds *hytale.HytaleFeeds) CommandHandler {
-	return CommandHandler{
+func NewCommandExecutor(config *config.Config, db *db.DB, httpClient *http.Client, authStore *auth.AuthStore, hytaleFeeds *hytale.HytaleFeeds) CommandExecutor {
+	return CommandExecutor{
 		Config:      config,
 		DB:          db,
 		HTTP:        httpClient,
@@ -78,18 +78,27 @@ type CommandContext struct {
 	hasDeferred bool
 }
 
-func (ch CommandHandler) newCommandContext(s *discordgo.Session, i *discordgo.InteractionCreate) *CommandContext {
+func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.InteractionCreate) *CommandContext {
 	return &CommandContext{
-		Config:      ch.Config,
-		DB:          ch.DB,
-		HTTP:        ch.HTTP,
-		AuthStore:   ch.AuthStore,
-		HytaleFeeds: ch.HytaleFeeds,
-		Breakers:    ch.Breakers,
+		Config:      ce.Config,
+		DB:          ce.DB,
+		HTTP:        ce.HTTP,
+		AuthStore:   ce.AuthStore,
+		HytaleFeeds: ce.HytaleFeeds,
+		Breakers:    ce.Breakers,
 		Session:     s,
 		Interaction: i,
 		hasDeferred: false,
 	}
+}
+
+func (ctx *CommandContext) Options() map[string]*discordgo.ApplicationCommandInteractionDataOption {
+	options := ctx.Interaction.ApplicationCommandData().Options
+	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
+	for _, opt := range options {
+		optionMap[opt.Name] = opt
+	}
+	return optionMap
 }
 
 func (ctx *CommandContext) User() *discordgo.User {
@@ -204,7 +213,7 @@ type Category struct {
 
 type Command struct {
 	discord *discordgo.ApplicationCommand
-	handler func(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext)
+	handler func(ctx *CommandContext)
 }
 
 var categories []*Category
@@ -229,8 +238,8 @@ func init() {
 	}
 }
 
-func (ch CommandHandler) HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	ctx := ch.newCommandContext(s, i)
+func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	ctx := ce.newCommandContext(s, i)
 
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
@@ -247,7 +256,7 @@ func (ch CommandHandler) HandleInteractionCreate(s *discordgo.Session, i *discor
 		for _, category := range categories {
 			for _, command := range category.commands {
 				if commandName == command.discord.Name {
-					command.handler(s, i, ctx)
+					command.handler(ctx)
 					return
 				}
 			}

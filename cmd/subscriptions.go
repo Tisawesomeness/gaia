@@ -59,15 +59,11 @@ var (
 	}
 )
 
-func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
-	options := i.ApplicationCommandData().Options
-	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
-	for _, opt := range options {
-		optionMap[opt.Name] = opt
-	}
+func subscribeCommand(ctx *CommandContext) {
+	options := ctx.Options()
 
-	subType := optionMap["type"].StringValue()
-	channel := optionMap["channel"].ChannelValue(s)
+	subType := options["type"].StringValue()
+	channel := options["channel"].ChannelValue(ctx.Session)
 
 	// Get the feed from the HytaleFeeds map
 	feed, exists := ctx.HytaleFeeds.Feeds[subType]
@@ -84,14 +80,14 @@ func subscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx 
 	}
 }
 
-func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
-	guildID := i.GuildID
+func listCommand(ctx *CommandContext) {
+	guildID := ctx.Interaction.GuildID
 	if guildID == "" {
 		ctx.ReplyWarn("This command can only be used in a guild.")
 		return
 	}
 
-	channels, err := s.GuildChannels(guildID)
+	channels, err := ctx.Session.GuildChannels(guildID)
 	if err != nil {
 		ctx.ReplyError(fmt.Errorf("Error while trying fetch guild channels: %w", err))
 		return
@@ -154,22 +150,18 @@ func listCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *Comm
 	ctx.ReplyEmbed(embed)
 }
 
-func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
-	guildID := i.GuildID
+func unsubscribeCommand(ctx *CommandContext) {
+	guildID := ctx.Interaction.GuildID
 	if guildID == "" {
 		ctx.ReplyWarn("This command can only be used in a guild.")
 		return
 	}
 
-	options := i.ApplicationCommandData().Options
-	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
-	for _, opt := range options {
-		optionMap[opt.Name] = opt
-	}
+	options := ctx.Options()
 
 	var channelID string
-	if channelOpt, exists := optionMap["channel"]; exists {
-		channel := channelOpt.ChannelValue(s)
+	if channelOpt, exists := options["channel"]; exists {
+		channel := channelOpt.ChannelValue(ctx.Session)
 		channelID = channel.ID
 	}
 
@@ -180,11 +172,11 @@ func unsubscribeCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ct
 				log.Printf("Error removing subscription for %s: %v", feedID, err)
 			}
 		}
-		channel := optionMap["channel"].ChannelValue(s)
+		channel := options["channel"].ChannelValue(ctx.Session)
 		ctx.Reply("Unsubscribed all feeds from channel: " + channel.Mention())
 	} else {
 		// Unsubscribe all channels in the guild from all feeds
-		channels, err := s.GuildChannels(guildID)
+		channels, err := ctx.Session.GuildChannels(guildID)
 		if err != nil {
 			ctx.ReplyError(fmt.Errorf("Error while fetching guild channels: %w", err))
 			return
