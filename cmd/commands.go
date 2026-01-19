@@ -20,6 +20,18 @@ type CommandContext struct {
 	HytaleFeeds hytale.HytaleFeeds
 }
 
+type CommandError struct {
+	message string
+}
+
+func (ce CommandError) Error() string {
+	return ce.message
+}
+
+func NewCommandError(message string) CommandError {
+	return CommandError{message: message}
+}
+
 type Category struct {
 	name     string
 	commands []*Command
@@ -39,6 +51,7 @@ func init() {
 		}},
 		{"Players", []*Command{
 			{ProfileCommand, profileCommand},
+			{SkinCommand, skinCommand},
 		}},
 		{"Updates", []*Command{
 			{VersionCommand, versionCommand},

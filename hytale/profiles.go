@@ -19,7 +19,7 @@ type publicGameProfileResponse struct {
 
 type PublicGameProfile struct {
 	Skin     map[string]*string
-	UUUID    string
+	UUID     string
 	Username string
 }
 
@@ -77,7 +77,7 @@ func fetchProfile(url string, authStore auth.AuthStore, httpClient http.Client) 
 
 	return PublicGameProfile{
 		Skin:     skin,
-		UUUID:    profile.UUID,
+		UUID:     profile.UUID,
 		Username: profile.Username,
 	}, nil
 }

@@ -17,8 +17,21 @@ var (
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "identifier",
-				Description: "The UUID or username of the profile to fetch",
+				Name:        "player",
+				Description: "Username or UUID",
+				Required:    true,
+			},
+		},
+	}
+
+	SkinCommand = &discordgo.ApplicationCommand{
+		Name:        "skin",
+		Description: "Fetch a Hytale player's skin details by UUID or username",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "player",
+				Description: "Username or UUID",
 				Required:    true,
 			},
 		},
@@ -167,44 +180,87 @@ func validateAndFormatUUID(uuid string) (string, bool) {
 	return fmt.Sprintf("%s-%s-%s-%s-%s", matches[1], matches[2], matches[3], matches[4], matches[5]), true
 }
 
+func fetchProfile(identifier string, ctx *CommandContext) (hytale.PublicGameProfile, error) {
+	uuid, isUUID := validateAndFormatUUID(identifier)
+	if isUUID {
+		return hytale.FetchProfileFromUUID(uuid, ctx.Config, ctx.HTTP, ctx.AuthStore)
+	} else if usernameRegex.MatchString(identifier) {
+		return hytale.FetchProfileFromUsername(identifier, ctx.Config, ctx.HTTP, ctx.AuthStore)
+	} else {
+		return hytale.PublicGameProfile{}, NewCommandError(identifier + " is not a valid username or UUID")
+	}
+}
+
 func profileCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	options := i.ApplicationCommandData().Options
 	identifier := options[0].Value.(string)
 
-	var profile hytale.PublicGameProfile
-	var err error
-	uuid, isUUID := validateAndFormatUUID(identifier)
-	if isUUID {
-		profile, err = hytale.FetchProfileFromUUID(uuid, ctx.Config, ctx.HTTP, ctx.AuthStore)
-	} else if usernameRegex.MatchString(identifier) {
-		profile, err = hytale.FetchProfileFromUsername(identifier, ctx.Config, ctx.HTTP, ctx.AuthStore)
-	} else {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: identifier + " is not a valid username or UUID",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
-		return
-	}
-
+	profile, err := fetchProfile(identifier, ctx)
 	if err != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Failed to fetch profile: " + err.Error(),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		if cmdErr, ok := err.(CommandError); ok {
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: cmdErr.message,
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+		} else {
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Failed to fetch profile: " + err.Error(),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+		}
 		return
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Title: "Profile for " + profile.Username,
 		Description: fmt.Sprintf("Short UUID: `%s`\nLong UUID: `%s`",
-			strings.ReplaceAll(profile.UUUID, "-", ""),
-			profile.UUUID),
+			strings.ReplaceAll(profile.UUID, "-", ""),
+			profile.UUID),
+		Color: 0x00FF00,
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+		},
+	})
+}
+
+func skinCommand(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+	options := i.ApplicationCommandData().Options
+	identifier := options[0].Value.(string)
+
+	profile, err := fetchProfile(identifier, ctx)
+	if err != nil {
+		if cmdErr, ok := err.(CommandError); ok {
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: cmdErr.message,
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+		} else {
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Failed to fetch profile: " + err.Error(),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+		}
+		return
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: "Skin Details for " + profile.Username,
 		Color: 0x00FF00,
 	}
 
