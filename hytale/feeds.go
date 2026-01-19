@@ -56,9 +56,9 @@ type ArticleFeed struct {
 
 const (
 	LauncherReleaseFeedID      = "launcher_release"
-	LauncherReleaseFeedDisplay = "New Versions"
+	LauncherReleaseFeedDisplay = "New Launcher Version"
 	LauncherPostFeedID         = "launcher_post"
-	LauncherPostFeedDisplay    = "Launcher Posts"
+	LauncherPostFeedDisplay    = "Launcher Articles"
 	expectedFeeds              = 2
 )
 
@@ -84,7 +84,7 @@ func (f *LauncherReleaseFeed) GetDisplayName() string {
 func (f *LauncherReleaseFeed) BuildMessage(s *discordgo.Session, config *config.Config) *discordgo.MessageEmbed {
 	// Prepare the embed with version and download links
 	embed := &discordgo.MessageEmbed{
-		Title:       "Latest Hytale Version",
+		Title:       "Latest Hytale Launcher Version",
 		Description: fmt.Sprintf("**%s**", f.GetVersion()),
 		Color:       0x00FF00,
 	}
