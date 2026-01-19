@@ -92,6 +92,14 @@ func (ch CommandHandler) newCommandContext(s *discordgo.Session, i *discordgo.In
 	}
 }
 
+func (ctx *CommandContext) User() *discordgo.User {
+	if ctx.Interaction.Member != nil {
+		return ctx.Interaction.Member.User
+	} else {
+		return ctx.Interaction.User
+	}
+}
+
 func (ctx *CommandContext) DeferReply() {
 	ctx.hasDeferred = true
 	ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
@@ -205,6 +213,7 @@ func init() {
 	categories = []*Category{
 		{"Core", []*Command{
 			{HelpCommand, helpCommand},
+			{CreditsCommand, creditsCommand},
 		}},
 		{"Players", []*Command{
 			{ProfileCommand, profileCommand},

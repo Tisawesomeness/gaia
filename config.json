@@ -1,6 +1,18 @@
 {
   "token": "YOUR_DISCORD_BOT_TOKEN",
   "test_server": "",
+  "is_self_hosted": true,
+  "branding": {
+    "author": "",
+    "author_tag": "",
+    "invite": "",
+    "help_server": "",
+    "website": "",
+    "github": "",
+    "issues": "",
+    "terms": "",
+    "privacy": ""
+  },
   "valkey": {
     "address": "127.0.0.1",
     "port": 6379,

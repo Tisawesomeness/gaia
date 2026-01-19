@@ -15,9 +15,23 @@ type BreakerConfig struct {
 }
 
 type Config struct {
-	Token      string `json:"token"`
-	TestServer string `json:"test_server"`
-	Valkey     struct {
+	Token        string `json:"token"`
+	TestServer   string `json:"test_server"`
+	IsSelfHosted bool   `json:"is_self_hosted"`
+	Branding     struct {
+		Author          string `json:"author"`
+		AuthorTag       string `json:"author_tag"`
+		Invite          string `json:"invite"`
+		HelpServer      string `json:"help_server"`
+		Website         string `json:"website"`
+		Github          string `json:"github"`
+		Issues          string `json:"issues"`
+		HostingProvider string `json:"hosting_provider"`
+		HostingWebsite  string `json:"hosting_website"`
+		Terms           string `json:"terms"`
+		Privacy         string `json:"privacy"`
+	} `json:"branding"`
+	Valkey struct {
 		Address  string `json:"address"`
 		Port     int    `json:"port"`
 		Password string `json:"password"`
@@ -56,12 +70,16 @@ type Config struct {
 	} `json:"http"`
 }
 
+var defaultConfig = Config{
+	IsSelfHosted: true,
+}
+
 func LoadConfig() (Config, error) {
 	configFile, err := os.ReadFile("config.json")
 	if err != nil {
 		return Config{}, err
 	}
-	var config Config
+	config := defaultConfig
 	err = json.Unmarshal(configFile, &config)
 	if err != nil {
 		return Config{}, err
