@@ -29,11 +29,30 @@ var (
 	VersionCommand = &discordgo.ApplicationCommand{
 		Name:        "version",
 		Description: "Get the latest Hytale version",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "patchline",
+				Description: "The release channel",
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{
+						Name:  hytale.Release.Display(),
+						Value: string(hytale.Release),
+					},
+					{
+						Name:  hytale.PreRelease.Display(),
+						Value: string(hytale.PreRelease),
+					},
+				},
+			},
+		},
 	}
+
 	LauncherCommand = &discordgo.ApplicationCommand{
 		Name:        "launcher",
 		Description: "Get the latest Hytale Launcher version",
 	}
+
 	ArticlesCommand = &discordgo.ApplicationCommand{
 		Name:        "articles",
 		Description: "Get the latest Hytale article",
@@ -61,8 +80,22 @@ func cleanupOldInteractions() {
 }
 
 func versionCommand(ctx *CommandContext) {
+	options := ctx.Options()
+	option, exists := options["patchline"]
+	var patchlineValue string
+	if exists {
+		patchlineValue = option.StringValue()
+	} else {
+		patchlineValue = "release"
+	}
+
+	patchline, err := hytale.ParsePatchline(patchlineValue)
+	if err != nil {
+		ctx.ReplyWarn("Invalid patchline")
+	}
+
 	// Get the launcher release feed
-	feed, exists := ctx.HytaleFeeds.Feeds[hytale.GameReleaseFeedID]
+	feed, exists := ctx.HytaleFeeds.Feeds[patchline.FeedID()]
 	if !exists {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
 		return

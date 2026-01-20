@@ -18,12 +18,58 @@ import (
 const (
 	GameReleaseFeedID          = "game_release"
 	GameReleaseFeedDisplay     = "New Hytale Release"
+	GamePreReleaseFeedID       = "game_pre_release"
+	GamePreReleaseFeedDisplay  = "New Hytale Pre-release"
 	LauncherReleaseFeedID      = "launcher_release"
 	LauncherReleaseFeedDisplay = "New Launcher Version"
 	LauncherPostFeedID         = "launcher_post"
 	LauncherPostFeedDisplay    = "Launcher Articles"
-	expectedFeeds              = 3
+	expectedFeeds              = 4
 )
+
+type Patchline string
+
+const (
+	Release    Patchline = "release"
+	PreRelease Patchline = "pre-release"
+)
+
+var (
+	patchlines = []Patchline{Release, PreRelease}
+)
+
+func ParsePatchline(patchline string) (Patchline, error) {
+	switch patchline {
+	case string(Release):
+		return Release, nil
+	case string(PreRelease):
+		return PreRelease, nil
+	default:
+		return "", fmt.Errorf("unknown patchline: %s", patchline)
+	}
+}
+
+func (p Patchline) Display() string {
+	switch p {
+	case Release:
+		return "Release"
+	case PreRelease:
+		return "Pre-release"
+	default:
+		panic(fmt.Errorf("unknown state: %s", p))
+	}
+}
+
+func (p Patchline) FeedID() string {
+	switch p {
+	case Release:
+		return GameReleaseFeedID
+	case PreRelease:
+		return GamePreReleaseFeedID
+	default:
+		panic(fmt.Errorf("unknown state: %s", p))
+	}
+}
 
 type Feed interface {
 	GetID() string
@@ -42,13 +88,14 @@ type gameReleaseResponse struct {
 	Url string `json:"url"`
 }
 
-// Game Release Feed
+// Game Release Feed, includes pre-release
 type GameReleaseFeed struct {
-	Version *GameReleaseVersion
+	Version   *GameReleaseVersion
+	Patchline Patchline
 }
 
 func (f *GameReleaseFeed) GetID() string {
-	return GameReleaseFeedID
+	return f.Patchline.FeedID()
 }
 
 func (f *GameReleaseFeed) GetDisplayName() string {
@@ -56,14 +103,14 @@ func (f *GameReleaseFeed) GetDisplayName() string {
 }
 
 func (f *GameReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
-	var title string
+	var adjective string
 	if isNews {
-		title = "New Hytale Version"
+		adjective = "New"
 	} else {
-		title = "Latest Hytale Version"
+		adjective = "Latest"
 	}
 	return &discordgo.MessageEmbed{
-		Title:       title,
+		Title:       fmt.Sprintf("%s Hytale %s", adjective, f.Patchline.Display()),
 		Description: fmt.Sprintf("`%s`", f.GetVersion()),
 		Color:       0x00FF00,
 	}
@@ -76,8 +123,8 @@ func (f *GameReleaseFeed) GetVersion() string {
 	return f.Version.Version
 }
 
-func getStoredGameRelease(db *db.DB) (*GameReleaseVersion, error) {
-	raw, err := db.GetLatestPost(GameReleaseFeedID)
+func getStoredGameRelease(patchline Patchline, db *db.DB) (*GameReleaseVersion, error) {
+	raw, err := db.GetLatestPost(patchline.FeedID())
 	if err != nil {
 		return nil, err
 	}
@@ -90,13 +137,13 @@ func getStoredGameRelease(db *db.DB) (*GameReleaseVersion, error) {
 	return &release, err
 }
 
-func (feeds HytaleFeeds) fetchGameReleaseUrl() (string, error) {
+func (feeds HytaleFeeds) fetchGameReleaseUrl(patchline Patchline) (string, error) {
 	token, err := feeds.authStore.GetOAuthToken()
 	if err != nil {
 		return "", err
 	}
 
-	req, err := http.NewRequest("GET", feeds.config.Feeds.GameRelease, nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s%s.json", feeds.config.Feeds.GameVersion, patchline), nil)
 	if err != nil {
 		return "", err
 	}
@@ -122,8 +169,8 @@ func (feeds HytaleFeeds) fetchGameReleaseUrl() (string, error) {
 	return response.Url, nil
 }
 
-func (feeds HytaleFeeds) fetchGameRelease() (*GameReleaseVersion, error) {
-	url, err := feeds.fetchGameReleaseUrl()
+func (feeds HytaleFeeds) fetchGameRelease(patchline Patchline) (*GameReleaseVersion, error) {
+	url, err := feeds.fetchGameReleaseUrl(patchline)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +182,7 @@ func (feeds HytaleFeeds) fetchGameRelease() (*GameReleaseVersion, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, util.NewBadResponseError("Fetch game release", resp)
+		return nil, util.NewBadResponseError(fmt.Sprintf("Fetch %s version", patchline), resp)
 	}
 
 	var release GameReleaseVersion
@@ -391,12 +438,17 @@ func (feeds *HytaleFeeds) initializeFeeds() error {
 	}
 
 	// Initialize game release feed
-	gameRelease, err := getStoredGameRelease(feeds.db)
-	if err != nil {
-		return err
-	}
-	if gameRelease != nil {
-		feeds.Feeds[GameReleaseFeedID] = &GameReleaseFeed{Version: gameRelease}
+	for _, patchline := range patchlines {
+		gameRelease, err := getStoredGameRelease(patchline, feeds.db)
+		if err != nil {
+			return err
+		}
+		if gameRelease != nil {
+			feeds.Feeds[patchline.FeedID()] = &GameReleaseFeed{
+				Version:   gameRelease,
+				Patchline: patchline,
+			}
+		}
 	}
 
 	return nil
@@ -432,18 +484,23 @@ func (feeds *HytaleFeeds) Poll() error {
 	feeds.updateOrAddFeed(&LauncherPostFeed{Articles: articles})
 
 	// Handle game release
-	gameRelease, err := feeds.fetchGameRelease()
-	if err != nil {
-		return err
-	}
-	gameReleaseStr, _ := json.Marshal(gameRelease)
-	err = feeds.db.SetLatestPost(GameReleaseFeedID, string(gameReleaseStr))
-	if err != nil {
-		return err
-	}
+	for _, patchline := range patchlines {
+		gameRelease, err := feeds.fetchGameRelease(patchline)
+		if err != nil {
+			return err
+		}
+		gameReleaseStr, _ := json.Marshal(gameRelease)
+		err = feeds.db.SetLatestPost(patchline.FeedID(), string(gameReleaseStr))
+		if err != nil {
+			return err
+		}
 
-	// Update or add game release feed
-	feeds.updateOrAddFeed(&GameReleaseFeed{Version: gameRelease})
+		// Update or add game release feed
+		feeds.updateOrAddFeed(&GameReleaseFeed{
+			Version:   gameRelease,
+			Patchline: patchline,
+		})
+	}
 
 	return nil
 }

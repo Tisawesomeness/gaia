@@ -26,6 +26,10 @@ var (
 						Value: hytale.GameReleaseFeedID,
 					},
 					{
+						Name:  hytale.GamePreReleaseFeedDisplay,
+						Value: hytale.GamePreReleaseFeedID,
+					},
+					{
 						Name:  hytale.LauncherReleaseFeedDisplay,
 						Value: hytale.LauncherReleaseFeedID,
 					},
