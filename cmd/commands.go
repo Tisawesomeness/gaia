@@ -281,27 +281,47 @@ func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *disco
 }
 
 func InitCommands(session *discordgo.Session, config config.Config) error {
+	if config.CreateCommandsOnStartup {
+		err := deployCommands(session, config)
+		if err != nil {
+			return err
+		}
+	}
+	StartCleanup()
+	return nil
+}
+
+func deployCommands(session *discordgo.Session, config config.Config) error {
+	var commands []*discordgo.ApplicationCommand
+	var testCommands []*discordgo.ApplicationCommand
+
 	for _, category := range categories {
 		for _, command := range category.commands {
-			// Register global commands
-			_, err := session.ApplicationCommandCreate(session.State.User.ID, "", command.discord)
-			if err != nil {
-				return fmt.Errorf("Could not deploy global '%v' command: %v", command.discord.Name, err)
-			}
+			commands = append(commands, command.discord)
 
 			contexts := command.discord.Contexts
 			if config.TestServer == "" || (contexts != nil && !slices.Contains(*contexts, discordgo.InteractionContextGuild)) {
 				continue
 			}
-			// Register guild commands with the test- prefix
+
 			guildCommand := *command.discord
 			guildCommand.Name = "test-" + guildCommand.Name
-			_, err = session.ApplicationCommandCreate(session.State.User.ID, config.TestServer, &guildCommand)
-			if err != nil {
-				return fmt.Errorf("Could not deploy guild '%v' command: %v", guildCommand.Name, err)
-			}
+			testCommands = append(testCommands, &guildCommand)
 		}
 	}
-	StartCleanup()
+
+	if len(commands) > 0 {
+		_, err := session.ApplicationCommandBulkOverwrite(session.State.User.ID, "", commands)
+		if err != nil {
+			return fmt.Errorf("Could not deploy global commands: %v", err)
+		}
+	}
+
+	if len(testCommands) > 0 && config.TestServer != "" {
+		_, err := session.ApplicationCommandBulkOverwrite(session.State.User.ID, config.TestServer, testCommands)
+		if err != nil {
+			return fmt.Errorf("Could not deploy guild commands: %v", err)
+		}
+	}
 	return nil
 }

@@ -15,10 +15,11 @@ type BreakerConfig struct {
 }
 
 type Config struct {
-	Token        string `json:"token"`
-	TestServer   string `json:"test_server"`
-	IsSelfHosted bool   `json:"is_self_hosted"`
-	Branding     struct {
+	Token                   string `json:"token"`
+	TestServer              string `json:"test_server"`
+	IsSelfHosted            bool   `json:"is_self_hosted"`
+	CreateCommandsOnStartup bool   `json:"create_commands_on_startup"`
+	Branding                struct {
 		Author          string `json:"author"`
 		AuthorTag       string `json:"author_tag"`
 		Invite          string `json:"invite"`

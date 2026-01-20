@@ -2,6 +2,7 @@
   "token": "YOUR_DISCORD_BOT_TOKEN",
   "test_server": "",
   "is_self_hosted": true,
+  "create_commands_on_startup": true,
   "branding": {
     "author": "",
     "author_tag": "",
