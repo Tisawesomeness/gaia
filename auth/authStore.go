@@ -23,6 +23,8 @@ type AuthStore struct {
 	gameSessionRefreshTimer *time.Timer
 }
 
+var expiredGameSessionError = errors.New("Expired game session")
+
 // Authenticates to Hytale OAuth and creates a game session.
 // Will resume from tokens stored in database if available.
 // Otherwise, asks the user to complete the OAuth flow.
@@ -51,8 +53,12 @@ func (a *AuthStore) initialize() error {
 
 	gameSession, profileUUID, err := a.initializeFreshGameSession()
 	if err != nil {
-		log.Printf("Failed to initialize game session: %v", err)
-		log.Println("Falling back to OAuth")
+		if errors.Is(err, expiredGameSessionError) {
+			log.Println("Game session expired, falling back to OAuth")
+		} else {
+			log.Printf("Failed to initialize game session: %v", err)
+			log.Println("Falling back to OAuth")
+		}
 		profileUUID, err = a.initializeProfile(a.oauthToken)
 		if err != nil {
 			return err
@@ -118,6 +124,10 @@ func (a *AuthStore) initializeFreshGameSession() (db.GameSessionToken, string, e
 		return db.GameSessionToken{}, "", errors.New("No stored profile UUID found")
 	}
 
+	// Unlike OAuth, trying to refresh an expired game session will fail
+	if time.Now().After((*storedGameSession).ExpiresAt) {
+		return db.GameSessionToken{}, "", expiredGameSessionError
+	}
 	refreshedSession, err := a.ensureGameSessionRefreshed(*storedGameSession, storedProfileUUID)
 	if err != nil {
 		return db.GameSessionToken{}, "", err
