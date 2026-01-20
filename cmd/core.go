@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Tisawesomeness/gaia/config"
@@ -36,7 +37,9 @@ func helpCommand(ctx *CommandContext) {
 	for _, category := range categories {
 		var description strings.Builder
 		for _, command := range category.commands {
-			fmt.Fprintf(&description, "`/%s` - %s\n", command.discord.Name, command.discord.Description)
+			if command.discord.Contexts == nil || slices.Contains(*command.discord.Contexts, ctx.Interaction.Context) {
+				fmt.Fprintf(&description, "`/%s` - %s\n", command.discord.Name, command.discord.Description)
+			}
 		}
 		field := &discordgo.MessageEmbedField{
 			Name:   category.name,

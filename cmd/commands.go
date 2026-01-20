@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -233,6 +234,7 @@ func init() {
 			{LauncherCommand, launcherCommand},
 			{ArticlesCommand, articlesCommand},
 			{SubscribeCommand, subscribeCommand},
+			{SubscribeDMCommand, subscribeDMCommand},
 			{ListCommand, listCommand},
 			{UnsubscribeCommand, unsubscribeCommand},
 		}},
@@ -287,7 +289,8 @@ func InitCommands(session *discordgo.Session, config config.Config) error {
 				return fmt.Errorf("Could not deploy global '%v' command: %v", command.discord.Name, err)
 			}
 
-			if config.TestServer == "" {
+			contexts := command.discord.Contexts
+			if config.TestServer == "" || (contexts != nil && !slices.Contains(*contexts, discordgo.InteractionContextGuild)) {
 				continue
 			}
 			// Register guild commands with the test- prefix

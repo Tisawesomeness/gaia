@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"unicode"
 
 	"github.com/Tisawesomeness/gaia/auth"
@@ -511,25 +512,71 @@ func (feeds *HytaleFeeds) updateOrAddFeed(newFeed Feed) {
 
 func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
 	for feedID, feed := range feeds.Feeds {
-		subs, err := feeds.db.GetSubscriptions(feedID)
+		targetIDs, err := feeds.db.GetSubscriptions(feedID)
 		if err != nil {
 			return err
 		}
 
-		for channelId, lastKnownVersion := range subs {
-			if lastKnownVersion != feed.GetVersion() {
-				_, err = s.Channel(channelId)
-				if err != nil {
-					log.Printf("Error accessing channel, removing: %v", err)
-					feeds.removeAllSubscriptions(channelId)
-				} else {
-					message := feed.BuildMessage(feeds.config, true)
-					_, err = s.ChannelMessageSendEmbed(channelId, message)
+		for _, targetID := range targetIDs {
+			sub, err := feeds.db.GetSubscription(feedID, targetID)
+			if err != nil {
+				log.Printf("Error getting subscription from db: %v", err)
+				continue
+			}
+
+			if sub.CurrentVersion() != feed.GetVersion() {
+				switch sub := sub.(type) {
+				case db.GuildSubscription:
+					_, err = s.Channel(targetID)
 					if err != nil {
-						log.Printf("Cannot send feed update: %v", err)
-						continue
+						log.Printf("Error accessing channel, removing: %v", err)
+						feeds.removeAllSubscriptions(targetID)
+					} else {
+						message := feed.BuildMessage(feeds.config, true)
+						_, err = s.ChannelMessageSendComplex(targetID, &discordgo.MessageSend{
+							Content: roleMentions(sub.Roles),
+							Embeds:  []*discordgo.MessageEmbed{message},
+							AllowedMentions: &discordgo.MessageAllowedMentions{
+								Roles: sub.Roles,
+							},
+						})
+						if err != nil {
+							log.Printf("Cannot send feed update: %v", err)
+							continue
+						}
+
+						feeds.db.AddOrUpdateSubscription(feedID, targetID, db.GuildSubscription{
+							Version: feed.GetVersion(),
+							Roles:   sub.Roles,
+						})
 					}
-					feeds.db.AddOrUpdateSubscription(feedID, channelId, feed.GetVersion())
+
+				case db.UserSubscription:
+					_, err = s.User(targetID)
+					if err != nil {
+						log.Printf("Error accessing user, removing: %v", err)
+						feeds.removeAllSubscriptions(targetID)
+					} else {
+						dm, err := s.UserChannelCreate(targetID)
+						if err != nil {
+							log.Printf("Cannot open DM: %v", err)
+							continue
+						}
+
+						message := feed.BuildMessage(feeds.config, true)
+						_, err = s.ChannelMessageSendEmbed(dm.ID, message)
+						if err != nil {
+							log.Printf("Cannot send feed update: %v", err)
+							continue
+						}
+
+						feeds.db.AddOrUpdateSubscription(feedID, targetID, db.UserSubscription{
+							Version: feed.GetVersion(),
+						})
+					}
+
+				default:
+					panic("Invalid subscription type")
 				}
 			}
 		}
@@ -537,8 +584,16 @@ func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
 	return nil
 }
 
-func (feeds HytaleFeeds) removeAllSubscriptions(channelId string) {
+func (feeds HytaleFeeds) removeAllSubscriptions(targetID string) {
 	for feedID := range feeds.Feeds {
-		feeds.db.RemoveSubscription(feedID, channelId)
+		feeds.db.RemoveSubscription(feedID, targetID)
 	}
+}
+
+func roleMentions(roleIDs []string) string {
+	var mentions []string
+	for _, id := range roleIDs {
+		mentions = append(mentions, fmt.Sprintf("<@&%s>", id))
+	}
+	return strings.Join(mentions, " ")
 }

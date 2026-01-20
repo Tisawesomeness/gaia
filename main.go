@@ -56,14 +56,16 @@ func main() {
 		log.Fatalf("Could not open session: %v", err)
 	}
 	defer session.Close()
-	log.Println("Bot started")
+	log.Println("Opened Discord session")
 
 	err = cmd.InitCommands(session, config)
 	if err != nil {
 		log.Fatalf("Error while registering commands: %v", err)
 	}
+	log.Println("Commands created")
 
 	go pollFeeds(session, config, *feeds)
+	log.Println("Bot finished init")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
