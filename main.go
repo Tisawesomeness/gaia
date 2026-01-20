@@ -46,7 +46,8 @@ func main() {
 	}
 	log.Println("Bot authenticated")
 
-	commandExecutor := cmd.NewCommandExecutor(&config, database, httpClient, authStore, feeds)
+	bootTime := time.Now()
+	commandExecutor := cmd.NewCommandExecutor(&config, database, httpClient, authStore, feeds, &bootTime)
 	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		commandExecutor.HandleInteractionCreate(s, i)
 	})

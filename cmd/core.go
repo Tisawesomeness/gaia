@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/bwmarrin/discordgo"
 )
 
 const (
+	version = "0.1.0"
+
 	websiteOriginal    = "https://tis.codes/gaia"
 	helpServerOriginal = "https://minecord.github.io/support"
 	githubOriginal     = "https://github.com/Tisawesomeness/gaia"
@@ -20,6 +23,10 @@ var (
 	HelpCommand = &discordgo.ApplicationCommand{
 		Name:        "help",
 		Description: "List all commands",
+	}
+	InfoCommand = &discordgo.ApplicationCommand{
+		Name:        "info",
+		Description: "Get information and stats about the bot",
 	}
 	CreditsCommand = &discordgo.ApplicationCommand{
 		Name:        "credits",
@@ -55,6 +62,88 @@ func helpCommand(ctx *CommandContext) {
 		Fields: fields,
 	}
 
+	ctx.ReplyEmbed(embed)
+}
+
+func infoCommand(ctx *CommandContext) {
+	fields := []*discordgo.MessageEmbedField{
+		{
+			Name:   "Author",
+			Value:  "[Tis](https://tis.codes)",
+			Inline: true,
+		},
+	}
+
+	if ctx.Config.IsSelfHosted {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Self-Hoster",
+			Value:  fmt.Sprintf("%s", ctx.Config.Branding.Author),
+			Inline: true,
+		})
+	}
+
+	fields = append(fields, &discordgo.MessageEmbedField{
+		Name:   "Version",
+		Value:  fmt.Sprintf("`%s`", version),
+		Inline: true,
+	})
+
+	if !ctx.Config.IsSelfHosted {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Shard",
+			Value:  "1/1",
+			Inline: true,
+		})
+	}
+
+	fields = append(fields, []*discordgo.MessageEmbedField{
+		{
+			Name:   "Guilds",
+			Value:  fmt.Sprintf("%d", len(ctx.Session.State.Guilds)),
+			Inline: true,
+		},
+		{
+			Name:   "Uptime",
+			Value:  formatUptime(*ctx.BootTime),
+			Inline: true,
+		},
+		{
+			Name:   "Ping",
+			Value:  fmt.Sprintf("%dms", ctx.Session.HeartbeatLatency().Milliseconds()),
+			Inline: true,
+		},
+		{
+			Name: "Links",
+			Value: fmt.Sprintf("[INVITE](%s) | [SUPPORT](%s) | [WEBSITE](%s) | [GITHUB](%s)",
+				ctx.Config.Branding.Invite,
+				ctx.Config.Branding.HelpServer,
+				ctx.Config.Branding.Website,
+				ctx.Config.Branding.Github),
+			Inline: false,
+		},
+	}...)
+
+	if !ctx.Config.IsSelfHosted {
+		fields = append(fields, []*discordgo.MessageEmbedField{
+			{
+				Name: "Legal",
+				Value: fmt.Sprintf("[TERMS](%s) | [PRIVACY](%s)",
+					ctx.Config.Branding.Terms,
+					ctx.Config.Branding.Privacy),
+				Inline: false,
+			},
+			{
+				Name:   "Donate",
+				Value:  donateLine,
+				Inline: false,
+			},
+		}...)
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Color:  0x0000ff,
+		Fields: fields,
+	}
 	ctx.ReplyEmbed(embed)
 }
 
@@ -120,4 +209,26 @@ func buildHostingField(config *config.Config) *discordgo.MessageEmbedField {
 			Inline: false,
 		}
 	}
+}
+
+func formatUptime(bootTime time.Time) string {
+	duration := time.Since(bootTime)
+	days := int(duration.Hours() / 24)
+	hours := int(duration.Hours()) % 24
+	minutes := int(duration.Minutes()) % 60
+	seconds := int(duration.Seconds()) % 60
+
+	var parts []string
+	if int(duration.Hours()/24) > 0 {
+		parts = append(parts, fmt.Sprintf("%dd", days))
+	}
+	if int(duration.Hours()) > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+	}
+	if int(duration.Minutes()) > 0 {
+		parts = append(parts, fmt.Sprintf("%dm", minutes))
+	}
+	parts = append(parts, fmt.Sprintf("%ds", seconds))
+
+	return strings.Join(parts, "")
 }

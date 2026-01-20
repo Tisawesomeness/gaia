@@ -23,6 +23,7 @@ type CommandExecutor struct {
 	HTTP        *http.Client
 	AuthStore   *auth.AuthStore
 	HytaleFeeds *hytale.HytaleFeeds
+	BootTime    *time.Time
 	Breakers    *Breakers
 }
 
@@ -31,13 +32,14 @@ type Breakers struct {
 	KratosSession *gobreaker.CircuitBreaker
 }
 
-func NewCommandExecutor(config *config.Config, db *db.DB, httpClient *http.Client, authStore *auth.AuthStore, hytaleFeeds *hytale.HytaleFeeds) CommandExecutor {
+func NewCommandExecutor(config *config.Config, db *db.DB, httpClient *http.Client, authStore *auth.AuthStore, hytaleFeeds *hytale.HytaleFeeds, bootTime *time.Time) CommandExecutor {
 	return CommandExecutor{
 		Config:      config,
 		DB:          db,
 		HTTP:        httpClient,
 		AuthStore:   authStore,
 		HytaleFeeds: hytaleFeeds,
+		BootTime:    bootTime,
 		Breakers: &Breakers{
 			HytaleSession: makeBreaker("HytaleSession", config.Auth.Breaker),
 			KratosSession: makeBreaker("KratosSession", config.Kratos.Breaker),
@@ -72,6 +74,7 @@ type CommandContext struct {
 	HTTP        *http.Client
 	AuthStore   *auth.AuthStore
 	HytaleFeeds *hytale.HytaleFeeds
+	BootTime    *time.Time
 	Breakers    *Breakers
 
 	Session     *discordgo.Session
@@ -87,6 +90,7 @@ func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.I
 		AuthStore:   ce.AuthStore,
 		HytaleFeeds: ce.HytaleFeeds,
 		Breakers:    ce.Breakers,
+		BootTime:    ce.BootTime,
 		Session:     s,
 		Interaction: i,
 		hasDeferred: false,
@@ -227,6 +231,7 @@ func init() {
 	categories = []*Category{
 		{"Core", []*Command{
 			{HelpCommand, helpCommand},
+			{InfoCommand, infoCommand},
 			{CreditsCommand, creditsCommand},
 		}},
 		{"Players", []*Command{
