@@ -3,6 +3,7 @@
   "test_server": "",
   "is_self_hosted": true,
   "create_commands_on_startup": true,
+  "playing": "/help | Playing Hytale",
   "branding": {
     "author": "",
     "author_tag": "",

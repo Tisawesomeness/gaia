@@ -59,6 +59,11 @@ func main() {
 	defer session.Close()
 	log.Println("Opened Discord session")
 
+	err = session.UpdateGameStatus(0, config.Playing)
+	if err != nil {
+		log.Printf("Error setting bot activity: %v", err)
+	}
+
 	err = cmd.InitCommands(session, config)
 	if err != nil {
 		log.Fatalf("Error while registering commands: %v", err)

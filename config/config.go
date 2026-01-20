@@ -19,6 +19,7 @@ type Config struct {
 	TestServer              string `json:"test_server"`
 	IsSelfHosted            bool   `json:"is_self_hosted"`
 	CreateCommandsOnStartup bool   `json:"create_commands_on_startup"`
+	Playing                 string `json:"playing"`
 	Branding                struct {
 		Author          string `json:"author"`
 		AuthorTag       string `json:"author_tag"`
