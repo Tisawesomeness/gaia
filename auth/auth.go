@@ -88,7 +88,7 @@ func startDeviceAuth(config config.Config, httpClient *http.Client) (DeviceAuthR
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return DeviceAuthResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return DeviceAuthResponse{}, util.NewBadResponseError("Start device auth", resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -97,7 +97,7 @@ func startDeviceAuth(config config.Config, httpClient *http.Client) (DeviceAuthR
 	}
 
 	deviceAuthResponse := defaultDeviceAuthResponse()
-	err = json.Unmarshal(util.TrimBOM(body), &deviceAuthResponse)
+	err = json.Unmarshal(body, &deviceAuthResponse)
 	if err != nil {
 		return DeviceAuthResponse{}, err
 	}
@@ -126,7 +126,7 @@ func pollForToken(config config.Config, httpClient *http.Client, deviceAuthRespo
 			defer resp.Body.Close()
 
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				return TokenResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+				return TokenResponse{}, util.NewBadResponseError("Poll for token", resp)
 			}
 
 			body, err := io.ReadAll(resp.Body)
@@ -135,7 +135,7 @@ func pollForToken(config config.Config, httpClient *http.Client, deviceAuthRespo
 			}
 
 			var tokenResponse TokenResponse
-			err = json.Unmarshal(util.TrimBOM(body), &tokenResponse)
+			err = json.Unmarshal(body, &tokenResponse)
 			if err != nil {
 				return TokenResponse{}, err
 			}
@@ -163,7 +163,7 @@ func OAuthRefresh(oauthRefreshToken string, config config.Config, httpClient *ht
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return TokenResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return TokenResponse{}, util.NewBadResponseError("OAuth refresh", resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -172,7 +172,7 @@ func OAuthRefresh(oauthRefreshToken string, config config.Config, httpClient *ht
 	}
 
 	var tokenResponse TokenResponse
-	err = json.Unmarshal(util.TrimBOM(body), &tokenResponse)
+	err = json.Unmarshal(body, &tokenResponse)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -198,7 +198,7 @@ func GetAccountProfiles(oauthAccessToken string, config config.Config, httpClien
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return LauncherDataResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return LauncherDataResponse{}, util.NewBadResponseError("Get account profiles", resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -207,7 +207,7 @@ func GetAccountProfiles(oauthAccessToken string, config config.Config, httpClien
 	}
 
 	var launcherDataResponse LauncherDataResponse
-	err = json.Unmarshal(util.TrimBOM(body), &launcherDataResponse)
+	err = json.Unmarshal(body, &launcherDataResponse)
 	if err != nil {
 		return LauncherDataResponse{}, err
 	}
@@ -236,7 +236,7 @@ func CreateGameSession(oauthAccessToken string, uuid string, config config.Confi
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return GameSessionResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return GameSessionResponse{}, util.NewBadResponseError("Create game session", resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -245,7 +245,7 @@ func CreateGameSession(oauthAccessToken string, uuid string, config config.Confi
 	}
 
 	var gameSessionResponse GameSessionResponse
-	err = json.Unmarshal(util.TrimBOM(body), &gameSessionResponse)
+	err = json.Unmarshal(body, &gameSessionResponse)
 	if err != nil {
 		return GameSessionResponse{}, err
 	}
@@ -269,7 +269,7 @@ func RefreshGameSession(gameSessionToken string, uuid string, config config.Conf
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return GameSessionResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return GameSessionResponse{}, util.NewBadResponseError("Refresh game session", resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -278,7 +278,7 @@ func RefreshGameSession(gameSessionToken string, uuid string, config config.Conf
 	}
 
 	var gameSessionResponse GameSessionResponse
-	err = json.Unmarshal(util.TrimBOM(body), &gameSessionResponse)
+	err = json.Unmarshal(body, &gameSessionResponse)
 	if err != nil {
 		return GameSessionResponse{}, err
 	}

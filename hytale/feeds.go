@@ -11,6 +11,7 @@ import (
 	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
+	"github.com/Tisawesomeness/gaia/util"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -103,7 +104,7 @@ func (feeds HytaleFeeds) fetchGameReleaseUrl() (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
+		return "", util.NewBadResponseError("Fetch game release url", resp)
 	}
 
 	var response gameReleaseResponse
@@ -128,7 +129,7 @@ func (feeds HytaleFeeds) fetchGameRelease() (*GameReleaseVersion, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
+		return nil, util.NewBadResponseError("Fetch game release", resp)
 	}
 
 	var release GameReleaseVersion
@@ -227,7 +228,7 @@ func (feeds HytaleFeeds) fetchLauncherRelease() (*LauncherRelease, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
+		return nil, util.NewBadResponseError("Fetch launcher release", resp)
 	}
 
 	var release LauncherRelease
@@ -311,7 +312,7 @@ func (feeds HytaleFeeds) fetchArticles() (*ArticleFeed, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
+		return nil, util.NewBadResponseError("Fetch articles", resp)
 	}
 
 	var articles ArticleFeed

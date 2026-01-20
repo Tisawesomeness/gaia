@@ -1,17 +1,14 @@
 package util
 
 import (
-	"bytes"
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"unicode"
 
 	"github.com/sony/gobreaker"
 )
-
-// Hytale APIs occasionally reply starting with a Byte Order Mark...
-func TrimBOM(body []byte) []byte {
-	return bytes.TrimPrefix(body, []byte("\xef\xbb\xbf"))
-}
 
 // Convert a string in mixed case to "Capitalized Words Separated By Spaces"
 func ToCapitalizedSpacedWords(s string) string {
@@ -44,4 +41,13 @@ func Execute[T any](breaker *gobreaker.CircuitBreaker, req func() (T, error)) (T
 		return nil, innerErr
 	})
 	return result, err
+}
+
+func NewBadResponseError(description string, resp *http.Response) error {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("%s returned HTTP %d, %v", description, resp.StatusCode, err)
+	} else {
+		return fmt.Errorf("%s returned HTTP %d:\n%s\n%s", description, resp.StatusCode, resp.Header, string(body))
+	}
 }

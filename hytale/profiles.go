@@ -57,7 +57,7 @@ func fetchProfile(url string, authStore *auth.AuthStore, httpClient *http.Client
 		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Fetching profile returned HTTP %d", resp.StatusCode)
+		return nil, util.NewBadResponseError("Fetch profile", resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -67,7 +67,7 @@ func fetchProfile(url string, authStore *auth.AuthStore, httpClient *http.Client
 	}
 
 	var profile publicGameProfileResponse
-	err = json.Unmarshal(util.TrimBOM(body), &profile)
+	err = json.Unmarshal(body, &profile)
 
 	skin, err := parseSkin(err, profile.Skin)
 	if err != nil {
@@ -140,7 +140,7 @@ func CheckAvailability(username string, config *config.Config, httpClient *http.
 
 	// Hytale returns 400 if username reserved, even though the request is fine
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusBadRequest {
-		return 0, fmt.Errorf("Checking availability returned HTTP %d", resp.StatusCode)
+		return 0, util.NewBadResponseError("Check availability", resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
