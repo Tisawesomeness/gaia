@@ -125,7 +125,7 @@ func pollForToken(config config.Config, httpClient *http.Client, deviceAuthRespo
 			}
 			defer resp.Body.Close()
 
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != 400 {
 				return TokenResponse{}, util.NewBadResponseError("Poll for token", resp)
 			}
 
