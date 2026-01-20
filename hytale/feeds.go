@@ -28,7 +28,7 @@ const (
 type Feed interface {
 	GetID() string
 	GetDisplayName() string
-	BuildMessage(config *config.Config) *discordgo.MessageEmbed
+	BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed
 	GetVersion() string
 }
 
@@ -55,9 +55,15 @@ func (f *GameReleaseFeed) GetDisplayName() string {
 	return GameReleaseFeedDisplay
 }
 
-func (f *GameReleaseFeed) BuildMessage(config *config.Config) *discordgo.MessageEmbed {
+func (f *GameReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
+	var title string
+	if isNews {
+		title = "New Hytale Version"
+	} else {
+		title = "Latest Hytale Version"
+	}
 	return &discordgo.MessageEmbed{
-		Title:       "Latest Hytale Game Version",
+		Title:       title,
 		Description: fmt.Sprintf("`%s`", f.GetVersion()),
 		Color:       0x00FF00,
 	}
@@ -165,10 +171,16 @@ func (f *LauncherReleaseFeed) GetDisplayName() string {
 	return LauncherReleaseFeedDisplay
 }
 
-func (f *LauncherReleaseFeed) BuildMessage(config *config.Config) *discordgo.MessageEmbed {
+func (f *LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
 	// Prepare the embed with version and download links
+	var title string
+	if isNews {
+		title = "New Hytale Launcher Version"
+	} else {
+		title = "Latest Hytale Launcher Version"
+	}
 	embed := &discordgo.MessageEmbed{
-		Title:       "Latest Hytale Launcher Version",
+		Title:       title,
 		Description: fmt.Sprintf("`%s`", f.GetVersion()),
 		Color:       0x00FF00,
 	}
@@ -271,7 +283,7 @@ func (f *LauncherPostFeed) GetDisplayName() string {
 	return LauncherPostFeedDisplay
 }
 
-func (f *LauncherPostFeed) BuildMessage(config *config.Config) *discordgo.MessageEmbed {
+func (f *LauncherPostFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
 	if len(f.Articles.Articles) <= 0 {
 		return &discordgo.MessageEmbed{
 			Title:       "Hytale Articles",
@@ -454,7 +466,7 @@ func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
 					log.Printf("Error accessing channel, removing: %v", err)
 					feeds.removeAllSubscriptions(channelId)
 				} else {
-					message := feed.BuildMessage(feeds.config)
+					message := feed.BuildMessage(feeds.config, true)
 					_, err = s.ChannelMessageSendEmbed(channelId, message)
 					if err != nil {
 						log.Printf("Cannot send feed update: %v", err)

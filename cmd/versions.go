@@ -76,7 +76,7 @@ func versionCommand(ctx *CommandContext) {
 	}
 
 	// Respond with the embed
-	ctx.ReplyEmbed(gameReleaseFeed.BuildMessage(ctx.Config))
+	ctx.ReplyEmbed(gameReleaseFeed.BuildMessage(ctx.Config, false))
 }
 
 func launcherCommand(ctx *CommandContext) {
@@ -95,7 +95,7 @@ func launcherCommand(ctx *CommandContext) {
 	}
 
 	// Respond with the embed
-	ctx.ReplyEmbed(launcherReleaseFeed.BuildMessage(ctx.Config))
+	ctx.ReplyEmbed(launcherReleaseFeed.BuildMessage(ctx.Config, false))
 }
 
 func articlesCommand(ctx *CommandContext) {
