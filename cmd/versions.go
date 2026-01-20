@@ -30,7 +30,10 @@ var (
 		Name:        "version",
 		Description: "Get the latest Hytale version",
 	}
-
+	LauncherCommand = &discordgo.ApplicationCommand{
+		Name:        "launcher",
+		Description: "Get the latest Hytale Launcher version",
+	}
 	ArticlesCommand = &discordgo.ApplicationCommand{
 		Name:        "articles",
 		Description: "Get the latest Hytale article",
@@ -58,6 +61,25 @@ func cleanupOldInteractions() {
 }
 
 func versionCommand(ctx *CommandContext) {
+	// Get the launcher release feed
+	feed, exists := ctx.HytaleFeeds.Feeds[hytale.GameReleaseFeedID]
+	if !exists {
+		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
+		return
+	}
+
+	// Get the version from the feed
+	gameReleaseFeed, ok := feed.(*hytale.GameReleaseFeed)
+	if !ok {
+		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
+		return
+	}
+
+	// Respond with the embed
+	ctx.ReplyEmbed(gameReleaseFeed.BuildMessage(ctx.Config))
+}
+
+func launcherCommand(ctx *CommandContext) {
 	// Get the launcher release feed
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedID]
 	if !exists {

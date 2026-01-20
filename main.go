@@ -35,7 +35,7 @@ func main() {
 		log.Fatalf("Could not create auth store: %v", err)
 	}
 
-	feeds, err := hytale.NewHytaleFeeds(&config, database, httpClient)
+	feeds, err := hytale.NewHytaleFeeds(&config, database, httpClient, authStore)
 	if err != nil {
 		log.Fatalf("Error creating Hytale feeds: %v", err)
 	}

@@ -230,6 +230,7 @@ func init() {
 		}},
 		{"Updates", []*Command{
 			{VersionCommand, versionCommand},
+			{LauncherCommand, launcherCommand},
 			{ArticlesCommand, articlesCommand},
 			{SubscribeCommand, subscribeCommand},
 			{ListCommand, listCommand},

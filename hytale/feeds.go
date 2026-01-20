@@ -8,58 +8,20 @@ import (
 	"net/http"
 	"unicode"
 
+	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
 	"github.com/bwmarrin/discordgo"
 )
 
-// DownloadURL represents the download URL structure for a specific architecture.
-type DownloadURL struct {
-	URL    string `json:"url"`
-	SHA256 string `json:"sha256"`
-}
-
-// PlatformDownloadURLs represents the download URLs for a specific platform.
-// Using a map to dynamically capture any architecture.
-type PlatformDownloadURLs map[string]*DownloadURL
-
-// DownloadURLs represents the download URLs for all platforms.
-// Using a map to dynamically capture any platform.
-type DownloadURLs map[string]PlatformDownloadURLs
-
-// HytaleRelease represents the entire JSON structure.
-type HytaleRelease struct {
-	Version      string       `json:"version"`
-	DownloadURLs DownloadURLs `json:"download_url"`
-}
-
-type Article struct {
-	Title       string `json:"title"`
-	DestURL     string `json:"dest_url"`
-	Description string `json:"description"`
-	ImageURL    string `json:"image_url"`
-}
-
-func (a *Article) BuildMessage(config *config.Config) *discordgo.MessageEmbed {
-	return &discordgo.MessageEmbed{
-		Title:       a.Title,
-		URL:         a.DestURL,
-		Description: a.Description,
-		Image:       &discordgo.MessageEmbedImage{URL: config.Feeds.ArticleImagePrefix + a.ImageURL},
-		Color:       0x00FF00,
-	}
-}
-
-type ArticleFeed struct {
-	Articles []*Article `json:"articles"`
-}
-
 const (
+	GameReleaseFeedID          = "game_release"
+	GameReleaseFeedDisplay     = "New Hytale Release"
 	LauncherReleaseFeedID      = "launcher_release"
 	LauncherReleaseFeedDisplay = "New Launcher Version"
 	LauncherPostFeedID         = "launcher_post"
 	LauncherPostFeedDisplay    = "Launcher Articles"
-	expectedFeeds              = 2
+	expectedFeeds              = 3
 )
 
 type Feed interface {
@@ -69,8 +31,129 @@ type Feed interface {
 	GetVersion() string
 }
 
+// Game Release
+
+type GameReleaseVersion struct {
+	Version string `json:"version"`
+}
+
+type gameReleaseResponse struct {
+	Url string `json:"url"`
+}
+
+// Game Release Feed
+type GameReleaseFeed struct {
+	Version *GameReleaseVersion
+}
+
+func (f *GameReleaseFeed) GetID() string {
+	return GameReleaseFeedID
+}
+
+func (f *GameReleaseFeed) GetDisplayName() string {
+	return GameReleaseFeedDisplay
+}
+
+func (f *GameReleaseFeed) BuildMessage(config *config.Config) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       "Latest Hytale Game Version",
+		Description: fmt.Sprintf("`%s`", f.GetVersion()),
+		Color:       0x00FF00,
+	}
+}
+
+func (f *GameReleaseFeed) GetVersion() string {
+	if f.Version == nil {
+		return ""
+	}
+	return f.Version.Version
+}
+
+func getStoredGameRelease(db *db.DB) (*GameReleaseVersion, error) {
+	raw, err := db.GetLatestPost(GameReleaseFeedID)
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+
+	var release GameReleaseVersion
+	err = json.Unmarshal(raw, &release)
+	return &release, err
+}
+
+func (feeds HytaleFeeds) fetchGameReleaseUrl() (string, error) {
+	token, err := feeds.authStore.GetOAuthToken()
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("GET", feeds.config.Feeds.GameRelease, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	resp, err := feeds.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
+	}
+
+	var response gameReleaseResponse
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		return "", err
+	}
+
+	return response.Url, nil
+}
+
+func (feeds HytaleFeeds) fetchGameRelease() (*GameReleaseVersion, error) {
+	url, err := feeds.fetchGameReleaseUrl()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := feeds.http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
+	}
+
+	var release GameReleaseVersion
+	err = json.NewDecoder(resp.Body).Decode(&release)
+	return &release, err
+}
+
+// Launcher Release
+
+type DownloadURL struct {
+	URL    string `json:"url"`
+	SHA256 string `json:"sha256"`
+}
+
+type PlatformDownloadURLs map[string]DownloadURL
+
+type DownloadURLs map[string]PlatformDownloadURLs
+
+type LauncherRelease struct {
+	Version      string       `json:"version"`
+	DownloadURLs DownloadURLs `json:"download_url"`
+}
+
 type LauncherReleaseFeed struct {
-	Release *HytaleRelease
+	Release *LauncherRelease
 }
 
 func (f *LauncherReleaseFeed) GetID() string {
@@ -85,7 +168,7 @@ func (f *LauncherReleaseFeed) BuildMessage(config *config.Config) *discordgo.Mes
 	// Prepare the embed with version and download links
 	embed := &discordgo.MessageEmbed{
 		Title:       "Latest Hytale Launcher Version",
-		Description: fmt.Sprintf("**%s**", f.GetVersion()),
+		Description: fmt.Sprintf("`%s`", f.GetVersion()),
 		Color:       0x00FF00,
 	}
 
@@ -122,6 +205,59 @@ func (f *LauncherReleaseFeed) GetVersion() string {
 	return f.Release.Version
 }
 
+func getStoredLauncherRelease(db *db.DB) (*LauncherRelease, error) {
+	raw, err := db.GetLatestPost(LauncherReleaseFeedID)
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+
+	var release LauncherRelease
+	err = json.Unmarshal(raw, &release)
+	return &release, err
+}
+
+func (feeds HytaleFeeds) fetchLauncherRelease() (*LauncherRelease, error) {
+	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherRelease)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
+	}
+
+	var release LauncherRelease
+	err = json.NewDecoder(resp.Body).Decode(&release)
+	return &release, err
+}
+
+// Articles
+
+type Article struct {
+	Title       string `json:"title"`
+	DestURL     string `json:"dest_url"`
+	Description string `json:"description"`
+	ImageURL    string `json:"image_url"`
+}
+
+func (a *Article) BuildMessage(config *config.Config) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       a.Title,
+		URL:         a.DestURL,
+		Description: a.Description,
+		Image:       &discordgo.MessageEmbedImage{URL: config.Feeds.ArticleImagePrefix + a.ImageURL},
+		Color:       0x00FF00,
+	}
+}
+
+type ArticleFeed struct {
+	Articles []*Article `json:"articles"`
+}
+
 type LauncherPostFeed struct {
 	Articles *ArticleFeed
 }
@@ -153,19 +289,53 @@ func (f *LauncherPostFeed) GetVersion() string {
 	return f.Articles.Articles[0].DestURL
 }
 
-type HytaleFeeds struct {
-	Feeds  map[string]Feed
-	config *config.Config
-	db     *db.DB
-	http   *http.Client
+func getStoredArticles(db *db.DB) (*ArticleFeed, error) {
+	raw, err := db.GetLatestPost(LauncherPostFeedID)
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+
+	var articles ArticleFeed
+	err = json.Unmarshal(raw, &articles)
+	return &articles, err
 }
 
-func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client) (*HytaleFeeds, error) {
+func (feeds HytaleFeeds) fetchArticles() (*ArticleFeed, error) {
+	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherArticles)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
+	}
+
+	var articles ArticleFeed
+	err = json.NewDecoder(resp.Body).Decode(&articles)
+	return &articles, err
+}
+
+// Management
+
+type HytaleFeeds struct {
+	Feeds     map[string]Feed
+	config    *config.Config
+	db        *db.DB
+	http      *http.Client
+	authStore *auth.AuthStore
+}
+
+func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authStore *auth.AuthStore) (*HytaleFeeds, error) {
 	feeds := &HytaleFeeds{
-		config: config,
-		db:     db,
-		http:   http,
-		Feeds:  make(map[string]Feed),
+		Feeds:     make(map[string]Feed),
+		config:    config,
+		db:        db,
+		http:      http,
+		authStore: authStore,
 	}
 
 	// Initialize feeds
@@ -180,11 +350,11 @@ func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client) (*Hytal
 		if err != nil {
 			return nil, err
 		}
+		if len(feeds.Feeds) < expectedFeeds {
+			return nil, errors.New("feed state was not initialized")
+		}
 	}
 
-	if len(feeds.Feeds) < expectedFeeds {
-		return nil, errors.New("feed state was not initialized")
-	}
 	return feeds, nil
 }
 
@@ -205,6 +375,15 @@ func (feeds *HytaleFeeds) initializeFeeds() error {
 	}
 	if articles != nil {
 		feeds.Feeds[LauncherPostFeedID] = &LauncherPostFeed{Articles: articles}
+	}
+
+	// Initialize game release feed
+	gameRelease, err := getStoredGameRelease(feeds.db)
+	if err != nil {
+		return err
+	}
+	if gameRelease != nil {
+		feeds.Feeds[GameReleaseFeedID] = &GameReleaseFeed{Version: gameRelease}
 	}
 
 	return nil
@@ -239,6 +418,20 @@ func (feeds *HytaleFeeds) Poll() error {
 	// Update or add articles feed
 	feeds.updateOrAddFeed(&LauncherPostFeed{Articles: articles})
 
+	// Handle game release
+	gameRelease, err := feeds.fetchGameRelease()
+	if err != nil {
+		return err
+	}
+	gameReleaseStr, _ := json.Marshal(gameRelease)
+	err = feeds.db.SetLatestPost(GameReleaseFeedID, string(gameReleaseStr))
+	if err != nil {
+		return err
+	}
+
+	// Update or add game release feed
+	feeds.updateOrAddFeed(&GameReleaseFeed{Version: gameRelease})
+
 	return nil
 }
 
@@ -272,66 +465,6 @@ func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
 		}
 	}
 	return nil
-}
-
-func getStoredLauncherRelease(db *db.DB) (*HytaleRelease, error) {
-	raw, err := db.GetLatestPost(LauncherReleaseFeedID)
-	if err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		return nil, nil
-	}
-
-	var release HytaleRelease
-	err = json.Unmarshal(raw, &release)
-	return &release, err
-}
-
-func getStoredArticles(db *db.DB) (*ArticleFeed, error) {
-	raw, err := db.GetLatestPost(LauncherPostFeedID)
-	if err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		return nil, nil
-	}
-
-	var articles ArticleFeed
-	err = json.Unmarshal(raw, &articles)
-	return &articles, err
-}
-
-func (feeds HytaleFeeds) fetchLauncherRelease() (*HytaleRelease, error) {
-	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherRelease)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
-	}
-
-	var release HytaleRelease
-	err = json.NewDecoder(resp.Body).Decode(&release)
-	return &release, err
-}
-
-func (feeds HytaleFeeds) fetchArticles() (*ArticleFeed, error) {
-	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherArticles)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
-	}
-
-	var articles ArticleFeed
-	err = json.NewDecoder(resp.Body).Decode(&articles)
-	return &articles, err
 }
 
 func (feeds HytaleFeeds) removeAllSubscriptions(channelId string) {

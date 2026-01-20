@@ -22,6 +22,10 @@ var (
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{
+						Name:  hytale.GameReleaseFeedDisplay,
+						Value: hytale.GameReleaseFeedID,
+					},
+					{
 						Name:  hytale.LauncherReleaseFeedDisplay,
 						Value: hytale.LauncherReleaseFeedID,
 					},

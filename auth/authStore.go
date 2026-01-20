@@ -19,6 +19,7 @@ type AuthStore struct {
 	profileUUID             string
 	gameSession             db.GameSessionToken
 	refreshMutex            *sync.Mutex
+	oauthRefreshTimer       *time.Timer
 	gameSessionRefreshTimer *time.Timer
 }
 
@@ -42,44 +43,23 @@ func NewAuthStore(config config.Config, db db.DB, httpClient *http.Client) (*Aut
 }
 
 func (a *AuthStore) initialize() error {
-	// Read OAuth token from db
-	// If not present, do OAuth device flow
-	// If expired, we can refresh later
-	storedOAuthToken, err := a.db.GetOAuthToken()
-	if err != nil || storedOAuthToken == nil {
-		if err != nil {
-			return err
-		}
-
-		newToken, err := a.performOAuthAndStore()
-		if err != nil {
-			return err
-		}
-		a.oauthToken = newToken
-	} else {
-		log.Println("Found stored OAuth token")
-		a.oauthToken = *storedOAuthToken
+	oauthToken, err := a.initializeOAuth()
+	if err != nil {
+		return err
 	}
+	a.oauthToken = oauthToken
 
-	// Unlike OAuth token, game session must be fresh
 	gameSession, profileUUID, err := a.initializeFreshGameSession()
 	if err != nil {
 		log.Printf("Failed to initialize game session: %v", err)
 		log.Println("Falling back to OAuth")
-		// OAuth token from db might not be fresh, so refresh if needed
-		oAuthToken, err := a.ensureOAuthRefreshed(a.oauthToken)
-		if err != nil {
-			return err
-		}
-		a.oauthToken = oAuthToken
-
-		profileUUID, err = a.initializeProfile(oAuthToken)
+		profileUUID, err = a.initializeProfile(a.oauthToken)
 		if err != nil {
 			return err
 		}
 		a.profileUUID = profileUUID
 
-		gameSession, err = a.createGameSessionAndStore(oAuthToken, profileUUID)
+		gameSession, err = a.createGameSessionAndStore(a.oauthToken, profileUUID)
 		if err != nil {
 			return err
 		}
@@ -89,8 +69,33 @@ func (a *AuthStore) initialize() error {
 		a.profileUUID = profileUUID
 	}
 
+	a.scheduleOAuthRefresh()
 	a.scheduleGameSessionRefresh()
 	return nil
+}
+
+// Attempts to initialize the OAuth token directly from storage
+// Refreshes if near expiry
+func (a *AuthStore) initializeOAuth() (db.OAuthToken, error) {
+	storedOAuthToken, err := a.db.GetOAuthToken()
+	if err != nil || storedOAuthToken == nil {
+		if err != nil {
+			log.Printf("Error getting stored OAuth token: %v", err)
+		}
+
+		newToken, err := a.performOAuthAndStore()
+		if err != nil {
+			return db.OAuthToken{}, err
+		}
+		return newToken, nil
+	}
+
+	log.Println("Found stored OAuth token")
+	updatedToken, err := a.ensureOAuthRefreshed(*storedOAuthToken)
+	if err != nil {
+		return db.OAuthToken{}, err
+	}
+	return updatedToken, nil
 }
 
 // Attempts to initialize the game session token directly from storage
@@ -270,6 +275,32 @@ func (a AuthStore) refreshGameSessionAndStore(gameSession db.GameSessionToken, p
 	return session, nil
 }
 
+func (a *AuthStore) scheduleOAuthRefresh() {
+	a.refreshMutex.Lock()
+	expiresAt := a.oauthToken.ExpiresAt
+	a.refreshMutex.Unlock()
+
+	timeUntilRefresh := max(time.Until(expiresAt)-time.Duration(a.config.Auth.OAuthRefreshBuffer)*time.Second, 0)
+
+	a.oauthRefreshTimer = time.AfterFunc(timeUntilRefresh, func() {
+		a.refreshMutex.Lock()
+		oauthToken := a.oauthToken
+		a.refreshMutex.Unlock()
+
+		refreshedOAuthToken, err := a.ensureOAuthRefreshed(oauthToken)
+		if err != nil {
+			log.Printf("Error refreshing OAuth token: %v", err)
+			return
+		}
+
+		a.refreshMutex.Lock()
+		a.oauthToken = refreshedOAuthToken
+		a.refreshMutex.Unlock()
+
+		a.scheduleOAuthRefresh()
+	})
+}
+
 func (a *AuthStore) scheduleGameSessionRefresh() {
 	a.refreshMutex.Lock()
 	expiresAt := a.gameSession.ExpiresAt
@@ -314,6 +345,19 @@ func (a *AuthStore) scheduleGameSessionRefresh() {
 
 		a.scheduleGameSessionRefresh()
 	})
+}
+
+// Retrieves the current OAuth access token.
+// Returns an error if the token is expired, as the background task should keep it up-to-date.
+func (a *AuthStore) GetOAuthToken() (string, error) {
+	a.refreshMutex.Lock()
+	defer a.refreshMutex.Unlock()
+
+	if time.Now().After(a.oauthToken.ExpiresAt) {
+		return "", errors.New("OAuth token is expired")
+	}
+
+	return a.oauthToken.AccessToken, nil
 }
 
 // Retrieves the current game session token.

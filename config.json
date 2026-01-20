@@ -54,6 +54,7 @@
   "feeds": {
     "poll_on_startup": false,
     "interval": 500,
+    "game_release": "https://account-data.hytale.com/game-assets/version/release.json",
     "launcher_release": "https://launcher.hytale.com/version/release/launcher.json",
     "launcher_articles": "https://launcher.hytale.com/launcher-feed/release/feed.json",
     "article_image_prefix": "https://launcher.hytale.com/launcher-feed/release/"
