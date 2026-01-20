@@ -30,6 +30,7 @@ var (
 			Value: hytale.LauncherPostFeedID,
 		},
 	}
+	manageSubscriptionsPermissions = int64(discordgo.PermissionManageWebhooks)
 
 	SubscribeCommand = &discordgo.ApplicationCommand{
 		Name:        "subscribe",
@@ -37,6 +38,7 @@ var (
 		Contexts: &[]discordgo.InteractionContextType{
 			discordgo.InteractionContextGuild,
 		},
+		DefaultMemberPermissions: &manageSubscriptionsPermissions,
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -63,7 +65,7 @@ var (
 		Name:        "subscribe-dm",
 		Description: "Subscribe to Hytale updates in DMs",
 		Contexts: &[]discordgo.InteractionContextType{
-			discordgo.InteractionContextPrivateChannel,
+			discordgo.InteractionContextBotDM,
 		},
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -81,8 +83,9 @@ var (
 		Description: "List all subscriptions",
 		Contexts: &[]discordgo.InteractionContextType{
 			discordgo.InteractionContextGuild,
-			discordgo.InteractionContextPrivateChannel,
+			discordgo.InteractionContextBotDM,
 		},
+		DefaultMemberPermissions: &manageSubscriptionsPermissions,
 	}
 
 	UnsubscribeCommand = &discordgo.ApplicationCommand{
@@ -90,8 +93,9 @@ var (
 		Description: "Unsubscribe from Hytale updates",
 		Contexts: &[]discordgo.InteractionContextType{
 			discordgo.InteractionContextGuild,
-			discordgo.InteractionContextPrivateChannel,
+			discordgo.InteractionContextBotDM,
 		},
+		DefaultMemberPermissions: &manageSubscriptionsPermissions,
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionChannel,
@@ -187,11 +191,11 @@ func listCommand(ctx *CommandContext) {
 				Color: 0x00FF00,
 			}
 
-			subscriptionNames := make([]string, len(userSubscriptions))
+			subscriptionNames := []string{}
 			for _, displayName := range userSubscriptions {
-				subscriptionNames = append(subscriptionNames, displayName)
+				subscriptionNames = append(subscriptionNames, "- "+displayName)
 			}
-			embed.Description = strings.Join(subscriptionNames, ",")
+			embed.Description = strings.Join(subscriptionNames, "\n")
 		}
 
 		ctx.ReplyEmbed(embed)
@@ -225,11 +229,10 @@ func listCommand(ctx *CommandContext) {
 					log.Printf("Error fetching subscription for %s %s: %v", feedID, targetID, err)
 				}
 				_, ok := sub.(db.GuildSubscription)
-				if !ok {
-					log.Printf("Error fetching subscription for %s %s: not a guild subscription", feedID, targetID)
-				}
-				if channel, exists := channelMap[targetID]; exists {
-					channelSubscriptions[channel.ID] = append(channelSubscriptions[channel.ID], feedID)
+				if ok {
+					if channel, exists := channelMap[targetID]; exists {
+						channelSubscriptions[channel.ID] = append(channelSubscriptions[channel.ID], feedID)
+					}
 				}
 			}
 		}
@@ -251,10 +254,10 @@ func listCommand(ctx *CommandContext) {
 			description := []string{}
 			for channelID, subscriptions := range channelSubscriptions {
 				if channel, exists := channelMap[channelID]; exists {
-					subscriptionNames := make([]string, len(subscriptions))
-					for i, sub := range subscriptions {
+					subscriptionNames := []string{}
+					for _, sub := range subscriptions {
 						if feed, exists := ctx.HytaleFeeds.Feeds[sub]; exists {
-							subscriptionNames[i] = feed.GetDisplayName()
+							subscriptionNames = append(subscriptionNames, feed.GetDisplayName())
 						}
 					}
 					description = append(description, "- "+channel.Mention()+" - **"+strings.Join(subscriptionNames, ", ")+"**")
