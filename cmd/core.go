@@ -42,7 +42,7 @@ func helpCommand(ctx *CommandContext) {
 	for _, category := range categories {
 		var description strings.Builder
 		for _, command := range category.commands {
-			if command.discord.Contexts == nil || slices.Contains(*command.discord.Contexts, ctx.Interaction.Context) {
+			if userCanExecute(ctx, command.discord) {
 				fmt.Fprintf(&description, "`/%s` - %s\n", command.discord.Name, command.discord.Description)
 			}
 		}
@@ -61,6 +61,20 @@ func helpCommand(ctx *CommandContext) {
 	}
 
 	ctx.ReplyEmbed(embed)
+}
+
+func userCanExecute(ctx *CommandContext, command *discordgo.ApplicationCommand) bool {
+	if command.Contexts != nil && !slices.Contains(*command.Contexts, ctx.Interaction.Context) {
+		return false
+	}
+	if command.DefaultMemberPermissions == nil {
+		return true
+	}
+	if ctx.Interaction.Member != nil {
+		return (ctx.Interaction.Member.Permissions & *command.DefaultMemberPermissions) == *command.DefaultMemberPermissions
+	} else {
+		return true
+	}
 }
 
 func infoCommand(ctx *CommandContext) {
