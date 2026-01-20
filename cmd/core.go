@@ -11,8 +11,6 @@ import (
 )
 
 const (
-	version = "0.1.0"
-
 	websiteOriginal    = "https://tis.codes/gaia"
 	helpServerOriginal = "https://minecord.github.io/support"
 	githubOriginal     = "https://github.com/Tisawesomeness/gaia"
@@ -84,7 +82,7 @@ func infoCommand(ctx *CommandContext) {
 
 	fields = append(fields, &discordgo.MessageEmbedField{
 		Name:   "Version",
-		Value:  fmt.Sprintf("`%s`", version),
+		Value:  fmt.Sprintf("`%s`", VERSION),
 		Inline: true,
 	})
 

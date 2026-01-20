@@ -17,6 +17,8 @@ import (
 	"github.com/sony/gobreaker"
 )
 
+const VERSION = "0.1.0"
+
 type CommandExecutor struct {
 	Config      *config.Config
 	DB          *db.DB
@@ -141,6 +143,19 @@ func (ctx *CommandContext) ReplyEmbed(embed *discordgo.MessageEmbed) {
 }
 
 func (ctx *CommandContext) ReplyComplex(data *discordgo.InteractionResponseData) {
+	// Default to no mentions allowed
+	if data.AllowedMentions == nil {
+		data.AllowedMentions = &discordgo.MessageAllowedMentions{}
+	}
+
+	for _, embed := range data.Embeds {
+		if embed.Footer == nil {
+			embed.Footer = &discordgo.MessageEmbedFooter{
+				Text: "Gaia " + VERSION,
+			}
+		}
+	}
+
 	if ctx.hasDeferred {
 		var attachments []*discordgo.MessageAttachment
 		if data.Attachments == nil {
@@ -148,10 +163,7 @@ func (ctx *CommandContext) ReplyComplex(data *discordgo.InteractionResponseData)
 		} else {
 			attachments = *data.Attachments
 		}
-		// Default to no mentions allowed
-		if data.AllowedMentions == nil {
-			data.AllowedMentions = &discordgo.MessageAllowedMentions{}
-		}
+
 		ctx.Session.FollowupMessageCreate(ctx.Interaction.Interaction, false, &discordgo.WebhookParams{
 			Content:         data.Content,
 			Components:      data.Components,
@@ -295,6 +307,7 @@ func InitCommands(session *discordgo.Session, config config.Config) error {
 		if err != nil {
 			return err
 		}
+		log.Println("Commands created")
 	}
 	StartCleanup()
 	return nil

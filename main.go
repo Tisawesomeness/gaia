@@ -63,7 +63,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error while registering commands: %v", err)
 	}
-	log.Println("Commands created")
 
 	go pollFeeds(session, config, *feeds)
 	log.Println("Bot finished init")
