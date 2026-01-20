@@ -144,6 +144,10 @@ func (ctx *CommandContext) ReplyComplex(data *discordgo.InteractionResponseData)
 		} else {
 			attachments = *data.Attachments
 		}
+		// Default to no mentions allowed
+		if data.AllowedMentions == nil {
+			data.AllowedMentions = &discordgo.MessageAllowedMentions{}
+		}
 		ctx.Session.FollowupMessageCreate(ctx.Interaction.Interaction, false, &discordgo.WebhookParams{
 			Content:         data.Content,
 			Components:      data.Components,

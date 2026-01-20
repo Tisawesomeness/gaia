@@ -248,6 +248,7 @@ func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, c
 					Components: []discordgo.MessageComponent{backButton, forwardButton},
 				},
 			},
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		},
 	})
 }
