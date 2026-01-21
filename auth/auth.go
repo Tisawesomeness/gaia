@@ -75,8 +75,8 @@ func OAuthDeviceFlow(config *config.Config, httpClient *http.Client) (TokenRespo
 
 	log.Println("===================================")
 	log.Println("===== Authentication Required =====")
-	log.Printf("Visit: %s", deviceAuthResponse.VerificationURI)
-	fmt.Printf("Enter code: %s", deviceAuthResponse.UserCode)
+	log.Printf("Visit: %s\n", deviceAuthResponse.VerificationURI)
+	fmt.Printf("Enter code: %s\n", deviceAuthResponse.UserCode)
 	log.Println("===================================")
 
 	tokenResponse, err := pollForToken(deviceAuthResponse, config, httpClient)
