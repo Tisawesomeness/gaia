@@ -1,5 +1,15 @@
 {
-  "token": "YOUR_DISCORD_BOT_TOKEN",
+  "credentials": {
+    "token": "YOUR_DISCORD_BOT_TOKEN",
+    "hytale_email": "YOUR_HYTALE_EMAIL",
+    "hytale_password": "YOUR_HYTALE_PASSWORD",
+    "hytale_2fa_secret": "YOUR_HYTALE_2FA_SECRET"
+  },
+  "valkey": {
+    "address": "127.0.0.1",
+    "port": 6379,
+    "password": ""
+  },
   "test_server": "",
   "is_self_hosted": true,
   "create_commands_on_startup": true,
@@ -15,20 +25,16 @@
     "terms": "",
     "privacy": ""
   },
-  "valkey": {
-    "address": "127.0.0.1",
-    "port": 6379,
-    "password": ""
-  },
   "kratos": {
-    "session_cookie": "",
+    "refresh_buffer": 300,
     "breaker": {
       "enabled": true,
       "max_half_open_requests": 3,
       "reset_interval": 300,
       "timeout": 30,
       "failure_ratio": 0.6
-    }
+    },
+    "accounts_backend": "https://backend.accounts.hytale.com"
   },
   "auth": {
     "oauth_refresh_buffer": 300,

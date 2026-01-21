@@ -235,8 +235,17 @@ func profileCommand(ctx *CommandContext) {
 }
 
 func checkAvailability(username string, ctx *CommandContext) {
+	kratosClient, ok := ctx.AuthStore.GetKratosClient()
+	if !ok {
+		ctx.ReplyEmbed(&discordgo.MessageEmbed{
+			Title:       "Profile for " + username,
+			Description: "Username not in use (unknown status)",
+			Color:       0x000000,
+		})
+	}
+
 	_, err := ctx.Breakers.KratosSession.Execute(func() (any, error) {
-		availability, err := hytale.CheckAvailability(username, ctx.Config, ctx.HTTP)
+		availability, err := hytale.CheckAvailability(username, ctx.Config, kratosClient)
 		if err != nil {
 			return nil, err
 		}

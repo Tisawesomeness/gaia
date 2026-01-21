@@ -45,10 +45,12 @@ func Execute[T any](breaker *gobreaker.CircuitBreaker, req func() (T, error)) (T
 
 // Returns an error with HTTP code, headers, and body attached
 func NewBadResponseError(description string, resp *http.Response) error {
+	finalURL := resp.Request.URL.String()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("%s returned HTTP %d, %v", description, resp.StatusCode, err)
+		return fmt.Errorf("%s: %s %s returned HTTP %d, %v", description, resp.Request.Method, finalURL, resp.StatusCode, err)
 	} else {
-		return fmt.Errorf("%s returned HTTP %d:\n%s\n%s", description, resp.StatusCode, resp.Header, string(body))
+		bodyStr := string(body)
+		return fmt.Errorf("%s: %s %s returned HTTP %d:\n%s\n%s\n", description, resp.Request.Method, finalURL, resp.StatusCode, resp.Header, bodyStr[:min(50, len(bodyStr))])
 	}
 }

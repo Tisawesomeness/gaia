@@ -40,7 +40,7 @@ func main() {
 		log.Fatalf("Error creating Hytale feeds: %v", err)
 	}
 
-	session, err := discordgo.New("Bot " + config.Token)
+	session, err := discordgo.New("Bot " + config.Credentials.DiscordToken)
 	if err != nil {
 		log.Fatalf("Error starting bot: %v", err)
 	}

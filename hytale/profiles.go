@@ -121,7 +121,8 @@ const (
 	Unknown
 )
 
-func CheckAvailability(username string, config *config.Config, httpClient *http.Client) (Availability, error) {
+// Checks a username's availability. Requires that the provided http client is signed in to Kratos.
+func CheckAvailability(username string, config *config.Config, kratosClient *http.Client) (Availability, error) {
 	req, err := http.NewRequest("GET", config.Profile.Availability, nil)
 	if err != nil {
 		return 0, err
@@ -130,9 +131,7 @@ func CheckAvailability(username string, config *config.Config, httpClient *http.
 	q.Add("username", username)
 	req.URL.RawQuery = q.Encode()
 
-	req.Header.Set("Cookie", fmt.Sprintf("ory_kratos_session=%s", config.Kratos.SessionCookie))
-
-	resp, err := httpClient.Do(req)
+	resp, err := kratosClient.Do(req)
 	if err != nil {
 		return 0, err
 	}
