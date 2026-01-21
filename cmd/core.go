@@ -12,7 +12,7 @@ import (
 
 const (
 	websiteOriginal    = "https://tis.codes/gaia"
-	helpServerOriginal = "https://minecord.github.io/support"
+	helpServerOriginal = "https://tis.codes/gaia-support"
 	githubOriginal     = "https://github.com/Tisawesomeness/gaia"
 	donateOriginal     = "https://ko-fi.com/tis_awesomeness"
 )
