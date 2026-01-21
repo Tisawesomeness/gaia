@@ -100,7 +100,7 @@ func (f *GameReleaseFeed) GetID() string {
 }
 
 func (f *GameReleaseFeed) GetDisplayName() string {
-	return GameReleaseFeedDisplay
+	return "New Hytale " + f.Patchline.Display()
 }
 
 func (f *GameReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
