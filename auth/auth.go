@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -18,7 +19,8 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 	IDToken      string `json:"id_token"`
 	Error        string `json:"error"`
-	ExpiresIn    int    `json:"expires_in"`
+	// In seconds from request time
+	ExpiresIn int `json:"expires_in"`
 }
 
 func (t TokenResponse) isSuccess() bool {
@@ -30,8 +32,10 @@ type DeviceAuthResponse struct {
 	UserCode                string `json:"user_code"`
 	VerificationURI         string `json:"verification_uri"`
 	VerificationURIComplete string `json:"verification_uri_complete"`
-	ExpiresIn               int    `json:"expires_in"`
-	Interval                int    `json:"interval"`
+	// In seconds from request time
+	ExpiresIn int `json:"expires_in"`
+	// In seconds
+	Interval int `json:"interval"`
 }
 
 func defaultDeviceAuthResponse() DeviceAuthResponse {
@@ -57,18 +61,25 @@ type GameSessionRequest struct {
 type GameSessionResponse struct {
 	SessionToken  string `json:"sessionToken"`
 	IdentityToken string `json:"identityToken"`
-	ExpiresAt     string `json:"expiresAt"`
+	// In RFC3339Nano format
+	ExpiresAt string `json:"expiresAt"`
 }
 
-func OAuthDeviceFlow(config config.Config, httpClient *http.Client) (TokenResponse, error) {
+// Starts the OAuth device flow, printing a log message asking the user to visit the verification link
+// and enter a code. This will block until authentication is finished.
+func OAuthDeviceFlow(config *config.Config, httpClient *http.Client) (TokenResponse, error) {
 	deviceAuthResponse, err := startDeviceAuth(config, httpClient)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to start device auth: %v", err)
 	}
 
-	fmt.Printf("Please visit %s and enter the code: %s\n", deviceAuthResponse.VerificationURI, deviceAuthResponse.UserCode)
+	log.Println("===================================")
+	log.Println("===== Authentication Required =====")
+	log.Printf("Visit: %s", deviceAuthResponse.VerificationURI)
+	fmt.Printf("Enter code: %s", deviceAuthResponse.UserCode)
+	log.Println("===================================")
 
-	tokenResponse, err := pollForToken(config, httpClient, deviceAuthResponse)
+	tokenResponse, err := pollForToken(deviceAuthResponse, config, httpClient)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to poll for token: %v", err)
 	}
@@ -76,7 +87,7 @@ func OAuthDeviceFlow(config config.Config, httpClient *http.Client) (TokenRespon
 	return tokenResponse, nil
 }
 
-func startDeviceAuth(config config.Config, httpClient *http.Client) (DeviceAuthResponse, error) {
+func startDeviceAuth(config *config.Config, httpClient *http.Client) (DeviceAuthResponse, error) {
 	params := url.Values{}
 	params.Add("client_id", config.Auth.ClientID)
 	params.Add("scope", config.Auth.Scope)
@@ -105,7 +116,7 @@ func startDeviceAuth(config config.Config, httpClient *http.Client) (DeviceAuthR
 	return deviceAuthResponse, nil
 }
 
-func pollForToken(config config.Config, httpClient *http.Client, deviceAuthResponse DeviceAuthResponse) (TokenResponse, error) {
+func pollForToken(deviceAuthResponse DeviceAuthResponse, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
 	params := url.Values{}
 	params.Add("client_id", config.Auth.ClientID)
 	params.Add("device_code", deviceAuthResponse.DeviceCode)
@@ -150,7 +161,7 @@ func pollForToken(config config.Config, httpClient *http.Client, deviceAuthRespo
 	}
 }
 
-func OAuthRefresh(oauthRefreshToken string, config config.Config, httpClient *http.Client) (TokenResponse, error) {
+func OAuthRefresh(oauthRefreshToken string, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
 	params := url.Values{}
 	params.Add("client_id", config.Auth.ClientID)
 	params.Add("refresh_token", oauthRefreshToken)
@@ -184,7 +195,7 @@ func OAuthRefresh(oauthRefreshToken string, config config.Config, httpClient *ht
 	return tokenResponse, nil
 }
 
-func GetAccountProfiles(oauthAccessToken string, config config.Config, httpClient *http.Client) (LauncherDataResponse, error) {
+func GetAccountProfiles(oauthAccessToken string, config *config.Config, httpClient *http.Client) (LauncherDataResponse, error) {
 	req, err := http.NewRequest("GET", config.Auth.Profiles, nil)
 	if err != nil {
 		return LauncherDataResponse{}, err
@@ -215,7 +226,7 @@ func GetAccountProfiles(oauthAccessToken string, config config.Config, httpClien
 	return launcherDataResponse, nil
 }
 
-func CreateGameSession(oauthAccessToken string, uuid string, config config.Config, httpClient *http.Client) (GameSessionResponse, error) {
+func CreateGameSession(oauthAccessToken string, uuid string, config *config.Config, httpClient *http.Client) (GameSessionResponse, error) {
 	requestBody, err := json.Marshal(GameSessionRequest{UUID: uuid})
 	if err != nil {
 		return GameSessionResponse{}, err
@@ -253,7 +264,7 @@ func CreateGameSession(oauthAccessToken string, uuid string, config config.Confi
 	return gameSessionResponse, nil
 }
 
-func RefreshGameSession(gameSessionToken string, uuid string, config config.Config, httpClient *http.Client) (GameSessionResponse, error) {
+func RefreshGameSession(gameSessionToken string, uuid string, config *config.Config, httpClient *http.Client) (GameSessionResponse, error) {
 	req, err := http.NewRequest("POST", config.Auth.RefreshGameSession, nil)
 	if err != nil {
 		return GameSessionResponse{}, err

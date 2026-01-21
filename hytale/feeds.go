@@ -28,6 +28,7 @@ const (
 	expectedFeeds              = 4
 )
 
+// A Hytale release branch (release, pre-release, etc)
 type Patchline string
 
 const (
@@ -72,10 +73,14 @@ func (p Patchline) FeedID() string {
 	}
 }
 
+// Represents a feed of content
 type Feed interface {
 	GetID() string
 	GetDisplayName() string
+	// Formats the latest feed content as an embed
 	BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed
+	// The last version string that was sent to the subscriber
+	// If the subscribed content has a new version string, then we know the subscriber should be notified
 	GetVersion() string
 }
 
@@ -220,7 +225,6 @@ func (f *LauncherReleaseFeed) GetDisplayName() string {
 }
 
 func (f *LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
-	// Prepare the embed with version and download links
 	var title string
 	if isNews {
 		title = "New Hytale Launcher Version"
@@ -233,7 +237,6 @@ func (f *LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *
 		Color:       0x00FF00,
 	}
 
-	// Add download links for each platform
 	if f.Release != nil && f.Release.DownloadURLs != nil {
 		fields := []*discordgo.MessageEmbedField{}
 		for platform, urls := range f.Release.DownloadURLs {
@@ -380,8 +383,9 @@ func (feeds HytaleFeeds) fetchArticles() (*ArticleFeed, error) {
 	return &articles, err
 }
 
-// Management
+// Feed Management
 
+// Keeps all feeds up-to-date by periodically checking for new content and notifying subscribers
 type HytaleFeeds struct {
 	Feeds     map[string]Feed
 	config    *config.Config
@@ -399,7 +403,6 @@ func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authSto
 		authStore: authStore,
 	}
 
-	// Initialize feeds
 	err := feeds.initializeFeeds()
 	if err != nil {
 		return nil, err
@@ -420,7 +423,6 @@ func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authSto
 }
 
 func (feeds *HytaleFeeds) initializeFeeds() error {
-	// Initialize launcher release feed
 	release, err := getStoredLauncherRelease(feeds.db)
 	if err != nil {
 		return err
@@ -429,7 +431,6 @@ func (feeds *HytaleFeeds) initializeFeeds() error {
 		feeds.Feeds[LauncherReleaseFeedID] = &LauncherReleaseFeed{Release: release}
 	}
 
-	// Initialize articles feed
 	articles, err := getStoredArticles(feeds.db)
 	if err != nil {
 		return err
@@ -438,7 +439,6 @@ func (feeds *HytaleFeeds) initializeFeeds() error {
 		feeds.Feeds[LauncherPostFeedID] = &LauncherPostFeed{Articles: articles}
 	}
 
-	// Initialize game release feed
 	for _, patchline := range patchlines {
 		gameRelease, err := getStoredGameRelease(patchline, feeds.db)
 		if err != nil {
@@ -455,8 +455,8 @@ func (feeds *HytaleFeeds) initializeFeeds() error {
 	return nil
 }
 
+// Fetches new content for all feeds
 func (feeds *HytaleFeeds) Poll() error {
-	// Handle launcher release
 	release, err := feeds.fetchLauncherRelease()
 	if err != nil {
 		return err
@@ -466,11 +466,8 @@ func (feeds *HytaleFeeds) Poll() error {
 	if err != nil {
 		return err
 	}
-
-	// Update or add launcher release feed
 	feeds.updateOrAddFeed(&LauncherReleaseFeed{Release: release})
 
-	// Handle articles
 	articles, err := feeds.fetchArticles()
 	if err != nil {
 		return err
@@ -480,11 +477,8 @@ func (feeds *HytaleFeeds) Poll() error {
 	if err != nil {
 		return err
 	}
-
-	// Update or add articles feed
 	feeds.updateOrAddFeed(&LauncherPostFeed{Articles: articles})
 
-	// Handle game release
 	for _, patchline := range patchlines {
 		gameRelease, err := feeds.fetchGameRelease(patchline)
 		if err != nil {
@@ -495,8 +489,6 @@ func (feeds *HytaleFeeds) Poll() error {
 		if err != nil {
 			return err
 		}
-
-		// Update or add game release feed
 		feeds.updateOrAddFeed(&GameReleaseFeed{
 			Version:   gameRelease,
 			Patchline: patchline,
@@ -510,81 +502,86 @@ func (feeds *HytaleFeeds) updateOrAddFeed(newFeed Feed) {
 	feeds.Feeds[newFeed.GetID()] = newFeed
 }
 
+// Notifies any subscribers if they have not received the latest content
 func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
 	for feedID, feed := range feeds.Feeds {
 		targetIDs, err := feeds.db.GetSubscriptions(feedID)
 		if err != nil {
 			return err
 		}
-
 		for _, targetID := range targetIDs {
-			sub, err := feeds.db.GetSubscription(feedID, targetID)
-			if err != nil {
-				log.Printf("Error getting subscription from db: %v", err)
-				continue
-			}
-
-			if sub.CurrentVersion() != feed.GetVersion() {
-				switch sub := sub.(type) {
-				case db.GuildSubscription:
-					_, err = s.Channel(targetID)
-					if err != nil {
-						log.Printf("Error accessing channel, removing: %v", err)
-						feeds.removeAllSubscriptions(targetID)
-					} else {
-						message := feed.BuildMessage(feeds.config, true)
-						_, err = s.ChannelMessageSendComplex(targetID, &discordgo.MessageSend{
-							Content: roleMentions(sub.Roles),
-							Embeds:  []*discordgo.MessageEmbed{message},
-							AllowedMentions: &discordgo.MessageAllowedMentions{
-								Roles: sub.Roles,
-							},
-						})
-						if err != nil {
-							log.Printf("Cannot send feed update: %v", err)
-							continue
-						}
-
-						feeds.db.AddOrUpdateSubscription(feedID, targetID, db.GuildSubscription{
-							Version: feed.GetVersion(),
-							Roles:   sub.Roles,
-						})
-					}
-
-				case db.UserSubscription:
-					_, err = s.User(targetID)
-					if err != nil {
-						log.Printf("Error accessing user, removing: %v", err)
-						feeds.removeAllSubscriptions(targetID)
-					} else {
-						dm, err := s.UserChannelCreate(targetID)
-						if err != nil {
-							log.Printf("Cannot open DM: %v", err)
-							continue
-						}
-
-						message := feed.BuildMessage(feeds.config, true)
-						_, err = s.ChannelMessageSendComplex(dm.ID, &discordgo.MessageSend{
-							Embeds:          []*discordgo.MessageEmbed{message},
-							AllowedMentions: &discordgo.MessageAllowedMentions{},
-						})
-						if err != nil {
-							log.Printf("Cannot send feed update: %v", err)
-							continue
-						}
-
-						feeds.db.AddOrUpdateSubscription(feedID, targetID, db.UserSubscription{
-							Version: feed.GetVersion(),
-						})
-					}
-
-				default:
-					panic("Invalid subscription type")
-				}
-			}
+			feeds.notify(s, feed, targetID)
 		}
 	}
 	return nil
+}
+
+func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string) {
+	sub, err := feeds.db.GetSubscription(feed.GetID(), targetID)
+	if err != nil {
+		log.Printf("Error getting subscription from db: %v", err)
+		return
+	}
+
+	// Instead of comparing entire content (formatting can change), compare just the version
+	if sub.CurrentVersion() != feed.GetVersion() {
+		switch sub := sub.(type) {
+		case db.GuildSubscription:
+			_, err = s.Channel(targetID)
+			if err != nil {
+				log.Printf("Error accessing channel, removing: %v", err)
+				feeds.removeAllSubscriptions(targetID)
+			} else {
+				message := feed.BuildMessage(feeds.config, true)
+				_, err = s.ChannelMessageSendComplex(targetID, &discordgo.MessageSend{
+					Content: roleMentions(sub.Roles),
+					Embeds:  []*discordgo.MessageEmbed{message},
+					AllowedMentions: &discordgo.MessageAllowedMentions{
+						Roles: sub.Roles,
+					},
+				})
+				if err != nil {
+					log.Printf("Cannot send feed update: %v", err)
+					return
+				}
+
+				feeds.db.AddOrUpdateSubscription(feed.GetID(), targetID, db.GuildSubscription{
+					Version: feed.GetVersion(),
+					Roles:   sub.Roles,
+				})
+			}
+
+		case db.UserSubscription:
+			_, err = s.User(targetID)
+			if err != nil {
+				log.Printf("Error accessing user, removing: %v", err)
+				feeds.removeAllSubscriptions(targetID)
+			} else {
+				dm, err := s.UserChannelCreate(targetID)
+				if err != nil {
+					log.Printf("Cannot open DM: %v", err)
+					return
+				}
+
+				message := feed.BuildMessage(feeds.config, true)
+				_, err = s.ChannelMessageSendComplex(dm.ID, &discordgo.MessageSend{
+					Embeds:          []*discordgo.MessageEmbed{message},
+					AllowedMentions: &discordgo.MessageAllowedMentions{},
+				})
+				if err != nil {
+					log.Printf("Cannot send feed update: %v", err)
+					return
+				}
+
+				feeds.db.AddOrUpdateSubscription(feed.GetID(), targetID, db.UserSubscription{
+					Version: feed.GetVersion(),
+				})
+			}
+
+		default:
+			panic("Invalid subscription type")
+		}
+	}
 }
 
 func (feeds HytaleFeeds) removeAllSubscriptions(targetID string) {

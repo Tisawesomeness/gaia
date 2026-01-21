@@ -235,7 +235,6 @@ func profileCommand(ctx *CommandContext) {
 }
 
 func checkAvailability(username string, ctx *CommandContext) {
-	// Execute the availability check through the circuit breaker
 	_, err := ctx.Breakers.KratosSession.Execute(func() (any, error) {
 		availability, err := hytale.CheckAvailability(username, ctx.Config, ctx.HTTP)
 		if err != nil {

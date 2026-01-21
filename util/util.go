@@ -43,6 +43,7 @@ func Execute[T any](breaker *gobreaker.CircuitBreaker, req func() (T, error)) (T
 	return result, err
 }
 
+// Returns an error with HTTP code, headers, and body attached
 func NewBadResponseError(description string, resp *http.Response) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

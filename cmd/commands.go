@@ -29,6 +29,8 @@ type CommandExecutor struct {
 	Breakers    *Breakers
 }
 
+// Shared circuit breakers based on auth method
+// ex: if Hytale session goes down, circuit breaker will gradually retry
 type Breakers struct {
 	HytaleSession *gobreaker.CircuitBreaker
 	KratosSession *gobreaker.CircuitBreaker
@@ -70,6 +72,13 @@ func makeBreaker(name string, config config.BreakerConfig) *gobreaker.CircuitBre
 	})
 }
 
+// Contains utility methods that make commands less error-prone:
+//
+// - Reply... methods with mentions disabled by default and work whether deferred or not
+//
+// - User() gets the user without having to nil-check Interaction.User / Interaction.Member
+//
+// - etc.
 type CommandContext struct {
 	Config      *config.Config
 	DB          *db.DB
@@ -79,7 +88,9 @@ type CommandContext struct {
 	BootTime    *time.Time
 	Breakers    *Breakers
 
-	Session     *discordgo.Session
+	// The raw Discord session, prefer using CommandContext methods
+	Session *discordgo.Session
+	// The raw Discord event, prefer using CommandContext methods
 	Interaction *discordgo.InteractionCreate
 	hasDeferred bool
 }
@@ -99,6 +110,7 @@ func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.I
 	}
 }
 
+// Generates a map of option ID to option data
 func (ctx *CommandContext) Options() map[string]*discordgo.ApplicationCommandInteractionDataOption {
 	options := ctx.Interaction.ApplicationCommandData().Options
 	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
@@ -108,6 +120,7 @@ func (ctx *CommandContext) Options() map[string]*discordgo.ApplicationCommandInt
 	return optionMap
 }
 
+// Gets the user that executed this command, works in both guilds and DMs
 func (ctx *CommandContext) User() *discordgo.User {
 	if ctx.Interaction.Member != nil {
 		return ctx.Interaction.Member.User
@@ -116,6 +129,9 @@ func (ctx *CommandContext) User() *discordgo.User {
 	}
 }
 
+// Signals to Discord that the command was received and a follow-up will come later.
+// After deferring, regular replies (InteractionResponseChannelMessageWithSource) will do nothing.
+// Use the ctx.Reply... methods instead.
 func (ctx *CommandContext) DeferReply() {
 	ctx.hasDeferred = true
 	ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
@@ -199,7 +215,7 @@ func (ctx *CommandContext) ReplyError(err error) {
 
 		id := ctx.Interaction.ApplicationCommandData().Name
 		options := formatCommandOptions(ctx.Interaction.ApplicationCommandData().Options)
-		log.Printf("Error in command /%s options %s: %+v", id, options, err)
+		log.Printf("Error in command /%s options %s:\n%+v", id, options, err)
 	}
 }
 
@@ -215,6 +231,8 @@ func formatCommandOptions(options []*discordgo.ApplicationCommandInteractionData
 	return strings.Join(parts, ", ")
 }
 
+// An error caused by the user, such as an invalid input.
+// Will not be logged.
 type UserError struct {
 	message string
 }
@@ -309,7 +327,7 @@ func InitCommands(session *discordgo.Session, config config.Config) error {
 		}
 		log.Println("Commands created")
 	}
-	StartCleanup()
+	StartArticleInteractionCleanup()
 	return nil
 }
 
@@ -326,6 +344,8 @@ func deployCommands(session *discordgo.Session, config config.Config) error {
 				continue
 			}
 
+			// Global commands can take some time to deploy
+			// Registering guild commands in a test server is instant and great for prototyping
 			guildCommand := *command.discord
 			guildCommand.Name = "test-" + guildCommand.Name
 			testCommands = append(testCommands, &guildCommand)

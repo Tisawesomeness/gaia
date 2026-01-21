@@ -34,10 +34,12 @@ func (db DB) Close() {
 }
 
 // Prevents keys with ":" from being confused as sub-keys
+// More of a sanity check than a security measure
 func sanitize(keyPart string) string {
 	return strings.ReplaceAll(keyPart, ":", ".")
 }
 
+// A subscription that can either be a UserSubscription or GuildSubscription
 type Subscription interface {
 	Type() string
 	CurrentVersion() string
@@ -164,6 +166,7 @@ func (db DB) RemoveSubscription(feedType string, targetID string) error {
 
 // May return nil!
 func (db DB) GetLatestPost(feedType string) ([]byte, error) {
+	// get <feedType>:latest
 	command := db.v.B().Get().Key(sanitize(feedType) + ":latest").Build()
 	resp := db.v.Do(context.Background(), command)
 	err := resp.Error()
@@ -181,6 +184,7 @@ func (db DB) GetLatestPost(feedType string) ([]byte, error) {
 }
 
 func (db DB) SetLatestPost(feedType string, content string) error {
+	// set <feedType>:latest <content>
 	command := db.v.B().Set().Key(sanitize(feedType) + ":latest").Value(content).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
@@ -193,6 +197,7 @@ type OAuthToken struct {
 
 // May return nil!
 func (db DB) GetOAuthToken() (*OAuthToken, error) {
+	// hgetall oauth_token
 	command := db.v.B().Hgetall().Key("oauth_token").Build()
 	result, err := db.v.Do(context.Background(), command).AsStrMap()
 	if err != nil {
@@ -215,6 +220,7 @@ func (db DB) GetOAuthToken() (*OAuthToken, error) {
 }
 
 func (db DB) SetOAuthToken(oAuthToken OAuthToken) error {
+	// hset oauth_token ...
 	command := db.v.B().Hset().Key("oauth_token").FieldValue().
 		FieldValue("access_token", oAuthToken.AccessToken).
 		FieldValue("refresh_token", oAuthToken.RefreshToken).
@@ -225,6 +231,7 @@ func (db DB) SetOAuthToken(oAuthToken OAuthToken) error {
 
 // May return empty!
 func (db DB) GetProfileUUID() (string, error) {
+	// get profile_uuid
 	command := db.v.B().Get().Key("profile_uuid").Build()
 	resp := db.v.Do(context.Background(), command)
 	err := resp.Error()
@@ -242,6 +249,7 @@ func (db DB) GetProfileUUID() (string, error) {
 }
 
 func (db DB) SetProfileUUID(uuid string) error {
+	// set profile_uuid <uuid>
 	command := db.v.B().Set().Key("profile_uuid").Value(uuid).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
@@ -253,6 +261,7 @@ type GameSessionToken struct {
 
 // May return nil!
 func (db DB) GetGameSession() (*GameSessionToken, error) {
+	// hgetall game_session
 	command := db.v.B().Hgetall().Key("game_session").Build()
 	result, err := db.v.Do(context.Background(), command).AsStrMap()
 	if err != nil {
@@ -274,6 +283,7 @@ func (db DB) GetGameSession() (*GameSessionToken, error) {
 }
 
 func (db DB) SetGameSession(sessionToken GameSessionToken) error {
+	// hset game_session ...
 	command := db.v.B().Hset().Key("game_session").FieldValue().
 		FieldValue("session_token", sessionToken.SessionToken).
 		FieldValue("expires_at", strconv.FormatInt(sessionToken.ExpiresAt.Unix(), 10)).

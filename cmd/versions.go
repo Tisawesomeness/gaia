@@ -9,21 +9,19 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// ArticleInteraction tracks the state of an article browsing session
+// Article browsing session state
 type ArticleInteraction struct {
 	CurrentIndex int
 	Articles     []*hytale.Article
-	LastUsed     time.Time // Track the last time the interaction was used
+	LastUsed     time.Time
 }
 
-// Global map to track article interactions
 var articleInteractions = make(map[string]*ArticleInteraction)
 
-// CleanupInterval defines how often to clean up old interactions
-const CleanupInterval = 5 * time.Minute
-
-// InteractionExpiry defines how long an interaction can be inactive before being removed
-const InteractionExpiry = 30 * time.Minute
+const (
+	CleanupInterval   = 5 * time.Minute
+	InteractionExpiry = 30 * time.Minute
+)
 
 var (
 	VersionCommand = &discordgo.ApplicationCommand{
@@ -59,8 +57,7 @@ var (
 	}
 )
 
-// StartCleanup starts a background goroutine to periodically clean up old interactions
-func StartCleanup() {
+func StartArticleInteractionCleanup() {
 	ticker := time.NewTicker(CleanupInterval)
 	go func() {
 		for range ticker.C {
@@ -69,7 +66,6 @@ func StartCleanup() {
 	}()
 }
 
-// cleanupOldInteractions removes interactions that have expired
 func cleanupOldInteractions() {
 	now := time.Now()
 	for id, interaction := range articleInteractions {
@@ -94,65 +90,55 @@ func versionCommand(ctx *CommandContext) {
 		ctx.ReplyWarn("Invalid patchline")
 	}
 
-	// Get the launcher release feed
 	feed, exists := ctx.HytaleFeeds.Feeds[patchline.FeedID()]
 	if !exists {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
 		return
 	}
 
-	// Get the version from the feed
 	gameReleaseFeed, ok := feed.(*hytale.GameReleaseFeed)
 	if !ok {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
 		return
 	}
 
-	// Respond with the embed
 	ctx.ReplyEmbed(gameReleaseFeed.BuildMessage(ctx.Config, false))
 }
 
 func launcherCommand(ctx *CommandContext) {
-	// Get the launcher release feed
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedID]
 	if !exists {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale Launcher version."))
 		return
 	}
 
-	// Get the version from the feed
 	launcherReleaseFeed, ok := feed.(*hytale.LauncherReleaseFeed)
 	if !ok {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale Launcher version."))
 		return
 	}
 
-	// Respond with the embed
 	ctx.ReplyEmbed(launcherReleaseFeed.BuildMessage(ctx.Config, false))
 }
 
 func articlesCommand(ctx *CommandContext) {
-	// Get the launcher post feed
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherPostFeedID]
 	if !exists {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale article."))
 		return
 	}
 
-	// Get the articles from the feed
 	launcherPostFeed, ok := feed.(*hytale.LauncherPostFeed)
 	if !ok {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale article."))
 		return
 	}
-	// Get all articles
 	articles := launcherPostFeed.Articles.Articles
 	if len(articles) == 0 {
 		ctx.ReplyEphemeral("No articles found.")
 		return
 	}
 
-	// Store the interaction and current article index
 	interactionID := ctx.Interaction.Interaction.ID
 	articleInteractions[interactionID] = &ArticleInteraction{
 		CurrentIndex: 0,
@@ -160,11 +146,10 @@ func articlesCommand(ctx *CommandContext) {
 		LastUsed:     time.Now(),
 	}
 
-	// Build the message embed for the latest article
 	latestArticle := articles[0]
 	embed := latestArticle.BuildMessage(ctx.Config)
 
-	// Add buttons
+	// Note: going *back* in time means going *forward* in the articles array
 	backButton := discordgo.Button{
 		Label:    "Back",
 		Style:    discordgo.SecondaryButton,
@@ -179,7 +164,6 @@ func articlesCommand(ctx *CommandContext) {
 		Disabled: true, // Disable if it's the first article
 	}
 
-	// Respond with the embed and buttons
 	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Embeds: []*discordgo.MessageEmbed{embed},
 		Components: []discordgo.MessageComponent{
@@ -194,36 +178,30 @@ func isArticleInteraction(customID string) bool {
 	return strings.HasPrefix(customID, "article_back_") || strings.HasPrefix(customID, "article_forward_")
 }
 
-// HandleArticleButton handles button clicks for navigating articles
 func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
 	customID := i.MessageComponentData().CustomID
 	interactionID := strings.TrimPrefix(customID, "article_back_")
 	interactionID = strings.TrimPrefix(interactionID, "article_forward_")
 
-	// Get the interaction data
 	interaction, exists := articleInteractions[interactionID]
 	if !exists {
 		ctx.ReplyEphemeral("This interaction has expired.")
 		return
 	}
 
-	// Update the last used time
 	interaction.LastUsed = time.Now()
 
-	// Update the current index based on the button clicked
 	if strings.HasPrefix(customID, "article_back_") {
 		interaction.CurrentIndex++
 	} else if strings.HasPrefix(customID, "article_forward_") {
 		interaction.CurrentIndex--
 	}
 
-	// Get the current article
 	currentArticle := interaction.Articles[interaction.CurrentIndex]
 
-	// Build the message embed for the current article
 	embed := currentArticle.BuildMessage(ctx.Config)
 
-	// Update the buttons
+	// Note: going *back* in time means going *forward* in the articles array
 	backButton := discordgo.Button{
 		Label:    "Back",
 		Style:    discordgo.SecondaryButton,

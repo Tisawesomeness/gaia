@@ -30,7 +30,7 @@ func main() {
 
 	httpClient := initHTTP(config)
 
-	authStore, err := auth.NewAuthStore(config, *database, httpClient)
+	authStore, err := auth.NewAuthStore(&config, database, httpClient)
 	if err != nil {
 		log.Fatalf("Could not create auth store: %v", err)
 	}
@@ -104,7 +104,7 @@ func poll(s *discordgo.Session, feeds hytale.HytaleFeeds) {
 	log.Println("Polling feeds...")
 	err := feeds.Poll()
 	if err != nil {
-		log.Printf("Error while polling launcher release: %v", err)
+		log.Printf("Error while polling feeds: %v", err)
 		return
 	}
 	err = feeds.NotifyFeeds(s)
