@@ -187,6 +187,9 @@ func creditsCommand(ctx *CommandContext) {
 				Inline: false,
 			},
 		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Not affiliated with Hytale or Hypixel Studios.",
+		},
 	}
 	ctx.ReplyEmbed(embed)
 }
