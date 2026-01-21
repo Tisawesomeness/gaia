@@ -21,6 +21,10 @@ func main() {
 		log.Fatalf("Error loading config: %v", err)
 	}
 
+	err = os.MkdirAll("./data", 0755)
+	if err != nil {
+		log.Fatalf("Could not create data directory: %v", err)
+	}
 	database, err := db.NewDB(config)
 	if err != nil {
 		log.Fatalf("Error creating Valkey client: %v", err)
