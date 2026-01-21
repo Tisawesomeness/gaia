@@ -101,7 +101,6 @@ func pollFeeds(s *discordgo.Session, config config.Config, feeds hytale.HytaleFe
 }
 
 func poll(s *discordgo.Session, feeds hytale.HytaleFeeds) {
-	log.Println("Polling feeds...")
 	err := feeds.Poll()
 	if err != nil {
 		log.Printf("Error while polling feeds: %v", err)

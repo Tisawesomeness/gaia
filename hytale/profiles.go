@@ -160,7 +160,7 @@ func CheckAvailability(username string, config *config.Config, httpClient *http.
 	} else if strings.TrimSpace(responseBody) == "" {
 		return Available, nil
 	} else {
-		log.Println("Unknown username availability response: " + responseBody)
+		log.Println("Unknown username availability response: " + responseBody[:min(50, len(responseBody))])
 		return Unknown, nil
 	}
 }
