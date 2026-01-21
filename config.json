@@ -26,7 +26,7 @@
     "privacy": ""
   },
   "kratos": {
-    "refresh_buffer": 300,
+    "renewal_hours": 120,
     "breaker": {
       "enabled": true,
       "max_half_open_requests": 3,

@@ -38,25 +38,6 @@ func getCSRFToken(config *config.Config, httpClient *http.Client) (string, error
 	return "", errors.New("could not find CSRF token cookie")
 }
 
-// Retrieves the session expiry time from the ory_kratos_session cookie in the provided cookiejar
-func GetSessionExpiry(jar http.CookieJar, config *config.Config) (*time.Time, error) {
-	cookieURL, err := url.Parse(config.Kratos.AccountsBackend)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse domain URL: %v", err)
-	}
-
-	cookies := jar.Cookies(cookieURL)
-	for _, cookie := range cookies {
-		if cookie.Name == "ory_kratos_session" {
-			if cookie.Expires.IsZero() {
-				return nil, fmt.Errorf("ory_kratos_session cookie has no expiry")
-			}
-			return &cookie.Expires, nil
-		}
-	}
-	return nil, fmt.Errorf("Could not find ory_kratos_session cookie")
-}
-
 // Initiates the Kratos login flow with username, password, and 2FA secret.
 // Cookies are stored in the provided httpClient
 func KratosLogin(config *config.Config, httpClient *http.Client) error {

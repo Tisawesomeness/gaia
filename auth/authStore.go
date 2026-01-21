@@ -58,8 +58,9 @@ func (a *AuthStore) initialize() error {
 		return err
 	}
 
+	var kratosRefresh *time.Time
 	if a.config.Credentials.HytaleEmail != "" && a.config.Credentials.HytalePassword != "" {
-		err = a.initKratos()
+		kratosRefresh, err = a.initKratos()
 		if err != nil {
 			log.Printf("Could not init Kratos: %v", err)
 		}
@@ -67,8 +68,8 @@ func (a *AuthStore) initialize() error {
 
 	a.scheduleOAuthRefresh()
 	a.scheduleGameSessionRefresh()
-	if a.kratosClient != nil {
-		a.scheduleKratosRefresh()
+	if a.kratosClient != nil && kratosRefresh != nil {
+		a.scheduleKratosRefresh(kratosRefresh)
 	}
 	return nil
 }
@@ -119,19 +120,44 @@ func (a *AuthStore) initSessions() error {
 	return nil
 }
 
-func (a *AuthStore) initKratos() error {
+func (a *AuthStore) initKratos() (*time.Time, error) {
 	kratosClient, err := initHTTPWithCookies(a.config)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	log.Println("Starting Kratos login...")
-	err = KratosLogin(a.config, kratosClient)
+	a.kratosClient = kratosClient
+
+	kratosRefresh, err := a.db.GetKratosRefresh()
+	if err == nil && kratosRefresh != nil {
+		log.Println("Found Kratos session")
+		if !time.Now().After(*kratosRefresh) {
+			return kratosRefresh, nil
+		} else {
+			log.Println("Kratos session expired")
+		}
+	}
+
+	newKratosRefresh, err := a.kratosLoginAndStore(kratosClient)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	return newKratosRefresh, nil
+}
+
+func (a *AuthStore) kratosLoginAndStore(kratosClient *http.Client) (*time.Time, error) {
+	log.Println("Starting Kratos login...")
+	err := KratosLogin(a.config, kratosClient)
+	if err != nil {
+		return nil, err
 	}
 	log.Println("Kratos login successful")
-	a.kratosClient = kratosClient
-	return nil
+
+	kratosRefresh := time.Now().Add(time.Duration(a.config.Kratos.RenewalHours) * time.Hour)
+	err = a.db.SetKratosRefresh(kratosRefresh)
+	if err != nil {
+		return nil, err
+	}
+	return &kratosRefresh, nil
 }
 
 func initHTTPWithCookies(config *config.Config) (*http.Client, error) {
@@ -313,7 +339,7 @@ func (a AuthStore) refreshOAuthAndStore(oAuthToken db.OAuthToken) (db.OAuthToken
 }
 
 // Refreshes the token if expired, otherwise returns the original token
-func (a *AuthStore) ensureGameSessionRefreshed(gameSession db.GameSessionToken, profileUUID string) (db.GameSessionToken, error) {
+func (a AuthStore) ensureGameSessionRefreshed(gameSession db.GameSessionToken, profileUUID string) (db.GameSessionToken, error) {
 	if time.Now().Add(time.Duration(a.config.Auth.GameSessionRefreshBuffer) * time.Second).After(gameSession.ExpiresAt) {
 		return a.refreshGameSessionAndStore(gameSession, profileUUID)
 	}
@@ -417,20 +443,17 @@ func (a *AuthStore) scheduleGameSessionRefresh() {
 	})
 }
 
-func (a *AuthStore) scheduleKratosRefresh() {
-	expiresAt, err := GetSessionExpiry(a.kratosClient.Jar, a.config)
-	if err != nil {
-		log.Printf("Could not schedule kratos refresh: %v", err)
-		return
-	}
-
-	timeUntilRefresh := max(time.Until(*expiresAt)-time.Duration(a.config.Kratos.RefreshBuffer)*time.Second, 0)
+func (a *AuthStore) scheduleKratosRefresh(refreshAt *time.Time) {
+	timeUntilRefresh := max(time.Until(*refreshAt), 0)
 
 	a.kratosRefreshTimer = time.AfterFunc(timeUntilRefresh, func() {
 		err := KratosLogin(a.config, a.kratosClient)
 		if err != nil {
 			log.Printf("Error refreshing Kratos: %v", err)
 		}
+
+		refreshTime := time.Now().Add(time.Duration(a.config.Kratos.RenewalHours) * time.Hour)
+		a.scheduleKratosRefresh(&refreshTime)
 	})
 }
 

@@ -290,3 +290,33 @@ func (db DB) SetGameSession(sessionToken GameSessionToken) error {
 		Build()
 	return db.v.Do(context.Background(), command).Error()
 }
+
+// May return nil!
+func (db DB) GetKratosRefresh() (*time.Time, error) {
+	// get kratos_refresh
+	command := db.v.B().Get().Key("kratos_refresh").Build()
+	resp := db.v.Do(context.Background(), command)
+	err := resp.Error()
+	if err != nil {
+		if valkey.IsValkeyNil(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	raw, err := resp.AsBytes()
+	if err != nil {
+		return nil, err
+	}
+	refreshUnix, err := strconv.ParseInt(string(raw), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	refreshTime := time.Unix(refreshUnix, 0)
+	return &refreshTime, nil
+}
+
+func (db DB) SetKratosRefresh(refresh time.Time) error {
+	// set kratos_refresh <refresh>
+	command := db.v.B().Set().Key("kratos_refresh").Value(strconv.FormatInt(refresh.Unix(), 10)).Build()
+	return db.v.Do(context.Background(), command).Error()
+}

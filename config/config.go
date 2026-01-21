@@ -45,7 +45,7 @@ type Config struct {
 		Privacy         string `json:"privacy"`
 	} `json:"branding"`
 	Kratos struct {
-		RefreshBuffer   int           `json:"refresh_buffer"`
+		RenewalHours    int           `json:"renewal_hours"`
 		Breaker         BreakerConfig `json:"breaker"`
 		AccountsBackend string        `json:"accounts_backend"`
 	} `json:"kratos"`
