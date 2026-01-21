@@ -30,6 +30,7 @@ type AuthStore struct {
 	kratosRefreshTimer *time.Timer
 }
 
+var expiredOAuthError = errors.New("Expired OAuth")
 var expiredGameSessionError = errors.New("Expired game session")
 
 // Authenticates to Hytale OAuth and creates a game session.
@@ -73,11 +74,23 @@ func (a *AuthStore) initialize() error {
 }
 
 func (a *AuthStore) initSessions() error {
-	oauthToken, err := a.initializeOAuth()
+	oauthToken, err := a.initializeFreshOAuth()
 	if err != nil {
-		return err
+		if errors.Is(err, expiredGameSessionError) {
+			log.Println("OAuth token expired, starting new flow...")
+		} else {
+			log.Printf("Failed to initialize OAuth: %v", err)
+			log.Println("Starting new OAuth flow...")
+		}
+
+		newToken, err := a.performOAuthAndStore()
+		if err != nil {
+			return err
+		}
+		a.oauthToken = newToken
+	} else {
+		a.oauthToken = oauthToken
 	}
-	a.oauthToken = oauthToken
 
 	gameSession, profileUUID, err := a.initializeFreshGameSession()
 	if err != nil {
@@ -87,6 +100,7 @@ func (a *AuthStore) initSessions() error {
 			log.Printf("Failed to initialize game session: %v", err)
 			log.Println("Falling back to OAuth")
 		}
+
 		profileUUID, err = a.initializeProfile(a.oauthToken)
 		if err != nil {
 			return err
@@ -110,10 +124,12 @@ func (a *AuthStore) initKratos() error {
 	if err != nil {
 		return err
 	}
+	log.Println("Starting Kratos login...")
 	err = KratosLogin(a.config, kratosClient)
 	if err != nil {
 		return err
 	}
+	log.Println("Kratos login successful")
 	a.kratosClient = kratosClient
 	return nil
 }
@@ -135,26 +151,22 @@ func initHTTPWithCookies(config *config.Config) (*http.Client, error) {
 
 // Attempts to initialize the OAuth token directly from storage
 // Refreshes if near expiry
-func (a *AuthStore) initializeOAuth() (db.OAuthToken, error) {
+func (a *AuthStore) initializeFreshOAuth() (db.OAuthToken, error) {
 	storedOAuthToken, err := a.db.GetOAuthToken()
 	if err != nil || storedOAuthToken == nil {
-		if err != nil {
-			log.Printf("Error getting stored OAuth token: %v", err)
-		}
-
-		newToken, err := a.performOAuthAndStore()
-		if err != nil {
-			return db.OAuthToken{}, err
-		}
-		return newToken, nil
+		return db.OAuthToken{}, errors.New("No stored OAuth token")
 	}
-
 	log.Println("Found stored OAuth token")
-	updatedToken, err := a.ensureOAuthRefreshed(*storedOAuthToken)
+
+	if time.Now().After((*storedOAuthToken).ExpiresAt) {
+		return db.OAuthToken{}, expiredOAuthError
+	}
+	refreshedToken, err := a.ensureOAuthRefreshed(*storedOAuthToken)
 	if err != nil {
 		return db.OAuthToken{}, err
 	}
-	return updatedToken, nil
+
+	return refreshedToken, nil
 }
 
 // Attempts to initialize the game session token directly from storage
@@ -162,22 +174,15 @@ func (a *AuthStore) initializeOAuth() (db.OAuthToken, error) {
 func (a *AuthStore) initializeFreshGameSession() (db.GameSessionToken, string, error) {
 	storedGameSession, err := a.db.GetGameSession()
 	if err != nil || storedGameSession == nil {
-		if err != nil {
-			log.Printf("Error getting stored game session token: %v", err)
-		}
 		return db.GameSessionToken{}, "", errors.New("No stored game session token found")
 	}
-
 	log.Println("Found stored game session token")
+
 	storedProfileUUID, err := a.db.GetProfileUUID()
 	if err != nil || storedProfileUUID == "" {
-		if err != nil {
-			log.Printf("Error getting stored profile UUID: %v", err)
-		}
 		return db.GameSessionToken{}, "", errors.New("No stored profile UUID found")
 	}
 
-	// Unlike OAuth, trying to refresh an expired game session will fail
 	if time.Now().After((*storedGameSession).ExpiresAt) {
 		return db.GameSessionToken{}, "", expiredGameSessionError
 	}
