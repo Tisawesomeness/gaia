@@ -564,7 +564,10 @@ func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
 						}
 
 						message := feed.BuildMessage(feeds.config, true)
-						_, err = s.ChannelMessageSendEmbed(dm.ID, message)
+						_, err = s.ChannelMessageSendComplex(dm.ID, &discordgo.MessageSend{
+							Embeds:          []*discordgo.MessageEmbed{message},
+							AllowedMentions: &discordgo.MessageAllowedMentions{},
+						})
 						if err != nil {
 							log.Printf("Cannot send feed update: %v", err)
 							continue
