@@ -27,7 +27,7 @@ var (
 
 	SkinCommand = &discordgo.ApplicationCommand{
 		Name:        "skin",
-		Description: "Fetch a Hytale player's skin details by UUID or username",
+		Description: "Fetch a Hytale player's skin details",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -37,6 +37,69 @@ var (
 			},
 		},
 	}
+)
+
+func NewRenderCommand(name string, description string, renderType hytale.RenderType) *Command {
+	return &Command{
+		discord: &discordgo.ApplicationCommand{
+			Name:        name,
+			Description: description,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "player",
+					Description: "Username or UUID",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "size",
+					Description: "Image Size",
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{
+							Name:  "64x64",
+							Value: 64,
+						},
+						{
+							Name:  "128x128",
+							Value: 128,
+						},
+						{
+							Name:  "256x256",
+							Value: 256,
+						},
+						{
+							Name:  "512x512",
+							Value: 512,
+						},
+						{
+							Name:  "1024x1024",
+							Value: 1024,
+						},
+						{
+							Name:  "2048x2048",
+							Value: 2048,
+						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "rotate",
+					Description: "Player rotation",
+					MinValue:    &minDegrees,
+					MaxValue:    maxDegrees,
+				},
+			},
+		},
+		handler: func(ctx *CommandContext) {
+			renderCommand(ctx, renderType)
+		},
+	}
+}
+
+var (
+	minDegrees = -360.0
+	maxDegrees = 360.0
 
 	uuidRegex     = regexp.MustCompile(`^([0-9a-fA-F]{8})-?([0-9a-fA-F]{4})-?([0-9a-fA-F]{4})-?([0-9a-fA-F]{4})-?([0-9a-fA-F]{12})$`)
 	usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]{3,16}$`)
@@ -389,6 +452,61 @@ func skinCommand(ctx *CommandContext) {
 				Inline: false,
 			})
 		}
+	}
+
+	ctx.ReplyEmbed(embed)
+}
+
+func renderCommand(ctx *CommandContext, renderType hytale.RenderType) {
+	options := ctx.Options()
+	identifier := options["player"].StringValue()
+
+	var size int
+	sizeOption, exists := options["size"]
+	if exists {
+		size = int(sizeOption.IntValue())
+	} else {
+		size = 512
+	}
+
+	var rotate int
+	rotateOption, exists := options["rotate"]
+	if exists {
+		rotate = util.WrapDegrees(int(rotateOption.IntValue()))
+	} else {
+		rotate = 0
+	}
+
+	var profile *hytale.PublicGameProfile
+	var err error
+	uuid, isUUID := validateAndFormatUUID(identifier)
+	if isUUID {
+		ctx.DeferReply()
+		profile, err = tryFetchProfileFromUUID(uuid, ctx)
+	} else if usernameRegex.MatchString(identifier) {
+		ctx.DeferReply()
+		profile, err = tryFetchProfileFromUsername(identifier, ctx)
+	} else {
+		ctx.ReplyWarn(fmt.Sprintf("`%s` is not a valid username or UUID", identifier))
+		return
+	}
+
+	if err != nil {
+		log.Printf("Could not fetch profile %s: %v", identifier, err)
+		ctx.ReplyExternalError("An error occurred while contacting Hytale servers.")
+		return
+	}
+
+	_, hasCape := profile.Skin["cape"]
+	if !hasCape && renderType == hytale.CapeRender {
+		ctx.Reply("That player does not have a cape.")
+		return
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Image: &discordgo.MessageEmbedImage{
+			URL: renderType.Render(ctx.Config, profile.Username, size, rotate),
+		},
 	}
 
 	ctx.ReplyEmbed(embed)

@@ -54,3 +54,11 @@ func NewBadResponseError(description string, resp *http.Response) error {
 		return fmt.Errorf("%s: %s %s returned HTTP %d:\n%s\n%s\n", description, resp.Request.Method, finalURL, resp.StatusCode, resp.Header, bodyStr[:min(50, len(bodyStr))])
 	}
 }
+
+// Wraps an angle in degrees to a value between 0 and 359.
+func WrapDegrees(degrees int) int {
+	if degrees >= 0 {
+		return degrees % 360
+	}
+	return (degrees%360 + 360) % 360
+}

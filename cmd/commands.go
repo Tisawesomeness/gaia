@@ -266,6 +266,9 @@ func init() {
 		}},
 		{"Players", []*Command{
 			{ProfileCommand, profileCommand},
+			NewRenderCommand("head", "Get an image of a Hytale player's head", hytale.HeadRender),
+			NewRenderCommand("body", "Get an image of a Hytale player's body", hytale.FullBodyRender),
+			NewRenderCommand("cape", "Get an image of a Hytale player's cape", hytale.CapeRender),
 			{SkinCommand, skinCommand},
 		}},
 		{"Updates", []*Command{

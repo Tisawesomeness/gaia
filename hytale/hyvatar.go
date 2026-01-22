@@ -7,6 +7,27 @@ import (
 	"github.com/Tisawesomeness/gaia/config"
 )
 
+type RenderType int
+
+const (
+	HeadRender RenderType = iota
+	FullBodyRender
+	CapeRender
+)
+
+func (rt RenderType) Render(config *config.Config, username string, size int, rotate int) string {
+	switch rt {
+	case HeadRender:
+		return RenderHead(config, username, size, rotate)
+	case FullBodyRender:
+		return RenderFullBody(config, username, size, rotate)
+	case CapeRender:
+		return RenderCape(config, username, size, rotate)
+	default:
+		panic("Unknown render type")
+	}
+}
+
 func RenderHead(config *config.Config, username string, size int, rotate int) string {
 	return renderURL(username, size, rotate, config.Profile.Hyvatar)
 }
