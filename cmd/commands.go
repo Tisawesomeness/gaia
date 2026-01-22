@@ -67,7 +67,7 @@ func makeBreaker(name string, config config.BreakerConfig) *gobreaker.CircuitBre
 		},
 		IsSuccessful: func(err error) bool {
 			var userErr *UserError
-			return errors.As(err, &userErr)
+			return err == nil || errors.As(err, &userErr)
 		},
 	})
 }
