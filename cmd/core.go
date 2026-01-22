@@ -33,7 +33,8 @@ var (
 
 	developersValue = "[Tis](https://tis.codes) - Main Dev"
 	apisValue       = "Discord API Wrapper - [discordgo](https://github.com/bwmarrin/discordgo)\n" +
-		"Hytale APIs - [Hytale Team](https://hytale.com/)"
+		"Hytale APIs - [Hytale Team](https://hytale.com/)\n" +
+		"Skin Renders - [Hyvatar](https://hyvatar.io/)"
 	donateLine = fmt.Sprintf(":sparkles: **[Donate](%s)** :sparkles: to support development", donateOriginal)
 )
 

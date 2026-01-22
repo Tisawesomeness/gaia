@@ -62,9 +62,11 @@ type Config struct {
 		RefreshGameSession       string        `json:"refresh_game_session"`
 	} `json:"auth"`
 	Profile struct {
-		ByUUID       string `json:"by_uuid"`
-		ByUsername   string `json:"by_username"`
-		Availability string `json:"availability"`
+		ByUUID         string `json:"by_uuid"`
+		ByUsername     string `json:"by_username"`
+		Availability   string `json:"availability"`
+		Hyvatar        string `json:"hyvatar"`
+		ProfileWebsite string `json:"profile_website"`
 	} `json:"profile"`
 	Feeds struct {
 		PollOnStartup      bool   `json:"poll_on_startup"`

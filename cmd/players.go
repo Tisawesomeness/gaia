@@ -226,7 +226,14 @@ func profileCommand(ctx *CommandContext) {
 	}
 
 	ctx.ReplyEmbed(&discordgo.MessageEmbed{
-		Title: "Profile for " + profile.Username,
+		Author: &discordgo.MessageEmbedAuthor{
+			Name:    "Profile for " + profile.Username,
+			URL:     ctx.Config.Profile.ProfileWebsite + profile.Username,
+			IconURL: hytale.RenderHead(ctx.Config, profile.Username, 128, 30),
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: hytale.RenderFullBody(ctx.Config, profile.Username, 512, 360-30),
+		},
 		Description: fmt.Sprintf("Short UUID: `%s`\nLong UUID: `%s`",
 			strings.ReplaceAll(profile.UUID, "-", ""),
 			profile.UUID),
@@ -333,7 +340,14 @@ func skinCommand(ctx *CommandContext) {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "Skin Details for " + profile.Username,
+		Author: &discordgo.MessageEmbedAuthor{
+			Name:    "Skin details for " + profile.Username,
+			URL:     ctx.Config.Profile.ProfileWebsite + profile.Username,
+			IconURL: hytale.RenderHead(ctx.Config, profile.Username, 128, 30),
+		},
+		Image: &discordgo.MessageEmbedImage{
+			URL: hytale.RenderFullBody(ctx.Config, profile.Username, 2048, 0),
+		},
 		Color: 0x00FF00,
 	}
 

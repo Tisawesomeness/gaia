@@ -57,7 +57,9 @@
   "profile": {
     "by_uuid": "https://account-data.hytale.com/profile/uuid/",
     "by_username": "https://account-data.hytale.com/profile/username/",
-    "availability": "https://accounts.hytale.com/api/account/username-reservations/availability"
+    "availability": "https://accounts.hytale.com/api/account/username-reservations/availability",
+    "hyvatar": "https://hyvatar.io/render/",
+    "profile_website": "https://hytags.com/username/"
   },
   "feeds": {
     "poll_on_startup": false,
