@@ -17,7 +17,7 @@ import (
 	"github.com/sony/gobreaker"
 )
 
-const VERSION = "0.1.0"
+const VERSION = "0.2.0"
 
 type CommandExecutor struct {
 	Config      *config.Config
