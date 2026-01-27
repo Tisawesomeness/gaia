@@ -32,11 +32,11 @@ type LauncherReleaseFeed struct {
 	Release *LauncherRelease
 }
 
-func (f *LauncherReleaseFeed) GetType() FeedType {
+func (f LauncherReleaseFeed) GetType() FeedType {
 	return LauncherPostFeedType
 }
 
-func (f *LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
+func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
 	var title string
 	if isNews {
 		title = "New Hytale Launcher Version"
@@ -77,11 +77,19 @@ func capitalizeFirstLetter(s string) string {
 	return string(runes)
 }
 
-func (f *LauncherReleaseFeed) GetVersion() string {
+func (f LauncherReleaseFeed) GetVersion() string {
 	return f.Release.Version
 }
 
-func getStoredLauncherRelease(db *db.DB) (*LauncherRelease, error) {
+func (f LauncherReleaseFeed) content() (string, error) {
+	contentBytes, err := json.Marshal(f.Release)
+	if err != nil {
+		return "", err
+	}
+	return string(contentBytes), nil
+}
+
+func getStoredLauncherRelease(db *db.DB) (Feed, error) {
 	raw, err := db.GetLatestPost(LauncherReleaseFeedType.ID())
 	if err != nil {
 		return nil, err
@@ -92,10 +100,10 @@ func getStoredLauncherRelease(db *db.DB) (*LauncherRelease, error) {
 
 	var release LauncherRelease
 	err = json.Unmarshal(raw, &release)
-	return &release, err
+	return LauncherReleaseFeed{Release: &release}, err
 }
 
-func (feeds HytaleFeeds) fetchLauncherRelease() (*LauncherRelease, error) {
+func (LauncherReleaseFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
 	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherRelease)
 	if err != nil {
 		return nil, err
@@ -108,7 +116,7 @@ func (feeds HytaleFeeds) fetchLauncherRelease() (*LauncherRelease, error) {
 
 	var release LauncherRelease
 	err = json.NewDecoder(resp.Body).Decode(&release)
-	return &release, err
+	return LauncherReleaseFeed{Release: &release}, err
 }
 
 // Articles
@@ -130,19 +138,19 @@ func (a *Article) BuildMessage(config *config.Config) *discordgo.MessageEmbed {
 	}
 }
 
-type ArticleFeed struct {
+type ArticleList struct {
 	Articles []*Article `json:"articles"`
 }
 
 type LauncherPostFeed struct {
-	Articles *ArticleFeed
+	Articles *ArticleList
 }
 
-func (f *LauncherPostFeed) GetType() FeedType {
+func (f LauncherPostFeed) GetType() FeedType {
 	return LauncherPostFeedType
 }
 
-func (f *LauncherPostFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
+func (f LauncherPostFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
 	if len(f.Articles.Articles) <= 0 {
 		return &discordgo.MessageEmbed{
 			Title:       "Hytale Articles",
@@ -154,14 +162,22 @@ func (f *LauncherPostFeed) BuildMessage(config *config.Config, isNews bool) *dis
 	return latestArticle.BuildMessage(config)
 }
 
-func (f *LauncherPostFeed) GetVersion() string {
+func (f LauncherPostFeed) GetVersion() string {
 	if len(f.Articles.Articles) <= 0 {
 		return ""
 	}
 	return f.Articles.Articles[0].DestURL
 }
 
-func getStoredArticles(db *db.DB) (*ArticleFeed, error) {
+func (f LauncherPostFeed) content() (string, error) {
+	contentBytes, err := json.Marshal(f.Articles)
+	if err != nil {
+		return "", err
+	}
+	return string(contentBytes), nil
+}
+
+func getStoredArticles(db *db.DB) (Feed, error) {
 	raw, err := db.GetLatestPost(LauncherPostFeedType.ID())
 	if err != nil {
 		return nil, err
@@ -170,12 +186,12 @@ func getStoredArticles(db *db.DB) (*ArticleFeed, error) {
 		return nil, nil
 	}
 
-	var articles ArticleFeed
+	var articles ArticleList
 	err = json.Unmarshal(raw, &articles)
-	return &articles, err
+	return LauncherPostFeed{Articles: &articles}, err
 }
 
-func (feeds HytaleFeeds) fetchArticles() (*ArticleFeed, error) {
+func (LauncherPostFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
 	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherArticles)
 	if err != nil {
 		return nil, err
@@ -186,7 +202,7 @@ func (feeds HytaleFeeds) fetchArticles() (*ArticleFeed, error) {
 		return nil, util.NewBadResponseError("Fetch articles", resp)
 	}
 
-	var articles ArticleFeed
+	var articles ArticleList
 	err = json.NewDecoder(resp.Body).Decode(&articles)
-	return &articles, err
+	return LauncherPostFeed{Articles: &articles}, err
 }

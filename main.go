@@ -105,13 +105,6 @@ func pollFeeds(s *discordgo.Session, config config.Config, feeds hytale.HytaleFe
 }
 
 func poll(s *discordgo.Session, feeds hytale.HytaleFeeds) {
-	err := feeds.Poll()
-	if err != nil {
-		log.Printf("Error while polling feeds: %v", err)
-		return
-	}
-	err = feeds.NotifyFeeds(s)
-	if err != nil {
-		log.Printf("Error while notifying channels: %v", err)
-	}
+	feeds.Poll()
+	feeds.NotifyFeeds(s)
 }

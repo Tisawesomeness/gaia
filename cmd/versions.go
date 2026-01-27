@@ -96,7 +96,7 @@ func versionCommand(ctx *CommandContext) {
 		return
 	}
 
-	gameReleaseFeed, ok := feed.(*hytale.GameReleaseFeed)
+	gameReleaseFeed, ok := feed.(hytale.GameReleaseFeed)
 	if !ok {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
 		return
@@ -112,7 +112,7 @@ func launcherCommand(ctx *CommandContext) {
 		return
 	}
 
-	launcherReleaseFeed, ok := feed.(*hytale.LauncherReleaseFeed)
+	launcherReleaseFeed, ok := feed.(hytale.LauncherReleaseFeed)
 	if !ok {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale Launcher version."))
 		return
@@ -128,7 +128,7 @@ func articlesCommand(ctx *CommandContext) {
 		return
 	}
 
-	launcherPostFeed, ok := feed.(*hytale.LauncherPostFeed)
+	launcherPostFeed, ok := feed.(hytale.LauncherPostFeed)
 	if !ok {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale article."))
 		return

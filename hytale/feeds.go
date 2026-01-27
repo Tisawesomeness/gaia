@@ -1,7 +1,6 @@
 package hytale
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -21,7 +20,10 @@ const (
 	GamePreReleaseFeedType
 	LauncherReleaseFeedType
 	LauncherPostFeedType
-	expectedFeeds = 4
+)
+
+var (
+	feedTypes = []FeedType{GameReleaseFeedType, GamePreReleaseFeedType, LauncherReleaseFeedType, LauncherPostFeedType}
 )
 
 func ParseFeedType(feedType string) (FeedType, error) {
@@ -69,59 +71,19 @@ func (ft FeedType) Display() string {
 	}
 }
 
-// A Hytale release branch (release, pre-release, etc)
-type Patchline int
-
-const (
-	Release Patchline = iota
-	PreRelease
-)
-
-var (
-	patchlines = []Patchline{Release, PreRelease}
-)
-
-func ParsePatchline(patchline string) (Patchline, error) {
-	switch patchline {
-	case Release.ID():
-		return Release, nil
-	case PreRelease.ID():
-		return PreRelease, nil
+// Gets the feed currently stored in the database
+func (ft FeedType) getStored(db *db.DB) (Feed, error) {
+	switch ft {
+	case GameReleaseFeedType:
+		return getStoredGameRelease(Release, db)
+	case GamePreReleaseFeedType:
+		return getStoredGameRelease(PreRelease, db)
+	case LauncherReleaseFeedType:
+		return getStoredLauncherRelease(db)
+	case LauncherPostFeedType:
+		return getStoredArticles(db)
 	default:
-		return 0, fmt.Errorf("unknown patchline: %s", patchline)
-	}
-}
-
-func (p Patchline) ID() string {
-	switch p {
-	case Release:
-		return "release"
-	case PreRelease:
-		return "pre-release"
-	default:
-		panic(fmt.Errorf("unknown state: %d", p))
-	}
-}
-
-func (p Patchline) Display() string {
-	switch p {
-	case Release:
-		return "Release"
-	case PreRelease:
-		return "Pre-release"
-	default:
-		panic(fmt.Errorf("unknown state: %d", p))
-	}
-}
-
-func (p Patchline) FeedType() FeedType {
-	switch p {
-	case Release:
-		return GameReleaseFeedType
-	case PreRelease:
-		return GamePreReleaseFeedType
-	default:
-		panic(fmt.Errorf("unknown state: %d", p))
+		panic(fmt.Errorf("unknown state: %d", ft))
 	}
 }
 
@@ -133,6 +95,10 @@ type Feed interface {
 	// The last version string that was sent to the subscriber
 	// If the subscribed content has a new version string, then we know the subscriber should be notified
 	GetVersion() string
+	// Fetches a new version of a feed, must be same type as current
+	fetch(feeds *HytaleFeeds) (Feed, error)
+	// Gets the feed's current raw content, as a string
+	content() (string, error)
 }
 
 // Keeps all feeds up-to-date by periodically checking for new content and notifying subscribers
@@ -158,12 +124,10 @@ func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authSto
 		return nil, err
 	}
 
+	expectedFeeds := len(feedTypes)
 	if len(feeds.Feeds) < expectedFeeds {
 		log.Println("Feeds have not been stored yet, fetching...")
-		err = feeds.Poll()
-		if err != nil {
-			return nil, err
-		}
+		feeds.Poll()
 		if len(feeds.Feeds) < expectedFeeds {
 			return nil, errors.New("feed state was not initialized")
 		}
@@ -173,79 +137,31 @@ func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authSto
 }
 
 func (feeds *HytaleFeeds) initializeFeeds() error {
-	release, err := getStoredLauncherRelease(feeds.db)
-	if err != nil {
-		return err
-	}
-	if release != nil {
-		feeds.Feeds[LauncherReleaseFeedType] = &LauncherReleaseFeed{Release: release}
-	}
-
-	articles, err := getStoredArticles(feeds.db)
-	if err != nil {
-		return err
-	}
-	if articles != nil {
-		feeds.Feeds[LauncherPostFeedType] = &LauncherPostFeed{Articles: articles}
-	}
-
-	for _, patchline := range patchlines {
-		gameRelease, err := getStoredGameRelease(patchline, feeds.db)
+	for _, feedType := range feedTypes {
+		feed, err := feedType.getStored(feeds.db)
 		if err != nil {
 			return err
 		}
-		if gameRelease != nil {
-			feeds.Feeds[patchline.FeedType()] = &GameReleaseFeed{
-				Version:   gameRelease,
-				Patchline: patchline,
-			}
+		if feed != nil {
+			feeds.Feeds[feedType] = feed
 		}
 	}
-
 	return nil
 }
 
-// Fetches new content for all feeds
-func (feeds *HytaleFeeds) Poll() error {
-	release, err := feeds.fetchLauncherRelease()
-	if err != nil {
-		return err
-	}
-	releaseStr, _ := json.Marshal(release)
-	err = feeds.db.SetLatestPost(LauncherReleaseFeedType.ID(), string(releaseStr))
-	if err != nil {
-		return err
-	}
-	feeds.updateOrAddFeed(&LauncherReleaseFeed{Release: release})
-
-	articles, err := feeds.fetchArticles()
-	if err != nil {
-		return err
-	}
-	articlesStr, _ := json.Marshal(articles)
-	err = feeds.db.SetLatestPost(LauncherPostFeedType.ID(), string(articlesStr))
-	if err != nil {
-		return err
-	}
-	feeds.updateOrAddFeed(&LauncherPostFeed{Articles: articles})
-
-	for _, patchline := range patchlines {
-		gameRelease, err := feeds.fetchGameRelease(patchline)
+func (feeds *HytaleFeeds) Poll() {
+	for feedType, feed := range feeds.Feeds {
+		newFeed, err := feed.fetch(feeds)
 		if err != nil {
-			return err
+			log.Printf("Error fetching feed %s: %v", feedType.ID(), err)
 		}
-		gameReleaseStr, _ := json.Marshal(gameRelease)
-		err = feeds.db.SetLatestPost(patchline.FeedType().ID(), string(gameReleaseStr))
+		content, err := feed.content()
+		err = feeds.db.SetLatestPost(LauncherReleaseFeedType.ID(), content)
 		if err != nil {
-			return err
+			log.Printf("Error setting latest post for feed %s: %v", feedType.ID(), err)
 		}
-		feeds.updateOrAddFeed(&GameReleaseFeed{
-			Version:   gameRelease,
-			Patchline: patchline,
-		})
+		feeds.updateOrAddFeed(newFeed)
 	}
-
-	return nil
 }
 
 func (feeds *HytaleFeeds) updateOrAddFeed(newFeed Feed) {
@@ -253,17 +169,17 @@ func (feeds *HytaleFeeds) updateOrAddFeed(newFeed Feed) {
 }
 
 // Notifies any subscribers if they have not received the latest content
-func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) error {
+func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) {
 	for feedType, feed := range feeds.Feeds {
 		targetIDs, err := feeds.db.GetSubscriptions(feedType.ID())
 		if err != nil {
-			return err
+			log.Printf("Error getting target IDs for feed %s: %v", feedType.ID(), err)
+			continue
 		}
 		for _, targetID := range targetIDs {
 			feeds.notify(s, feed, targetID)
 		}
 	}
-	return nil
 }
 
 func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string) {
