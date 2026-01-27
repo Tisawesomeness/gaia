@@ -103,7 +103,7 @@ func getStoredLauncherRelease(db *db.DB) (Feed, error) {
 	return LauncherReleaseFeed{Release: &release}, err
 }
 
-func (LauncherReleaseFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
+func fetchLauncherRelease(feeds *HytaleFeeds) (Feed, error) {
 	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherRelease)
 	if err != nil {
 		return nil, err
@@ -191,7 +191,7 @@ func getStoredArticles(db *db.DB) (Feed, error) {
 	return LauncherPostFeed{Articles: &articles}, err
 }
 
-func (LauncherPostFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
+func fetchArticles(feeds *HytaleFeeds) (Feed, error) {
 	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherArticles)
 	if err != nil {
 		return nil, err

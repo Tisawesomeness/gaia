@@ -145,13 +145,13 @@ func getStoredGameRelease(patchline Patchline, db *db.DB) (Feed, error) {
 	}, err
 }
 
-func (feed GameReleaseFeed) fetchGameReleaseUrl(feeds *HytaleFeeds) (string, error) {
+func fetchGameReleaseUrl(patchline Patchline, feeds *HytaleFeeds) (string, error) {
 	token, err := feeds.authStore.GetOAuthToken()
 	if err != nil {
 		return "", err
 	}
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s%s.json", feeds.config.Feeds.GameVersion, feed.Patchline.ID()), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s%s.json", feeds.config.Feeds.GameVersion, patchline.ID()), nil)
 	if err != nil {
 		return "", err
 	}
@@ -177,8 +177,8 @@ func (feed GameReleaseFeed) fetchGameReleaseUrl(feeds *HytaleFeeds) (string, err
 	return response.Url, nil
 }
 
-func (feed GameReleaseFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
-	url, err := feed.fetchGameReleaseUrl(feeds)
+func fetchGameRelease(patchline Patchline, feeds *HytaleFeeds) (Feed, error) {
+	url, err := fetchGameReleaseUrl(patchline, feeds)
 	if err != nil {
 		return nil, err
 	}
@@ -190,14 +190,14 @@ func (feed GameReleaseFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, util.NewBadResponseError(fmt.Sprintf("Fetch %s version", feed.Patchline.ID()), resp)
+		return nil, util.NewBadResponseError(fmt.Sprintf("Fetch %s version", patchline.ID()), resp)
 	}
 
 	var release GameReleaseVersion
 	err = json.NewDecoder(resp.Body).Decode(&release)
 	return GameReleaseFeed{
 		Version:   &release,
-		Patchline: feed.Patchline,
+		Patchline: patchline,
 	}, err
 }
 
@@ -283,11 +283,11 @@ func getStoredMavenRelease(patchline Patchline, db *db.DB) (Feed, error) {
 	}, err
 }
 
-func (feed MavenFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
+func fetchMavenRelease(patchline Patchline, feeds *HytaleFeeds) (Feed, error) {
 	config := feeds.config.Feeds
 	metadataUrl := fmt.Sprintf("%s/%s/%s/%s/maven-metadata.xml",
 		config.MavenRepo,
-		feed.Patchline.ID(),
+		patchline.ID(),
 		strings.ReplaceAll(config.MavenGroup, ".", "/"),
 		config.MavenArtifact,
 	)
@@ -299,13 +299,13 @@ func (feed MavenFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, util.NewBadResponseError(fmt.Sprintf("Fetch %s maven version", feed.Patchline.ID()), resp)
+		return nil, util.NewBadResponseError(fmt.Sprintf("Fetch %s maven version", patchline.ID()), resp)
 	}
 
 	var mavenResp mavenResponse
 	err = xml.NewDecoder(resp.Body).Decode(&mavenResp)
 	return MavenFeed{
 		Version:   &mavenResp.Versioning,
-		Patchline: feed.Patchline,
+		Patchline: patchline,
 	}, err
 }

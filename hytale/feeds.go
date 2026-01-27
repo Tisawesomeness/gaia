@@ -93,6 +93,7 @@ func (ft FeedType) Display() string {
 }
 
 // Gets the feed currently stored in the database
+// May return nil!
 func (ft FeedType) getStored(db *db.DB) (Feed, error) {
 	switch ft {
 	case GameReleaseFeedType:
@@ -112,6 +113,25 @@ func (ft FeedType) getStored(db *db.DB) (Feed, error) {
 	}
 }
 
+func (ft FeedType) fetch(feeds *HytaleFeeds) (Feed, error) {
+	switch ft {
+	case GameReleaseFeedType:
+		return fetchGameRelease(Release, feeds)
+	case GamePreReleaseFeedType:
+		return fetchGameRelease(PreRelease, feeds)
+	case MavenReleaseFeedType:
+		return fetchMavenRelease(Release, feeds)
+	case MavenPreReleaseFeedType:
+		return fetchMavenRelease(PreRelease, feeds)
+	case LauncherReleaseFeedType:
+		return fetchLauncherRelease(feeds)
+	case LauncherPostFeedType:
+		return fetchArticles(feeds)
+	default:
+		panic(fmt.Errorf("unknown state: %d", ft))
+	}
+}
+
 // Represents a feed of content
 type Feed interface {
 	GetType() FeedType
@@ -120,8 +140,6 @@ type Feed interface {
 	// The last version string that was sent to the subscriber
 	// If the subscribed content has a new version string, then we know the subscriber should be notified
 	GetVersion() string
-	// Fetches a new version of a feed, must be same type as current
-	fetch(feeds *HytaleFeeds) (Feed, error)
 	// Gets the feed's current raw content, as a string
 	content() (string, error)
 }
@@ -175,15 +193,17 @@ func (feeds *HytaleFeeds) initializeFeeds() error {
 }
 
 func (feeds *HytaleFeeds) Poll() {
-	for feedType, feed := range feeds.Feeds {
-		newFeed, err := feed.fetch(feeds)
+	for _, feedType := range feedTypes {
+		newFeed, err := feedType.fetch(feeds)
 		if err != nil {
 			log.Printf("Error fetching feed %s: %v", feedType.ID(), err)
+			continue
 		}
-		content, err := feed.content()
-		err = feeds.db.SetLatestPost(LauncherReleaseFeedType.ID(), content)
+		content, err := newFeed.content()
+		err = feeds.db.SetLatestPost(feedType.ID(), content)
 		if err != nil {
 			log.Printf("Error setting latest post for feed %s: %v", feedType.ID(), err)
+			continue
 		}
 		feeds.updateOrAddFeed(newFeed)
 	}
