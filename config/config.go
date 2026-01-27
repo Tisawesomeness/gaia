@@ -75,6 +75,9 @@ type Config struct {
 		LauncherRelease    string `json:"launcher_release"`
 		LauncherArticles   string `json:"launcher_articles"`
 		ArticleImagePrefix string `json:"article_image_prefix"`
+		MavenRepo          string `json:"maven_repo"`
+		MavenGroup         string `json:"maven_group"`
+		MavenArtifact      string `json:"maven_artifact"`
 	} `json:"feeds"`
 	HTTP struct {
 		Timeout      int `json:"timeout"`

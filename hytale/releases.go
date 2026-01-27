@@ -2,8 +2,10 @@ package hytale
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
@@ -53,15 +55,31 @@ func (p Patchline) Display() string {
 	}
 }
 
-func (p Patchline) FeedType() FeedType {
-	switch p {
+type Side int
+
+const (
+	Client Side = iota
+	Server
+)
+
+func GetFeedType(patchline Patchline, side Side) FeedType {
+	switch patchline {
 	case Release:
-		return GameReleaseFeedType
+		switch side {
+		case Client:
+			return GameReleaseFeedType
+		case Server:
+			return MavenReleaseFeedType
+		}
 	case PreRelease:
-		return GamePreReleaseFeedType
-	default:
-		panic(fmt.Errorf("unknown state: %d", p))
+		switch side {
+		case Client:
+			return GamePreReleaseFeedType
+		case Server:
+			return MavenPreReleaseFeedType
+		}
 	}
+	panic(fmt.Errorf("unknown patchline %d or side %d", patchline, side))
 }
 
 type GameReleaseVersion struct {
@@ -78,7 +96,7 @@ type GameReleaseFeed struct {
 }
 
 func (f GameReleaseFeed) GetType() FeedType {
-	return f.Patchline.FeedType()
+	return GetFeedType(f.Patchline, Client)
 }
 
 func (f GameReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
@@ -89,7 +107,7 @@ func (f GameReleaseFeed) BuildMessage(config *config.Config, isNews bool) *disco
 		adjective = "Latest"
 	}
 	return &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("%s Hytale %s", adjective, f.Patchline.Display()),
+		Title:       fmt.Sprintf("%s Hytale Client %s", adjective, f.Patchline.Display()),
 		Description: fmt.Sprintf("`%s`", f.GetVersion()),
 		Color:       0x00FF00,
 	}
@@ -111,7 +129,7 @@ func (f GameReleaseFeed) content() (string, error) {
 }
 
 func getStoredGameRelease(patchline Patchline, db *db.DB) (Feed, error) {
-	raw, err := db.GetLatestPost(patchline.FeedType().ID())
+	raw, err := db.GetLatestPost(GetFeedType(patchline, Client).ID())
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +197,115 @@ func (feed GameReleaseFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
 	err = json.NewDecoder(resp.Body).Decode(&release)
 	return GameReleaseFeed{
 		Version:   &release,
+		Patchline: feed.Patchline,
+	}, err
+}
+
+type MavenVersion struct {
+	Version string `xml:"version"`
+}
+
+type MavenVersioning struct {
+	XMLName     xml.Name       `xml:"versioning"`
+	Latest      string         `xml:"latest"`
+	Versions    []MavenVersion `xml:"versions"`
+	LastUpdated string         `xml:"lastUpdated"`
+}
+
+type mavenResponse struct {
+	XMLName    xml.Name        `xml:"metadata"`
+	Versioning MavenVersioning `xml:"versioning"`
+}
+
+type MavenFeed struct {
+	Version   *MavenVersioning
+	Patchline Patchline
+}
+
+func (f MavenFeed) GetType() FeedType {
+	return GetFeedType(f.Patchline, Server)
+}
+
+func (f MavenFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
+	var adjective string
+	if isNews {
+		adjective = "New"
+	} else {
+		adjective = "Latest"
+	}
+
+	downloadUrl := fmt.Sprintf("%s/%s/%s/%s/%s/%s-%s.jar",
+		config.Feeds.MavenRepo,
+		f.Patchline.ID(),
+		strings.ReplaceAll(config.Feeds.MavenGroup, ".", "/"),
+		config.Feeds.MavenArtifact,
+		f.GetVersion(),
+		config.Feeds.MavenArtifact,
+		f.GetVersion(),
+	)
+
+	return &discordgo.MessageEmbed{
+		Title:       fmt.Sprintf("%s Hytale Server %s", adjective, f.Patchline.Display()),
+		Description: fmt.Sprintf("`%s`\n[Downlaod](%s)", f.GetVersion(), downloadUrl),
+		Color:       0x00FF00,
+	}
+}
+
+func (f MavenFeed) GetVersion() string {
+	if f.Version == nil {
+		return ""
+	}
+	return f.Version.Latest
+}
+
+func (f MavenFeed) content() (string, error) {
+	contentBytes, err := xml.Marshal(f.Version)
+	if err != nil {
+		return "", err
+	}
+	return string(contentBytes), nil
+}
+
+func getStoredMavenRelease(patchline Patchline, db *db.DB) (Feed, error) {
+	raw, err := db.GetLatestPost(GetFeedType(patchline, Server).ID())
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+
+	var versioning MavenVersioning
+	err = xml.Unmarshal(raw, &versioning)
+	return MavenFeed{
+		Version:   &versioning,
+		Patchline: patchline,
+	}, err
+}
+
+func (feed MavenFeed) fetch(feeds *HytaleFeeds) (Feed, error) {
+	config := feeds.config.Feeds
+	metadataUrl := fmt.Sprintf("%s/%s/%s/%s/maven-metadata.xml",
+		config.MavenRepo,
+		feed.Patchline.ID(),
+		strings.ReplaceAll(config.MavenGroup, ".", "/"),
+		config.MavenArtifact,
+	)
+
+	resp, err := feeds.http.Get(metadataUrl)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, util.NewBadResponseError(fmt.Sprintf("Fetch %s maven version", feed.Patchline.ID()), resp)
+	}
+
+	var mavenResp mavenResponse
+	err = xml.NewDecoder(resp.Body).Decode(&mavenResp)
+	return MavenFeed{
+		Version:   &mavenResp.Versioning,
 		Patchline: feed.Patchline,
 	}, err
 }

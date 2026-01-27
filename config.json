@@ -67,7 +67,10 @@
     "game_version": "https://account-data.hytale.com/game-assets/version/",
     "launcher_release": "https://launcher.hytale.com/version/release/launcher.json",
     "launcher_articles": "https://launcher.hytale.com/launcher-feed/release/feed.json",
-    "article_image_prefix": "https://launcher.hytale.com/launcher-feed/release/"
+    "article_image_prefix": "https://launcher.hytale.com/launcher-feed/release/",
+    "maven_repo": "https://maven.hytale.com",
+    "maven_group": "com.hypixel.hytale",
+    "maven_artifact": "Server"
   },
   "http": {
     "timeout": 5,

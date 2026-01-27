@@ -18,12 +18,21 @@ type FeedType int
 const (
 	GameReleaseFeedType FeedType = iota
 	GamePreReleaseFeedType
+	MavenReleaseFeedType
+	MavenPreReleaseFeedType
 	LauncherReleaseFeedType
 	LauncherPostFeedType
 )
 
 var (
-	feedTypes = []FeedType{GameReleaseFeedType, GamePreReleaseFeedType, LauncherReleaseFeedType, LauncherPostFeedType}
+	feedTypes = []FeedType{
+		GameReleaseFeedType,
+		GamePreReleaseFeedType,
+		MavenReleaseFeedType,
+		MavenPreReleaseFeedType,
+		LauncherReleaseFeedType,
+		LauncherPostFeedType,
+	}
 )
 
 func ParseFeedType(feedType string) (FeedType, error) {
@@ -32,6 +41,10 @@ func ParseFeedType(feedType string) (FeedType, error) {
 		return GameReleaseFeedType, nil
 	case GamePreReleaseFeedType.ID():
 		return GamePreReleaseFeedType, nil
+	case MavenReleaseFeedType.ID():
+		return MavenReleaseFeedType, nil
+	case MavenPreReleaseFeedType.ID():
+		return MavenPreReleaseFeedType, nil
 	case LauncherReleaseFeedType.ID():
 		return LauncherReleaseFeedType, nil
 	case LauncherPostFeedType.ID():
@@ -47,6 +60,10 @@ func (ft FeedType) ID() string {
 		return "game_release"
 	case GamePreReleaseFeedType:
 		return "game_pre_release"
+	case MavenReleaseFeedType:
+		return "maven_release"
+	case MavenPreReleaseFeedType:
+		return "maven_pre_release"
 	case LauncherReleaseFeedType:
 		return "launcher_release"
 	case LauncherPostFeedType:
@@ -59,9 +76,13 @@ func (ft FeedType) ID() string {
 func (ft FeedType) Display() string {
 	switch ft {
 	case GameReleaseFeedType:
-		return "New Hytale Releases"
+		return "New Client Releases"
 	case GamePreReleaseFeedType:
-		return "New Hytale Pre-releases"
+		return "New Client Pre-releases"
+	case MavenReleaseFeedType:
+		return "New Server Releases"
+	case MavenPreReleaseFeedType:
+		return "New Server Pre-releases"
 	case LauncherReleaseFeedType:
 		return "New Launcher Versions"
 	case LauncherPostFeedType:
@@ -78,6 +99,10 @@ func (ft FeedType) getStored(db *db.DB) (Feed, error) {
 		return getStoredGameRelease(Release, db)
 	case GamePreReleaseFeedType:
 		return getStoredGameRelease(PreRelease, db)
+	case MavenReleaseFeedType:
+		return getStoredMavenRelease(Release, db)
+	case MavenPreReleaseFeedType:
+		return getStoredMavenRelease(PreRelease, db)
 	case LauncherReleaseFeedType:
 		return getStoredLauncherRelease(db)
 	case LauncherPostFeedType:

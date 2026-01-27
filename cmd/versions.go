@@ -24,24 +24,37 @@ const (
 )
 
 var (
+	patchlineOption = &discordgo.ApplicationCommandOption{
+		Type:        discordgo.ApplicationCommandOptionString,
+		Name:        "patchline",
+		Description: "The release channel",
+		Choices: []*discordgo.ApplicationCommandOptionChoice{
+			{
+				Name:  hytale.Release.Display(),
+				Value: hytale.Release.ID(),
+			},
+			{
+				Name:  hytale.PreRelease.Display(),
+				Value: hytale.PreRelease.ID(),
+			},
+		},
+	}
+
 	VersionCommand = &discordgo.ApplicationCommand{
 		Name:        "version",
 		Description: "Get the latest Hytale version",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "patchline",
-				Description: "The release channel",
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
-					{
-						Name:  hytale.Release.Display(),
-						Value: hytale.Release.ID(),
-					},
-					{
-						Name:  hytale.PreRelease.Display(),
-						Value: hytale.PreRelease.ID(),
-					},
-				},
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Name:        "server",
+				Description: "Get the latest Hytale server version",
+				Options:     []*discordgo.ApplicationCommandOption{patchlineOption},
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Name:        "client",
+				Description: "Get the latest Hytale client version",
+				Options:     []*discordgo.ApplicationCommandOption{patchlineOption},
 			},
 		},
 	}
@@ -77,6 +90,16 @@ func cleanupOldInteractions() {
 
 func versionCommand(ctx *CommandContext) {
 	options := ctx.Options()
+
+	var side hytale.Side
+	if _, exists := options["client"]; exists {
+		side = hytale.Client
+	} else if _, exists := options["server"]; exists {
+		side = hytale.Server
+	} else {
+		ctx.ReplyWarn("Invalid side")
+	}
+
 	option, exists := options["patchline"]
 	var patchlineValue string
 	if exists {
@@ -90,19 +113,13 @@ func versionCommand(ctx *CommandContext) {
 		ctx.ReplyWarn("Invalid patchline")
 	}
 
-	feed, exists := ctx.HytaleFeeds.Feeds[patchline.FeedType()]
+	feed, exists := ctx.HytaleFeeds.Feeds[hytale.GetFeedType(patchline, side)]
 	if !exists {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
 		return
 	}
 
-	gameReleaseFeed, ok := feed.(hytale.GameReleaseFeed)
-	if !ok {
-		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
-		return
-	}
-
-	ctx.ReplyEmbed(gameReleaseFeed.BuildMessage(ctx.Config, false))
+	ctx.ReplyEmbed(feed.BuildMessage(ctx.Config, false))
 }
 
 func launcherCommand(ctx *CommandContext) {
