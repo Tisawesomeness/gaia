@@ -35,11 +35,11 @@ var (
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{
 						Name:  hytale.Release.Display(),
-						Value: string(hytale.Release),
+						Value: hytale.Release.ID(),
 					},
 					{
 						Name:  hytale.PreRelease.Display(),
-						Value: string(hytale.PreRelease),
+						Value: hytale.PreRelease.ID(),
 					},
 				},
 			},
@@ -90,7 +90,7 @@ func versionCommand(ctx *CommandContext) {
 		ctx.ReplyWarn("Invalid patchline")
 	}
 
-	feed, exists := ctx.HytaleFeeds.Feeds[patchline.FeedID()]
+	feed, exists := ctx.HytaleFeeds.Feeds[patchline.FeedType()]
 	if !exists {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
 		return
@@ -106,7 +106,7 @@ func versionCommand(ctx *CommandContext) {
 }
 
 func launcherCommand(ctx *CommandContext) {
-	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedID]
+	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedType]
 	if !exists {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale Launcher version."))
 		return
@@ -122,7 +122,7 @@ func launcherCommand(ctx *CommandContext) {
 }
 
 func articlesCommand(ctx *CommandContext) {
-	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherPostFeedID]
+	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherPostFeedType]
 	if !exists {
 		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale article."))
 		return

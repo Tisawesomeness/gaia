@@ -68,10 +68,10 @@ func (us UserSubscription) CurrentVersion() string {
 	return us.Version
 }
 
-func (db DB) AddOrUpdateSubscription(feedType string, targetID string, subscription Subscription) error {
-	key := sanitize(feedType) + ":subs:" + targetID
+func (db DB) AddOrUpdateSubscription(feedID string, targetID string, subscription Subscription) error {
+	key := sanitize(feedID) + ":subs:" + targetID
 
-	// hset <feedType>:subs:<targetID> ...
+	// hset <feedID>:subs:<targetID> ...
 	switch sub := subscription.(type) {
 	case GuildSubscription:
 		rolesStr := strings.Join(sub.Roles, ",")
@@ -97,14 +97,14 @@ func (db DB) AddOrUpdateSubscription(feedType string, targetID string, subscript
 		return fmt.Errorf("unknown subscription type")
 	}
 
-	// sadd <feedType>:subs <targetID>
-	command := db.v.B().Sadd().Key(sanitize(feedType) + ":subs").Member(targetID).Build()
+	// sadd <feedID>:subs <targetID>
+	command := db.v.B().Sadd().Key(sanitize(feedID) + ":subs").Member(targetID).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 
-func (db DB) GetSubscriptions(feedType string) ([]string, error) {
-	// smembers <feedType>:subs
-	command := db.v.B().Smembers().Key(sanitize(feedType) + ":subs").Build()
+func (db DB) GetSubscriptions(feedID string) ([]string, error) {
+	// smembers <feedID>:subs
+	command := db.v.B().Smembers().Key(sanitize(feedID) + ":subs").Build()
 	resp := db.v.Do(context.Background(), command)
 	if err := resp.Error(); err != nil {
 		return nil, err
@@ -118,10 +118,10 @@ func (db DB) GetSubscriptions(feedType string) ([]string, error) {
 	return subscriptionIDs, nil
 }
 
-func (db DB) GetSubscription(feedType string, targetID string) (Subscription, error) {
-	key := sanitize(feedType) + ":subs:" + targetID
+func (db DB) GetSubscription(feedID string, targetID string) (Subscription, error) {
+	key := sanitize(feedID) + ":subs:" + targetID
 
-	// hgetall <feedType>:subs:<targetID>
+	// hgetall <feedID>:subs:<targetID>
 	command := db.v.B().Hgetall().Key(key).Build()
 	result, err := db.v.Do(context.Background(), command).AsStrMap()
 	if err != nil {
@@ -152,22 +152,22 @@ func (db DB) GetSubscription(feedType string, targetID string) (Subscription, er
 	}
 }
 
-func (db DB) RemoveSubscription(feedType string, targetID string) error {
-	// del <feedType>:subs:<targetID>
-	command := db.v.B().Del().Key(sanitize(feedType) + ":subs:" + targetID).Build()
+func (db DB) RemoveSubscription(feedID string, targetID string) error {
+	// del <feedID>:subs:<targetID>
+	command := db.v.B().Del().Key(sanitize(feedID) + ":subs:" + targetID).Build()
 	if err := db.v.Do(context.Background(), command).Error(); err != nil {
 		return err
 	}
 
-	// srem <feedType>:subs <targetID>
-	command = db.v.B().Srem().Key(sanitize(feedType) + ":subs").Member(targetID).Build()
+	// srem <feedID>:subs <targetID>
+	command = db.v.B().Srem().Key(sanitize(feedID) + ":subs").Member(targetID).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 
 // May return nil!
-func (db DB) GetLatestPost(feedType string) ([]byte, error) {
-	// get <feedType>:latest
-	command := db.v.B().Get().Key(sanitize(feedType) + ":latest").Build()
+func (db DB) GetLatestPost(feedID string) ([]byte, error) {
+	// get <feedID>:latest
+	command := db.v.B().Get().Key(sanitize(feedID) + ":latest").Build()
 	resp := db.v.Do(context.Background(), command)
 	err := resp.Error()
 	if err != nil {
@@ -183,9 +183,9 @@ func (db DB) GetLatestPost(feedType string) ([]byte, error) {
 	return raw, err
 }
 
-func (db DB) SetLatestPost(feedType string, content string) error {
-	// set <feedType>:latest <content>
-	command := db.v.B().Set().Key(sanitize(feedType) + ":latest").Value(content).Build()
+func (db DB) SetLatestPost(feedID string, content string) error {
+	// set <feedID>:latest <content>
+	command := db.v.B().Set().Key(sanitize(feedID) + ":latest").Value(content).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 
