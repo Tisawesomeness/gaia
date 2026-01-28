@@ -14,9 +14,6 @@
 # Exclude build command shortcut(s)
 *.cmd
 
-# Exclude program output
-*.txt
-
 # Exclude program storage
 data
 !*.go

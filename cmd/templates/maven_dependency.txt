@@ -1,0 +1,6 @@
+<dependency>
+    <groupId>{{ .Group }}</groupId>
+    <artifactId>{{ .Artifact }}</artifactId>
+    <version>{{ .Version }}</version>
+    <scope>provided</scope>
+</dependency>

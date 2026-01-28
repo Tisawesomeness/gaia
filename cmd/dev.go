@@ -12,10 +12,27 @@ import (
 )
 
 var (
+	scriptSizeOption = &discordgo.ApplicationCommandOption{
+		Type:        discordgo.ApplicationCommandOptionString,
+		Name:        "type",
+		Description: "Whether to show the full script or only the dependency",
+		Choices: []*discordgo.ApplicationCommandOptionChoice{
+			{
+				Name:  "Dependency",
+				Value: "dependency",
+			},
+			{
+				Name:  "Full",
+				Value: "full",
+			},
+		},
+	}
+
 	MavenCommand = &discordgo.ApplicationCommand{
 		Name:        "maven",
 		Description: "Generate a maven build file for Hytale development",
 		Options: []*discordgo.ApplicationCommandOption{
+			scriptSizeOption,
 			patchlineOption,
 		},
 	}
@@ -24,6 +41,7 @@ var (
 		Name:        "gradle",
 		Description: "Generate a gradle build file for Hytale development",
 		Options: []*discordgo.ApplicationCommandOption{
+			scriptSizeOption,
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Name:        "flavor",
@@ -44,16 +62,104 @@ var (
 	}
 )
 
+type scriptType int
+
+const (
+	maven scriptType = iota
+	gradle
+	gradleKts
+)
+
+func (s scriptType) fileName() string {
+	switch s {
+	case maven:
+		return "pom.xml"
+	case gradle:
+		return "build.gradle"
+	case gradleKts:
+		return "build.gradle.kts"
+	default:
+		panic("unknown script type")
+	}
+}
+
+func (s scriptType) display() string {
+	switch s {
+	case maven:
+		return "Maven"
+	case gradle:
+		return "Groovy Gradle"
+	case gradleKts:
+		return "Kotlin Gradle"
+	default:
+		panic("unknown script type")
+	}
+}
+
+func (s scriptType) codeblockLang() string {
+	switch s {
+	case maven:
+		return "xml"
+	case gradle:
+		return "gradle"
+	case gradleKts:
+		return "kts"
+	default:
+		panic("unknown script type")
+	}
+}
+
+type buildScript struct {
+	template   *template.Template
+	scriptType scriptType
+	isFull     bool
+}
+
 var (
+	//go:embed templates/maven_dependency.txt
+	mavenDepTemplateStr string
+	mavenDep            = buildScript{
+		template:   template.Must(template.New("mavenDep").Parse(mavenDepTemplateStr)),
+		scriptType: maven,
+		isFull:     false,
+	}
 	//go:embed templates/pom.xml
-	mavenTemplateStr string
-	mavenTemplate    = template.Must(template.New("maven").Parse(mavenTemplateStr))
+	mavenFullTemplateStr string
+	mavenFull            = buildScript{
+		template:   template.Must(template.New("mavenFull").Parse(mavenFullTemplateStr)),
+		scriptType: maven,
+		isFull:     true,
+	}
+
+	//go:embed templates/gradle_dependency.txt
+	gradleDepTemplateStr string
+	gradleDep            = buildScript{
+		template:   template.Must(template.New("gradleDep").Parse(gradleDepTemplateStr)),
+		scriptType: gradle,
+		isFull:     false,
+	}
 	//go:embed templates/build.gradle
-	gradleTemplateStr string
-	gradleTemplate    = template.Must(template.New("gradle").Parse(gradleTemplateStr))
+	gradleFullTemplateStr string
+	gradleFull            = buildScript{
+		template:   template.Must(template.New("gradleFull").Parse(gradleFullTemplateStr)),
+		scriptType: gradle,
+		isFull:     true,
+	}
+
+	//go:embed templates/gradle_kts_dependency.txt
+	gradleKtsDepTemplateStr string
+	gradleKtsDep            = buildScript{
+		template:   template.Must(template.New("gradleKtsDep").Parse(gradleKtsDepTemplateStr)),
+		scriptType: gradleKts,
+		isFull:     false,
+	}
 	//go:embed templates/build.gradle.kts
-	gradleKtsTemplateStr string
-	gradleKtsTemplate    = template.Must(template.New("gradleKts").Parse(gradleKtsTemplateStr))
+	gradleKtsFullTemplateStr string
+	gradleKtsFull            = buildScript{
+		template:   template.Must(template.New("gradleKtsFull").Parse(gradleKtsFullTemplateStr)),
+		scriptType: gradleKts,
+		isFull:     true,
+	}
 )
 
 type variables struct {
@@ -64,25 +170,49 @@ type variables struct {
 }
 
 func mavenCommand(ctx *CommandContext) {
-	buildScriptCommand(ctx, mavenTemplate, "pom.xml", "xml")
+	options := ctx.Options()
+
+	scriptSize := "dependency"
+	if option, exists := options["type"]; exists {
+		scriptSize = option.StringValue()
+	}
+
+	if scriptSize == "dependency" {
+		buildScriptCommand(ctx, mavenDep)
+	} else {
+		buildScriptCommand(ctx, mavenFull)
+	}
 }
 
 func gradleCommand(ctx *CommandContext) {
 	options := ctx.Options()
+
+	scriptSize := "dependency"
+	if option, exists := options["type"]; exists {
+		scriptSize = option.StringValue()
+	}
 
 	flavor := "kotlin"
 	if option, exists := options["flavor"]; exists {
 		flavor = option.StringValue()
 	}
 
-	if flavor == "kotlin" {
-		buildScriptCommand(ctx, gradleKtsTemplate, "build.gradle.kits", "kts")
+	if scriptSize == "dependency" {
+		if flavor == "kotlin" {
+			buildScriptCommand(ctx, gradleKtsDep)
+		} else {
+			buildScriptCommand(ctx, gradleDep)
+		}
 	} else {
-		buildScriptCommand(ctx, gradleTemplate, "build.gradle", "gradle")
+		if flavor == "kotlin" {
+			buildScriptCommand(ctx, gradleKtsFull)
+		} else {
+			buildScriptCommand(ctx, gradleFull)
+		}
 	}
 }
 
-func buildScriptCommand(ctx *CommandContext, template *template.Template, fileName string, lang string) {
+func buildScriptCommand(ctx *CommandContext, buildScript buildScript) {
 	options := ctx.Options()
 
 	patchlineValue := "release"
@@ -115,22 +245,27 @@ func buildScriptCommand(ctx *CommandContext, template *template.Template, fileNa
 		Version:    version,
 	}
 	var buf bytes.Buffer
-	err = template.Execute(&buf, vars)
+	err = buildScript.template.Execute(&buf, vars)
 	if err != nil {
 		ctx.ReplyError(errors.New("Could not generate build file"))
 		return
 	}
 
-	if fileName == "pom.xml" {
+	if !buildScript.isFull {
+		ctx.ReplyEmbed(&discordgo.MessageEmbed{
+			Title:       fmt.Sprintf("%s Hytale Dependency", buildScript.scriptType.display()),
+			Description: fmt.Sprintf("```%s\n%s\n```", buildScript.scriptType.codeblockLang(), buf.String()),
+		})
+	} else if buildScript.scriptType == maven {
 		ctx.ReplyComplex(&discordgo.InteractionResponseData{
 			Files: []*discordgo.File{
 				{
-					Name:   fileName,
+					Name:   buildScript.scriptType.fileName(),
 					Reader: &buf,
 				},
 			},
 		})
 	} else {
-		ctx.Reply(fmt.Sprintf("```%s\n%s\n```", lang, buf.String()))
+		ctx.Reply(fmt.Sprintf("```%s\n%s\n```", buildScript.scriptType.codeblockLang(), buf.String()))
 	}
 }
