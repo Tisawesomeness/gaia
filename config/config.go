@@ -70,6 +70,7 @@ type Config struct {
 	} `json:"profile"`
 	Feeds struct {
 		PollOnStartup      bool   `json:"poll_on_startup"`
+		NotifyOnStartup    bool   `json:"notify_on_startup"`
 		Interval           int    `json:"interval"`
 		GameVersion        string `json:"game_version"`
 		LauncherRelease    string `json:"launcher_release"`

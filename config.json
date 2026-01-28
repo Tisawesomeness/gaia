@@ -63,6 +63,7 @@
   },
   "feeds": {
     "poll_on_startup": false,
+    "notify_on_startup": true,
     "interval": 600,
     "game_version": "https://account-data.hytale.com/game-assets/version/",
     "launcher_release": "https://launcher.hytale.com/version/release/launcher.json",

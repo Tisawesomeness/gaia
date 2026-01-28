@@ -97,14 +97,13 @@ func pollFeeds(s *discordgo.Session, config config.Config, feeds hytale.HytaleFe
 	defer ticker.Stop()
 
 	if config.Feeds.PollOnStartup {
-		poll(s, feeds)
+		feeds.Poll()
+	}
+	if config.Feeds.NotifyOnStartup {
+		feeds.NotifyFeeds(s)
 	}
 	for range ticker.C {
-		poll(s, feeds)
+		feeds.Poll()
+		feeds.NotifyFeeds(s)
 	}
-}
-
-func poll(s *discordgo.Session, feeds hytale.HytaleFeeds) {
-	feeds.Poll()
-	feeds.NotifyFeeds(s)
 }
