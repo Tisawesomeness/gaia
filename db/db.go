@@ -138,7 +138,12 @@ func (db DB) GetSubscription(feedID string, targetID string) (Subscription, erro
 	switch subType {
 	case "guild":
 		rolesStr := result["roles"]
-		roles := strings.Split(rolesStr, ",")
+		var roles []string
+		if rolesStr == "" {
+			roles = []string{}
+		} else {
+			roles = strings.Split(rolesStr, ",")
+		}
 		return GuildSubscription{
 			Version: version,
 			Roles:   roles,
