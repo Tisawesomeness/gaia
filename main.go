@@ -1,10 +1,12 @@
 package main
 
 import (
+	_ "embed"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/Tisawesomeness/gaia/auth"
@@ -13,6 +15,12 @@ import (
 	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/hytale"
 	"github.com/bwmarrin/discordgo"
+)
+
+var (
+	//go:embed version.txt
+	versionRaw string
+	version    = strings.TrimSpace(versionRaw)
 )
 
 func main() {
@@ -51,7 +59,7 @@ func main() {
 	log.Println("Bot authenticated")
 
 	bootTime := time.Now()
-	commandExecutor := cmd.NewCommandExecutor(&config, database, httpClient, authStore, feeds, &bootTime)
+	commandExecutor := cmd.NewCommandExecutor(&config, database, httpClient, authStore, feeds, version, &bootTime)
 	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		commandExecutor.HandleInteractionCreate(s, i)
 	})

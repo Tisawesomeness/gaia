@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	_ "embed"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,7 +17,10 @@ import (
 	"github.com/sony/gobreaker"
 )
 
-const VERSION = "0.2.0"
+type BotMetadata struct {
+	Version  string
+	BootTime *time.Time
+}
 
 type CommandExecutor struct {
 	Config      *config.Config
@@ -24,8 +28,8 @@ type CommandExecutor struct {
 	HTTP        *http.Client
 	AuthStore   *auth.AuthStore
 	HytaleFeeds *hytale.HytaleFeeds
-	BootTime    *time.Time
 	Breakers    *Breakers
+	BotMetadata *BotMetadata
 }
 
 // Shared circuit breakers based on auth method
@@ -35,17 +39,28 @@ type Breakers struct {
 	KratosSession *gobreaker.CircuitBreaker
 }
 
-func NewCommandExecutor(config *config.Config, db *db.DB, httpClient *http.Client, authStore *auth.AuthStore, hytaleFeeds *hytale.HytaleFeeds, bootTime *time.Time) CommandExecutor {
+func NewCommandExecutor(
+	config *config.Config,
+	db *db.DB,
+	httpClient *http.Client,
+	authStore *auth.AuthStore,
+	hytaleFeeds *hytale.HytaleFeeds,
+	version string,
+	bootTime *time.Time,
+) CommandExecutor {
 	return CommandExecutor{
 		Config:      config,
 		DB:          db,
 		HTTP:        httpClient,
 		AuthStore:   authStore,
 		HytaleFeeds: hytaleFeeds,
-		BootTime:    bootTime,
 		Breakers: &Breakers{
 			HytaleSession: makeBreaker("HytaleSession", config.Auth.Breaker),
 			KratosSession: makeBreaker("KratosSession", config.Kratos.Breaker),
+		},
+		BotMetadata: &BotMetadata{
+			Version:  version,
+			BootTime: bootTime,
 		},
 	}
 }
@@ -80,8 +95,8 @@ type CommandContext struct {
 	HTTP        *http.Client
 	AuthStore   *auth.AuthStore
 	HytaleFeeds *hytale.HytaleFeeds
-	BootTime    *time.Time
 	Breakers    *Breakers
+	BotMetadata *BotMetadata
 
 	// The raw Discord session, prefer using CommandContext methods
 	Session *discordgo.Session
@@ -98,7 +113,7 @@ func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.I
 		AuthStore:   ce.AuthStore,
 		HytaleFeeds: ce.HytaleFeeds,
 		Breakers:    ce.Breakers,
-		BootTime:    ce.BootTime,
+		BotMetadata: ce.BotMetadata,
 		Session:     s,
 		Interaction: i,
 		hasDeferred: false,
@@ -162,7 +177,7 @@ func (ctx *CommandContext) ReplyComplex(data *discordgo.InteractionResponseData)
 	for _, embed := range data.Embeds {
 		if embed.Footer == nil {
 			embed.Footer = &discordgo.MessageEmbedFooter{
-				Text: "Gaia " + VERSION,
+				Text: "Gaia " + ctx.BotMetadata.Version,
 			}
 		}
 	}

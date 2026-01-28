@@ -97,7 +97,7 @@ func infoCommand(ctx *CommandContext) {
 
 	fields = append(fields, &discordgo.MessageEmbedField{
 		Name:   "Version",
-		Value:  fmt.Sprintf("`%s`", VERSION),
+		Value:  fmt.Sprintf("`%s`", ctx.BotMetadata.Version),
 		Inline: true,
 	})
 
@@ -117,7 +117,7 @@ func infoCommand(ctx *CommandContext) {
 		},
 		{
 			Name:   "Uptime",
-			Value:  formatUptime(*ctx.BootTime),
+			Value:  formatUptime(*ctx.BotMetadata.BootTime),
 			Inline: true,
 		},
 		{
