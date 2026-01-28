@@ -99,17 +99,21 @@ func (f GameReleaseFeed) GetType() FeedType {
 	return GetFeedType(f.Patchline, Client)
 }
 
-func (f GameReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
+func (f GameReleaseFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
 	var adjective string
 	if isNews {
 		adjective = "New"
 	} else {
 		adjective = "Latest"
 	}
-	return &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("%s Hytale Client %s", adjective, f.Patchline.Display()),
-		Description: fmt.Sprintf("`%s`", f.GetVersion()),
-		Color:       0x00FF00,
+	return &FeedMessage{
+		Embeds: []*discordgo.MessageEmbed{
+			{
+				Title:       fmt.Sprintf("%s Hytale Client %s", adjective, f.Patchline.Display()),
+				Description: fmt.Sprintf("`%s`", f.GetVersion()),
+				Color:       0x00FF00,
+			},
+		},
 	}
 }
 
@@ -226,28 +230,62 @@ func (f MavenFeed) GetType() FeedType {
 	return GetFeedType(f.Patchline, Server)
 }
 
-func (f MavenFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
-	var adjective string
-	if isNews {
-		adjective = "New"
-	} else {
-		adjective = "Latest"
-	}
-
-	downloadUrl := fmt.Sprintf("%s/%s/%s/%s/%s/%s-%s.jar",
+func downloadUrl(config *config.Config, version string, patchline Patchline) string {
+	return fmt.Sprintf("%s/%s/%s/%s/%s/%s-%s.jar",
 		config.Feeds.MavenRepo,
-		f.Patchline.ID(),
+		patchline.ID(),
 		strings.ReplaceAll(config.Feeds.MavenGroup, ".", "/"),
 		config.Feeds.MavenArtifact,
-		f.GetVersion(),
+		version,
 		config.Feeds.MavenArtifact,
-		f.GetVersion(),
+		version,
 	)
+}
 
-	return &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("%s Hytale Server %s", adjective, f.Patchline.Display()),
-		Description: fmt.Sprintf("`%s`\n[Downlaod](%s)", f.GetVersion(), downloadUrl),
-		Color:       0x00FF00,
+func (f MavenFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
+	// If announcing a new release, only need to include the new release in the embed
+	if isNews {
+		url := downloadUrl(config, f.Version.Latest, f.Patchline)
+
+		return &FeedMessage{
+			Embeds: []*discordgo.MessageEmbed{
+				{
+					Title:       fmt.Sprintf("New Hytale Server %s", f.Patchline.Display()),
+					Description: fmt.Sprintf("`%s`", f.Version.Latest),
+					Color:       0x00FF00,
+				},
+			},
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.Button{
+							Label: "Download",
+							Style: discordgo.LinkButton,
+							URL:   url,
+						},
+					},
+				},
+			},
+		}
+	}
+
+	// Slice goes from oldest to newest, iterate in reverse so latest is at the top
+	descriptionLines := []string{}
+	for i := len(f.Version.Versions) - 1; i >= 0; i-- {
+		version := f.Version.Versions[i]
+		line := fmt.Sprintf("- `%s`- [Download](%s)", version.Version, downloadUrl(config, version.Version, f.Patchline))
+		descriptionLines = append(descriptionLines, line)
+	}
+	description := strings.Join(descriptionLines, "\n")
+
+	return &FeedMessage{
+		Embeds: []*discordgo.MessageEmbed{
+			{
+				Title:       fmt.Sprintf("Hytale Server %ss", f.Patchline.Display()),
+				Description: description,
+				Color:       0x00FF00,
+			},
+		},
 	}
 }
 

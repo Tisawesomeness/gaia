@@ -9,15 +9,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// Article browsing session state
-type ArticleInteraction struct {
-	CurrentIndex int
-	Articles     []*hytale.Article
-	LastUsed     time.Time
-}
-
-var articleInteractions = make(map[string]*ArticleInteraction)
-
 const (
 	CleanupInterval   = 5 * time.Minute
 	InteractionExpiry = 30 * time.Minute
@@ -42,12 +33,12 @@ var (
 
 	VersionCommand = &discordgo.ApplicationCommand{
 		Name:        "version",
-		Description: "Get the latest Hytale version",
+		Description: "Get the latest Hytale versions",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Name:        "server",
-				Description: "Get the latest Hytale server version",
+				Description: "List Hytale server versions",
 				Options:     []*discordgo.ApplicationCommandOption{patchlineOption},
 			},
 			{
@@ -70,7 +61,7 @@ var (
 	}
 )
 
-func StartArticleInteractionCleanup() {
+func StartInteractionCleanup() {
 	ticker := time.NewTicker(CleanupInterval)
 	go func() {
 		for range ticker.C {
@@ -119,7 +110,11 @@ func versionCommand(ctx *CommandContext) {
 		return
 	}
 
-	ctx.ReplyEmbed(feed.BuildMessage(ctx.Config, false))
+	message := feed.BuildMessage(ctx.Config, false)
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
+		Embeds:     message.Embeds,
+		Components: message.Components,
+	})
 }
 
 func launcherCommand(ctx *CommandContext) {
@@ -129,14 +124,21 @@ func launcherCommand(ctx *CommandContext) {
 		return
 	}
 
-	launcherReleaseFeed, ok := feed.(hytale.LauncherReleaseFeed)
-	if !ok {
-		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale Launcher version."))
-		return
-	}
-
-	ctx.ReplyEmbed(launcherReleaseFeed.BuildMessage(ctx.Config, false))
+	message := feed.BuildMessage(ctx.Config, false)
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
+		Embeds:     message.Embeds,
+		Components: message.Components,
+	})
 }
+
+// Article browsing session state
+type ArticleInteraction struct {
+	CurrentIndex int
+	Articles     []*hytale.Article
+	LastUsed     time.Time
+}
+
+var articleInteractions = make(map[string]*ArticleInteraction)
 
 func articlesCommand(ctx *CommandContext) {
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherPostFeedType]
@@ -164,30 +166,28 @@ func articlesCommand(ctx *CommandContext) {
 	}
 
 	latestArticle := articles[0]
-	embed := latestArticle.BuildMessage(ctx.Config)
+	message := latestArticle.BuildMessage(ctx.Config)
 
 	// Note: going *back* in time means going *forward* in the articles array
-	backButton := discordgo.Button{
-		Label:    "Back",
-		Style:    discordgo.SecondaryButton,
-		CustomID: "article_back_" + interactionID,
-		Disabled: len(articles) <= 1, // Disable if there's only one article
-	}
-
-	forwardButton := discordgo.Button{
-		Label:    "Forward",
-		Style:    discordgo.SecondaryButton,
-		CustomID: "article_forward_" + interactionID,
-		Disabled: true, // Disable if it's the first article
-	}
-
-	ctx.ReplyComplex(&discordgo.InteractionResponseData{
-		Embeds: []*discordgo.MessageEmbed{embed},
-		Components: []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{backButton, forwardButton},
-			},
+	buttons := []discordgo.MessageComponent{
+		discordgo.Button{
+			Label:    "Back",
+			Style:    discordgo.SecondaryButton,
+			CustomID: "article_back_" + interactionID,
+			Disabled: len(articles) <= 1, // Disable if there's only one article
 		},
+		discordgo.Button{
+			Label:    "Forward",
+			Style:    discordgo.SecondaryButton,
+			CustomID: "article_forward_" + interactionID,
+			Disabled: true, // Disable if it's the first article
+		},
+	}
+
+	paginateMessage(message, buttons)
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
+		Embeds:     message.Embeds,
+		Components: message.Components,
 	})
 }
 
@@ -216,34 +216,53 @@ func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, c
 
 	currentArticle := interaction.Articles[interaction.CurrentIndex]
 
-	embed := currentArticle.BuildMessage(ctx.Config)
+	message := currentArticle.BuildMessage(ctx.Config)
 
 	// Note: going *back* in time means going *forward* in the articles array
-	backButton := discordgo.Button{
-		Label:    "Back",
-		Style:    discordgo.SecondaryButton,
-		CustomID: "article_back_" + interactionID,
-		Disabled: interaction.CurrentIndex == len(interaction.Articles)-1,
-	}
-
-	forwardButton := discordgo.Button{
-		Label:    "Forward",
-		Style:    discordgo.SecondaryButton,
-		CustomID: "article_forward_" + interactionID,
-		Disabled: interaction.CurrentIndex == 0,
+	buttons := []discordgo.MessageComponent{
+		discordgo.Button{
+			Label:    "Back",
+			Style:    discordgo.SecondaryButton,
+			CustomID: "article_back_" + interactionID,
+			Disabled: interaction.CurrentIndex == len(interaction.Articles)-1,
+		},
+		discordgo.Button{
+			Label:    "Forward",
+			Style:    discordgo.SecondaryButton,
+			CustomID: "article_forward_" + interactionID,
+			Disabled: interaction.CurrentIndex == 0,
+		},
 	}
 
 	// Edit the original message
+	paginateMessage(message, buttons)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{embed},
-			Components: []discordgo.MessageComponent{
-				discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{backButton, forwardButton},
-				},
-			},
+			Embeds:          message.Embeds,
+			Components:      message.Components,
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		},
 	})
+}
+
+// Mutates message
+func paginateMessage(message *hytale.FeedMessage, buttons []discordgo.MessageComponent) {
+	if len(message.Components) == 0 {
+		message.Components = []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: buttons,
+			},
+		}
+	} else if actionsRow, ok := message.Components[0].(discordgo.ActionsRow); ok {
+		message.Components[0] = discordgo.ActionsRow{
+			Components: append(buttons, actionsRow.Components...),
+		}
+	} else {
+		message.Components = append([]discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: buttons,
+			},
+		}, message.Components...)
+	}
 }

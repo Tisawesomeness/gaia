@@ -36,7 +36,7 @@ func (f LauncherReleaseFeed) GetType() FeedType {
 	return LauncherPostFeedType
 }
 
-func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
+func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
 	var title string
 	if isNews {
 		title = "New Hytale Launcher Version"
@@ -65,7 +65,9 @@ func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *d
 		embed.Fields = fields
 	}
 
-	return embed
+	return &FeedMessage{
+		Embeds: []*discordgo.MessageEmbed{embed},
+	}
 }
 
 func capitalizeFirstLetter(s string) string {
@@ -128,13 +130,17 @@ type Article struct {
 	ImageURL    string `json:"image_url"`
 }
 
-func (a *Article) BuildMessage(config *config.Config) *discordgo.MessageEmbed {
-	return &discordgo.MessageEmbed{
-		Title:       a.Title,
-		URL:         a.DestURL,
-		Description: a.Description,
-		Image:       &discordgo.MessageEmbedImage{URL: config.Feeds.ArticleImagePrefix + a.ImageURL},
-		Color:       0x00FF00,
+func (a *Article) BuildMessage(config *config.Config) *FeedMessage {
+	return &FeedMessage{
+		Embeds: []*discordgo.MessageEmbed{
+			{
+				Title:       a.Title,
+				URL:         a.DestURL,
+				Description: a.Description,
+				Image:       &discordgo.MessageEmbedImage{URL: config.Feeds.ArticleImagePrefix + a.ImageURL},
+				Color:       0x00FF00,
+			},
+		},
 	}
 }
 
@@ -150,12 +156,16 @@ func (f LauncherPostFeed) GetType() FeedType {
 	return LauncherPostFeedType
 }
 
-func (f LauncherPostFeed) BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed {
+func (f LauncherPostFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
 	if len(f.Articles.Articles) <= 0 {
-		return &discordgo.MessageEmbed{
-			Title:       "Hytale Articles",
-			Description: "No articles yet...",
-			Color:       0xFF0000,
+		return &FeedMessage{
+			Embeds: []*discordgo.MessageEmbed{
+				{
+					Title:       "Hytale Articles",
+					Description: "No articles yet...",
+					Color:       0xFF0000,
+				},
+			},
 		}
 	}
 	latestArticle := f.Articles.Articles[0]

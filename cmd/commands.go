@@ -330,7 +330,7 @@ func InitCommands(session *discordgo.Session, config config.Config) error {
 		}
 		log.Println("Commands created")
 	}
-	StartArticleInteractionCleanup()
+	StartInteractionCleanup()
 	return nil
 }
 

@@ -132,11 +132,16 @@ func (ft FeedType) fetch(feeds *HytaleFeeds) (Feed, error) {
 	}
 }
 
+type FeedMessage struct {
+	Embeds     []*discordgo.MessageEmbed
+	Components []discordgo.MessageComponent
+}
+
 // Represents a feed of content
 type Feed interface {
 	GetType() FeedType
 	// Formats the latest feed content as an embed
-	BuildMessage(config *config.Config, isNews bool) *discordgo.MessageEmbed
+	BuildMessage(config *config.Config, isNews bool) *FeedMessage
 	// The last version string that was sent to the subscriber
 	// If the subscribed content has a new version string, then we know the subscriber should be notified
 	GetVersion() string
@@ -245,14 +250,15 @@ func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string
 			} else {
 				message := feed.BuildMessage(feeds.config, true)
 				_, err = s.ChannelMessageSendComplex(targetID, &discordgo.MessageSend{
-					Content: roleMentions(sub.Roles),
-					Embeds:  []*discordgo.MessageEmbed{message},
+					Content:    roleMentions(sub.Roles),
+					Embeds:     message.Embeds,
+					Components: message.Components,
 					AllowedMentions: &discordgo.MessageAllowedMentions{
 						Roles: sub.Roles,
 					},
 				})
 				if err != nil {
-					log.Printf("Cannot send feed update: %v", err)
+					log.Printf("Cannot send feed update (guild): %v", err)
 					return
 				}
 
@@ -276,11 +282,12 @@ func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string
 
 				message := feed.BuildMessage(feeds.config, true)
 				_, err = s.ChannelMessageSendComplex(dm.ID, &discordgo.MessageSend{
-					Embeds:          []*discordgo.MessageEmbed{message},
+					Embeds:          message.Embeds,
+					Components:      message.Components,
 					AllowedMentions: &discordgo.MessageAllowedMentions{},
 				})
 				if err != nil {
-					log.Printf("Cannot send feed update: %v", err)
+					log.Printf("Cannot send feed update (user): %v", err)
 					return
 				}
 
