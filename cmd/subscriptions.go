@@ -22,6 +22,14 @@ var (
 			Value: hytale.GamePreReleaseFeedType.ID(),
 		},
 		{
+			Name:  hytale.MavenReleaseFeedType.Display(),
+			Value: hytale.MavenReleaseFeedType.ID(),
+		},
+		{
+			Name:  hytale.MavenPreReleaseFeedType.Display(),
+			Value: hytale.MavenPreReleaseFeedType.ID(),
+		},
+		{
 			Name:  hytale.LauncherReleaseFeedType.Display(),
 			Value: hytale.LauncherReleaseFeedType.ID(),
 		},
