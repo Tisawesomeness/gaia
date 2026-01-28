@@ -276,12 +276,14 @@ func init() {
 			{VersionCommand, versionCommand},
 			{LauncherCommand, launcherCommand},
 			{ArticlesCommand, articlesCommand},
-			{MavenCommand, mavenCommand},
-			{GradleCommand, gradleCommand},
 			{SubscribeCommand, subscribeCommand},
 			{SubscribeDMCommand, subscribeDMCommand},
 			{ListCommand, listCommand},
 			{UnsubscribeCommand, unsubscribeCommand},
+		}},
+		{"Developer", []*Command{
+			{MavenCommand, mavenCommand},
+			{GradleCommand, gradleCommand},
 		}},
 	}
 }
