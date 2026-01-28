@@ -275,6 +275,8 @@ func init() {
 			{VersionCommand, versionCommand},
 			{LauncherCommand, launcherCommand},
 			{ArticlesCommand, articlesCommand},
+			{MavenCommand, mavenCommand},
+			{GradleCommand, gradleCommand},
 			{SubscribeCommand, subscribeCommand},
 			{SubscribeDMCommand, subscribeDMCommand},
 			{ListCommand, listCommand},
