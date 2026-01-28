@@ -202,13 +202,13 @@ func fetchGameRelease(patchline Patchline, feeds *HytaleFeeds) (Feed, error) {
 }
 
 type MavenVersion struct {
-	Version string `xml:"version"`
+	Version string `xml:",chardata"`
 }
 
 type MavenVersioning struct {
 	XMLName     xml.Name       `xml:"versioning"`
 	Latest      string         `xml:"latest"`
-	Versions    []MavenVersion `xml:"versions"`
+	Versions    []MavenVersion `xml:"versions>version"`
 	LastUpdated string         `xml:"lastUpdated"`
 }
 
