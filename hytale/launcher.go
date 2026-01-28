@@ -46,7 +46,7 @@ func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *F
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Description: fmt.Sprintf("`%s`", f.GetVersion()),
-		Color:       0x00FF00,
+		Color:       0x0000FF,
 	}
 
 	if f.Release != nil && f.Release.DownloadURLs != nil {
@@ -138,7 +138,7 @@ func (a *Article) BuildMessage(config *config.Config) *FeedMessage {
 				URL:         a.DestURL,
 				Description: a.Description,
 				Image:       &discordgo.MessageEmbedImage{URL: config.Feeds.ArticleImagePrefix + a.ImageURL},
-				Color:       0x00FF00,
+				Color:       0x0000FF,
 			},
 		},
 	}

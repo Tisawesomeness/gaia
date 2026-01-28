@@ -111,7 +111,7 @@ func (f GameReleaseFeed) BuildMessage(config *config.Config, isNews bool) *FeedM
 			{
 				Title:       fmt.Sprintf("%s Hytale Client %s", adjective, f.Patchline.Display()),
 				Description: fmt.Sprintf("`%s`", f.GetVersion()),
-				Color:       0x00FF00,
+				Color:       0x0000FF,
 			},
 		},
 	}
@@ -252,7 +252,7 @@ func (f MavenFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage
 				{
 					Title:       fmt.Sprintf("New Hytale Server %s", f.Patchline.Display()),
 					Description: fmt.Sprintf("`%s`", f.Version.Latest),
-					Color:       0x00FF00,
+					Color:       0x0000FF,
 				},
 			},
 			Components: []discordgo.MessageComponent{
@@ -283,7 +283,7 @@ func (f MavenFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage
 			{
 				Title:       fmt.Sprintf("Hytale Server %ss", f.Patchline.Display()),
 				Description: description,
-				Color:       0x00FF00,
+				Color:       0x0000FF,
 			},
 		},
 	}

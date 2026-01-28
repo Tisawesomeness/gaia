@@ -172,13 +172,13 @@ func articlesCommand(ctx *CommandContext) {
 	buttons := []discordgo.MessageComponent{
 		discordgo.Button{
 			Label:    "Back",
-			Style:    discordgo.SecondaryButton,
+			Style:    discordgo.PrimaryButton,
 			CustomID: "article_back_" + interactionID,
 			Disabled: len(articles) <= 1, // Disable if there's only one article
 		},
 		discordgo.Button{
 			Label:    "Forward",
-			Style:    discordgo.SecondaryButton,
+			Style:    discordgo.PrimaryButton,
 			CustomID: "article_forward_" + interactionID,
 			Disabled: true, // Disable if it's the first article
 		},
@@ -222,13 +222,13 @@ func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, c
 	buttons := []discordgo.MessageComponent{
 		discordgo.Button{
 			Label:    "Back",
-			Style:    discordgo.SecondaryButton,
+			Style:    discordgo.PrimaryButton,
 			CustomID: "article_back_" + interactionID,
 			Disabled: interaction.CurrentIndex == len(interaction.Articles)-1,
 		},
 		discordgo.Button{
 			Label:    "Forward",
-			Style:    discordgo.SecondaryButton,
+			Style:    discordgo.PrimaryButton,
 			CustomID: "article_forward_" + interactionID,
 			Disabled: interaction.CurrentIndex == 0,
 		},
