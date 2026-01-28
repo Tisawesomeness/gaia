@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"strings"
 	"time"
 
@@ -106,7 +105,7 @@ func versionCommand(ctx *CommandContext) {
 
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.GetFeedType(patchline, side)]
 	if !exists {
-		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
+		ctx.ReplyError("Could not retrieve the latest Hytale version.", nil)
 		return
 	}
 
@@ -120,7 +119,7 @@ func versionCommand(ctx *CommandContext) {
 func launcherCommand(ctx *CommandContext) {
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedType]
 	if !exists {
-		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale Launcher version."))
+		ctx.ReplyError("Could not retrieve the latest Hytale Launcher version.", nil)
 		return
 	}
 
@@ -143,13 +142,13 @@ var articleInteractions = make(map[string]*ArticleInteraction)
 func articlesCommand(ctx *CommandContext) {
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherPostFeedType]
 	if !exists {
-		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale article."))
+		ctx.ReplyError("Could not retrieve the latest Hytale article.", nil)
 		return
 	}
 
 	launcherPostFeed, ok := feed.(hytale.LauncherPostFeed)
 	if !ok {
-		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale article."))
+		ctx.ReplyError("Could not retrieve the latest Hytale article.", nil)
 		return
 	}
 	articles := launcherPostFeed.Articles.Articles

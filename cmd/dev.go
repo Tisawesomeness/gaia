@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	_ "embed"
-	"errors"
 	"fmt"
 	"text/template"
 
@@ -228,13 +227,13 @@ func buildScriptCommand(ctx *CommandContext, buildScript buildScript) {
 
 	feed, exists := ctx.HytaleFeeds.Feeds[hytale.GetFeedType(patchline, hytale.Server)]
 	if !exists {
-		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
+		ctx.ReplyError("Could not retrieve the latest Hytale version.", nil)
 		return
 	}
 
 	version := feed.GetVersion()
 	if version == "" {
-		ctx.ReplyError(errors.New("Could not retrieve the latest Hytale version."))
+		ctx.ReplyError("Could not retrieve the latest Hytale version.", nil)
 		return
 	}
 
@@ -247,7 +246,7 @@ func buildScriptCommand(ctx *CommandContext, buildScript buildScript) {
 	var buf bytes.Buffer
 	err = buildScript.template.Execute(&buf, vars)
 	if err != nil {
-		ctx.ReplyError(errors.New("Could not generate build file"))
+		ctx.ReplyError("Could not generate build script", nil)
 		return
 	}
 

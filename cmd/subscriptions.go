@@ -145,7 +145,7 @@ func subscribeCommand(ctx *CommandContext) {
 		Roles:   roles,
 	})
 	if err != nil {
-		ctx.ReplyError(fmt.Errorf("Error while trying to save subscription: %w", err))
+		ctx.ReplyError("Error while trying to save subscription", err)
 	} else {
 		ctx.Reply(fmt.Sprintf("Subscribed %s to %s", channel.Mention(), feedType.Display()))
 	}
@@ -170,7 +170,7 @@ func subscribeDMCommand(ctx *CommandContext) {
 		Version: feed.GetVersion(),
 	})
 	if err != nil {
-		ctx.ReplyError(fmt.Errorf("Error while trying to save subscription: %w", err))
+		ctx.ReplyError("Error while trying to save subscription", err)
 	} else {
 		ctx.Reply(fmt.Sprintf("Subscribed to %s", feedType.Display()))
 	}
@@ -220,7 +220,7 @@ func listCommand(ctx *CommandContext) {
 	} else {
 		channels, err := ctx.Session.GuildChannels(guildID)
 		if err != nil {
-			ctx.ReplyError(fmt.Errorf("Error while trying fetch guild channels: %w", err))
+			ctx.ReplyError("Error while fetching guild channels", err)
 			return
 		}
 
@@ -317,7 +317,7 @@ func unsubscribeCommand(ctx *CommandContext) {
 		} else {
 			channels, err := ctx.Session.GuildChannels(guildID)
 			if err != nil {
-				ctx.ReplyError(fmt.Errorf("Error while fetching guild channels: %w", err))
+				ctx.ReplyError("Error while fetching guild channels", err)
 				return
 			}
 

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -64,10 +63,6 @@ func makeBreaker(name string, config config.BreakerConfig) *gobreaker.CircuitBre
 
 		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
 			log.Printf("Circuit breaker %s %s -> %s", name, from.String(), to.String())
-		},
-		IsSuccessful: func(err error) bool {
-			var userErr *UserError
-			return err == nil || errors.As(err, &userErr)
 		},
 	})
 }
@@ -172,6 +167,7 @@ func (ctx *CommandContext) ReplyComplex(data *discordgo.InteractionResponseData)
 		}
 	}
 
+	var err error
 	if ctx.hasDeferred {
 		var attachments []*discordgo.MessageAttachment
 		if data.Attachments == nil {
@@ -180,7 +176,7 @@ func (ctx *CommandContext) ReplyComplex(data *discordgo.InteractionResponseData)
 			attachments = *data.Attachments
 		}
 
-		ctx.Session.FollowupMessageCreate(ctx.Interaction.Interaction, false, &discordgo.WebhookParams{
+		_, err = ctx.Session.FollowupMessageCreate(ctx.Interaction.Interaction, false, &discordgo.WebhookParams{
 			Content:         data.Content,
 			Components:      data.Components,
 			Embeds:          data.Embeds,
@@ -191,10 +187,14 @@ func (ctx *CommandContext) ReplyComplex(data *discordgo.InteractionResponseData)
 			Flags:           data.Flags,
 		})
 	} else {
-		ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
+		err = ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: data,
 		})
+	}
+
+	if err != nil {
+		ctx.reportError(err)
 	}
 }
 
@@ -206,17 +206,17 @@ func (ctx *CommandContext) ReplyExternalError(content string) {
 	ctx.ReplyEphemeral(":x: " + content)
 }
 
-func (ctx *CommandContext) ReplyError(err error) {
-	var userErr *UserError
-	if errors.As(err, &userErr) {
-		ctx.ReplyWarn(userErr.message)
-	} else {
-		ctx.ReplyEphemeral(":boom: An error occurred: " + err.Error())
-
-		id := ctx.Interaction.ApplicationCommandData().Name
-		options := formatCommandOptions(ctx.Interaction.ApplicationCommandData().Options)
-		log.Printf("Error in command /%s options %s:\n%+v", id, options, err)
+func (ctx *CommandContext) ReplyError(message string, err error) {
+	ctx.ReplyEphemeral(":boom: " + message)
+	if err != nil {
+		ctx.reportError(err)
 	}
+}
+
+func (ctx *CommandContext) reportError(err error) {
+	id := ctx.Interaction.ApplicationCommandData().Name
+	options := formatCommandOptions(ctx.Interaction.ApplicationCommandData().Options)
+	log.Printf("Error in command /%s options %s:\n%+v", id, options, err)
 }
 
 func formatCommandOptions(options []*discordgo.ApplicationCommandInteractionDataOption) string {
@@ -229,20 +229,6 @@ func formatCommandOptions(options []*discordgo.ApplicationCommandInteractionData
 		parts = append(parts, fmt.Sprintf("%s=%v", option.Name, value))
 	}
 	return strings.Join(parts, ", ")
-}
-
-// An error caused by the user, such as an invalid input.
-// Will not be logged.
-type UserError struct {
-	message string
-}
-
-func (ce UserError) Error() string {
-	return ce.message
-}
-
-func NewUserError(message string) UserError {
-	return UserError{message: message}
 }
 
 type Category struct {
