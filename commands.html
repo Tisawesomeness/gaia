@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Meta tags -->
+    <title>Gaia - Commands</title>
+    <meta charset="UTF-8">
+    <meta name="title" content="Gaia Commands">
+    <meta name="og:title" content="Gaia Commands">
+    <meta name="twitter:title" content="Gaia Commands">
+    <meta name="og:site_name" content="Gaia">
+    <meta name="description" content="A Discord bot keeping watch over Orbis.">
+    <meta name="og:description" content="A Discord bot keeping watch over Orbis.">
+    <meta name="twitter:description" content="A Discord bot keeping watch over Orbis.">
+    <meta name="url" content="https://gaia.tis.codes">
+    <meta name="keywords" content="gaia,discord,bot,hytale,bots,server,support,help,commands">
+
+    <!-- Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+    <link rel="manifest" href="/icons/site.webmanifest">
+    <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#5bbad5">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <meta name="msapplication-TileColor" content="#00aba9">
+    <meta name="msapplication-config" content="/icons/browserconfig.xml">
+    <meta name="theme-color" content="#ffffff">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha384-3B6NwesSXE7YJlcLI9RpRqGf2p/EgVH8BgoKTaUrmKNDkHPStTQ3EyoYjCGXaOTS" crossorigin="anonymous">
+    <link rel="stylesheet" href="css/gaia.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                Gaia
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="commands.html">Commands</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="support.html">Support</a>
+                    </li>
+                    <li class="nav-item ms-2">
+                        <a href="invite.html" 
+                           class="invite-nav-btn" target="_blank">
+                            Invite
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Commands Section -->
+    <section class="commands-section py-5">
+        <div class="container">
+            <h1 class="text-center mb-5">Commands</h1>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="command-category">
+                        <h3 class="category-title mb-3">Core</h3>
+                        <div class="command-list">
+                            <div class="command-item">
+                                <code class="command-id">/help</code>
+                                <span class="command-description">List all commands</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/info</code>
+                                <span class="command-description">Get information and stats about the bot</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/credits</code>
+                                <span class="command-description">See who made the bot possible</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6">
+                    <div class="command-category">
+                        <h3 class="category-title mb-3">Players</h3>
+                        <div class="command-list">
+                            <div class="command-item">
+                                <code class="command-id">/version</code>
+                                <span class="command-description">Fetch a Hytale profile by UUID or username</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/head</code>
+                                <span class="command-description">Get an image of a Hytale player's head</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/body</code>
+                                <span class="command-description">Get an image of a Hytale player's body</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/cape</code>
+                                <span class="command-description">Get an image of a Hytale player's cape</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/skin</code>
+                                <span class="command-description">Fetch a Hytale player's skin details</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="command-category">
+                        <h3 class="category-title mb-3">Updates</h3>
+                        <div class="command-list">
+                            <div class="command-item">
+                                <code class="command-id">/version</code>
+                                <span class="command-description">Get the latest Hytale versions</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/launcher</code>
+                                <span class="command-description">Get the latest Hytale Launcher version</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/articles</code>
+                                <span class="command-description">Get the latest Hytale article</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/subscribe</code>
+                                <span class="command-description">Subscribe to Hytale updates</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/list-subscriptions</code>
+                                <span class="command-description">List all subscriptions</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/unsubscribe</code>
+                                <span class="command-description">Unsubscribe from Hytale updates</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="command-category">
+                        <h3 class="category-title mb-3">Developer</h3>
+                        <div class="command-list">
+                            <div class="command-item">
+                                <code class="command-id">/maven</code>
+                                <span class="command-description">Generate a Maven build file</span>
+                            </div>
+                            <div class="command-item">
+                                <code class="command-id">/gradle</code>
+                                <span class="command-description">Generate a Gradle build file</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-links">
+                <a href="terms.html">Terms</a>
+                <a href="privacy.html">Privacy</a>
+                <a href="contact.html">Contact</a>
+            </div>
+            <div class="footer-info">
+                <small>Not affiliated with Hytale or Hypixel Studios. All trademarks are property of their respective owners. </small>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+</body>
+</html>
