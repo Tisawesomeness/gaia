@@ -6,6 +6,7 @@
     --bright-color: #456baa;
     --text-color: #a5b9c6;
     --feature-border: #2d4a70;
+    --minecord-color: #4caf50;
     --bs-link-color-rgb: var(--accent-color);
 }
 
@@ -185,6 +186,89 @@ a:link:hover {
     color: var(--accent-color);
 }
 
+.minecord-card {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: var(--primary-color);
+    border: 2px solid var(--feature-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    z-index: 1000;
+    max-width: 450px;
+    text-decoration: none !important;
+}
+
+.minecord-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+
+.minecord-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    object-fit: cover;
+    margin-left: 1rem;
+    flex-shrink: 0;
+}
+
+.minecord-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.minecord-title {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: var(--minecord-color);
+    margin: 0;
+    line-height: 1.2;
+}
+
+.minecord-description {
+    font-size: 1rem;
+    color: var(--text-color);
+    margin: 0;
+    line-height: 1.2;
+}
+
+.minecord-card a {
+    text-decoration: none !important;
+    color: inherit !important;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.minecord-card a:hover {
+    text-decoration: none !important;
+    color: inherit !important;
+}
+
+@media (max-width: 768px) {
+    .minecord-card {
+        max-width: 375px;
+        padding: 0.75rem;
+    }
+
+    .minecord-logo {
+        width: 48px;
+        height: 48px;
+    }
+
+    .minecord-title {
+        font-size: 0.9rem;
+    }
+
+    .minecord-description {
+        font-size: 0.75rem;
+    }
+}
+
 .footer {
     background-color: var(--tertiary-color);
     color: white;
@@ -321,3 +405,4 @@ a:link:hover {
     padding: 4rem 0;
     background-color: var(--primary-color);
 }
+
