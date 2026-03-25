@@ -188,7 +188,7 @@ var (
 					id:      "pants",
 				},
 				{
-					display: "Overpants",
+					display: "Legwear",
 					id:      "overpants",
 				},
 				{
