@@ -1,14 +1,55 @@
 package util
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"unicode"
 
+	"github.com/Tisawesomeness/gaia/config"
 	"github.com/sony/gobreaker"
 )
+
+type webhookMessage struct {
+	Content string `json:"content"`
+}
+
+// Logs a message to stdout and the Discord webhook, if configured
+func DiscordLogf(config *config.Config, httpClient *http.Client, msg string, v ...any) {
+	DiscordLog(config, httpClient, fmt.Sprintf(msg, v...))
+}
+
+// Logs a message to stdout and the Discord webhook, if configured
+func DiscordLog(config *config.Config, httpClient *http.Client, msg string) {
+	log.Println(msg)
+	if config.LogWebhook == "" {
+		return
+	}
+
+	body, err := json.Marshal(webhookMessage{msg})
+	if err != nil {
+		fmt.Printf("Could not log to Discord webhook: %v", err)
+		return
+	}
+
+	req, err := http.NewRequest("POST", config.LogWebhook, bytes.NewBuffer(body))
+	if err != nil {
+		fmt.Printf("Could not log to Discord webhook: %v", err)
+		return
+	}
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		fmt.Printf("Could not log to Discord webhook: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+}
 
 // Convert a string in mixed case to "Capitalized Words Separated By Spaces"
 func ToCapitalizedSpacedWords(s string) string {

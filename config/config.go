@@ -28,6 +28,7 @@ type Config struct {
 		Password string `json:"password"`
 	} `json:"valkey"`
 	TestServer              string `json:"test_server"`
+	LogWebhook              string `json:"log_webhook"`
 	IsSelfHosted            bool   `json:"is_self_hosted"`
 	CreateCommandsOnStartup bool   `json:"create_commands_on_startup"`
 	Playing                 string `json:"playing"`

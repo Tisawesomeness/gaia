@@ -10,6 +10,7 @@ import (
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
+	"github.com/Tisawesomeness/gaia/util"
 )
 
 // Keeps an OAuth and Hytale game session up-to-date by scheduling refreshes shortly before expiry.
@@ -240,6 +241,7 @@ func (a *AuthStore) initializeProfile(oAuthToken db.OAuthToken) (string, error) 
 }
 
 func (a AuthStore) performOAuthAndStore() (db.OAuthToken, error) {
+	util.DiscordLog(a.config, a.httpClient, "Authentication required!")
 	tokenResponse, err := OAuthDeviceFlow(a.config, a.httpClient)
 	if err != nil {
 		return db.OAuthToken{}, err
@@ -385,7 +387,7 @@ func (a *AuthStore) scheduleOAuthRefresh() {
 
 		refreshedOAuthToken, err := a.ensureOAuthRefreshed(oauthToken)
 		if err != nil {
-			log.Printf("Error refreshing OAuth token: %v", err)
+			util.DiscordLogf(a.config, a.httpClient, "Error refreshing OAuth token: %v", err)
 			return
 		}
 
@@ -420,7 +422,7 @@ func (a *AuthStore) scheduleGameSessionRefresh() {
 
 			refreshedOAuthToken, err := a.ensureOAuthRefreshed(oauthToken)
 			if err != nil {
-				log.Printf("Error refreshing OAuth token: %v", err)
+				util.DiscordLogf(a.config, a.httpClient, "Error refreshing OAuth token: %v", err)
 				return
 			}
 
@@ -430,7 +432,7 @@ func (a *AuthStore) scheduleGameSessionRefresh() {
 
 			refreshedSessionToken, err = a.createGameSessionAndStore(refreshedOAuthToken, a.profileUUID)
 			if err != nil {
-				log.Printf("error creating game session: %v", err)
+				util.DiscordLogf(a.config, a.httpClient, "Error creating game session after refresh: %v", err)
 				return
 			}
 		}

@@ -14,6 +14,7 @@ import (
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/hytale"
+	"github.com/Tisawesomeness/gaia/util"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -44,17 +45,20 @@ func main() {
 
 	authStore, err := auth.NewAuthStore(&config, database, httpClient)
 	if err != nil {
-		log.Fatalf("Could not create auth store: %v", err)
+		util.DiscordLogf(&config, httpClient, "Could not create auth store: %v", err)
+		os.Exit(1)
 	}
 
 	feeds, err := hytale.NewHytaleFeeds(&config, database, httpClient, authStore)
 	if err != nil {
-		log.Fatalf("Error creating Hytale feeds: %v", err)
+		util.DiscordLogf(&config, httpClient, "Error creating Hytale feeds: %v", err)
+		os.Exit(1)
 	}
 
 	session, err := discordgo.New("Bot " + config.Credentials.DiscordToken)
 	if err != nil {
-		log.Fatalf("Error starting bot: %v", err)
+		util.DiscordLogf(&config, httpClient, "Error starting bot: %v", err)
+		os.Exit(1)
 	}
 	log.Println("Bot authenticated")
 
@@ -66,23 +70,26 @@ func main() {
 
 	err = session.Open()
 	if err != nil {
-		log.Fatalf("Could not open session: %v", err)
+		util.DiscordLogf(&config, httpClient, "Could not open session: %v", err)
+		os.Exit(1)
 	}
 	defer session.Close()
 	log.Println("Opened Discord session")
 
 	err = session.UpdateGameStatus(0, config.Playing)
 	if err != nil {
-		log.Printf("Error setting bot activity: %v", err)
+		util.DiscordLogf(&config, httpClient, "Error setting bot activity: %v", err)
+		os.Exit(1)
 	}
 
 	err = cmd.InitCommands(session, config)
 	if err != nil {
-		log.Fatalf("Error while registering commands: %v", err)
+		util.DiscordLogf(&config, httpClient, "Error while registering commands: %v", err)
+		os.Exit(1)
 	}
 
 	go pollFeeds(session, config, *feeds)
-	log.Println("Bot finished init")
+	util.DiscordLog(&config, httpClient, "Bot finished init")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
