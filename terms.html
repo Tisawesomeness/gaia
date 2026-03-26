@@ -34,74 +34,76 @@
     <link rel="stylesheet" href="css/gaia.css">
 </head>
 <body>
+    <!-- Skip Navigation Link -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark">
+    <nav class="navbar navbar-expand-lg navbar-dark" aria-label="Main navigation">
         <div class="container">
-            <a class="navbar-brand" href="index.html">
+            <a class="navbar-brand" href="index.html" aria-label="Gaia Homepage">
                 Gaia
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon" aria-hidden="true"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.html">Home</a>
+                <ul class="navbar-nav ms-auto" role="menubar">
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="index.html" role="menuitem" tabindex="0">Home</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="commands.html">Commands</a>
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="commands.html" role="menuitem" tabindex="0">Commands</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="support.html">Support</a>
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="support.html" role="menuitem" tabindex="0">Support</a>
                     </li>
-                    <li class="nav-item ms-2">
-                        <a href="invite.html" 
-                           class="invite-nav-btn" target="_blank">
-                            Invite
-                        </a>
+                    <li class="nav-item ms-2" role="none">
+                        <a class="invite-nav-btn" href="invite.html" role="menuitem" tabindex="0" aria-label="Invite Gaia to your server" target="_blank">Invite</a>
                     </li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <!-- Content -->
-    <section class="terms-section">
-        <div class="container">
-            <h1 id="terms-of-service">Terms of Service</h2>
-            <p>Last Updated: January 20, 2026</p>
+    <main id="main-content">
+        <!-- Content -->
+        <section class="terms-section" aria-labelledby="terms-of-service">
+            <div class="container">
+                <h1 id="terms-of-service">Terms of Service</h2>
+                <p>Last Updated: January 20, 2026</p>
 
-            <h2 id="introduction">Introduction</h2>
-            <p>By inviting the publicly-hosted instance of Gaia to your Discord server or sending commands to the bot, you acknowledge and agree to the Terms of Service. If you you do not agree with the Terms of Service, you are prohibited from accessing the bot.</p>
+                <h2 id="introduction">Introduction</h2>
+                <p>By inviting the publicly-hosted instance of Gaia to your Discord server or sending commands to the bot, you acknowledge and agree to the Terms of Service. If you you do not agree with the Terms of Service, you are prohibited from accessing the bot.</p>
 
-            <h2 id="acceptable-use">Acceptable Use</h2>
-            <p>You agree not to use the bot in a manner that:</p>
-            <ul>
-                <li>Violates the Discord <a href="https://discord.com/terms">Terms of Service</a></li>
-                <li>Violates any applicable regional, national, or international law or regulation</li>
-                <li>Exposes minors to harmful material in any way</li>
-                <li>Is any form of spam or unwelcome message towards another user or external service</li>
-                <li>Interferes with the normal functionality of the Gaia bot or an external service, such as a Hytale server</li>
-            </ul>
-            <p>We reserve the right to take any appropriate measure to protect the availability and usability of the bot, including denying users access to the bot.</p>
+                <h2 id="acceptable-use">Acceptable Use</h2>
+                <p>You agree not to use the bot in a manner that:</p>
+                <ul>
+                    <li>Violates the Discord <a href="https://discord.com/terms">Terms of Service</a></li>
+                    <li>Violates any applicable regional, national, or international law or regulation</li>
+                    <li>Exposes minors to harmful material in any way</li>
+                    <li>Is any form of spam or unwelcome message towards another user or external service</li>
+                    <li>Interferes with the normal functionality of the Gaia bot or an external service, such as a Hytale server</li>
+                </ul>
+                <p>We reserve the right to take any appropriate measure to protect the availability and usability of the bot, including denying users access to the bot.</p>
 
-            <h2 id="third-party-content">Third-Party Content</h2>
-            <p>Several bot commands link to third-party content such as Hytale skins or Hytale server listings. The bot has no control over, and assumes no responsibility for any third-party content.</p>
+                <h2 id="third-party-content">Third-Party Content</h2>
+                <p>Several bot commands link to third-party content such as Hytale skins or Hytale server listings. The bot has no control over, and assumes no responsibility for any third-party content.</p>
 
-            <h2 id="disclaimers">Disclaimers</h2>
-            <p>Gaia is provided as-is. There are no guarantees that it will be available in the future, and its purpose or availability may be changed at any time.</p>
-            <p>Unless required by applicable law, in no event shall we be liable for any damages arising out of the use or inability to use the bot.</p>
+                <h2 id="disclaimers">Disclaimers</h2>
+                <p>Gaia is provided as-is. There are no guarantees that it will be available in the future, and its purpose or availability may be changed at any time.</p>
+                <p>Unless required by applicable law, in no event shall we be liable for any damages arising out of the use or inability to use the bot.</p>
 
-            <h2 id="modifications">Modifications</h2>
-            <p>We may update the Terms of Service at any time by posting the updated Terms of Service on this site. By continuing to access or use the bot after any revisions become effective, you agree to be bound by the updated terms.</p>
+                <h2 id="modifications">Modifications</h2>
+                <p>We may update the Terms of Service at any time by posting the updated Terms of Service on this site. By continuing to access or use the bot after any revisions become effective, you agree to be bound by the updated terms.</p>
 
-            <h2 id="contact">Contact</h2>
-            <p>If you have any comments or questions, contact us at <a href="mailto:tis_dev@protonmail.com">tis_dev@protonmail.com</a>.</p>
-        </div>
-    </section>
+                <h2 id="contact">Contact</h2>
+                <p>If you have any comments or questions, contact us at <a href="mailto:tis_dev@protonmail.com">tis_dev@protonmail.com</a>.</p>
+            </div>
+        </section>
+    </main>
 
     <!-- Footer -->
-    <footer class="footer">
+    <footer class="footer" role="contentinfo">
         <div class="container">
             <div class="footer-links">
                 <a href="terms.html">Terms</a>
@@ -109,11 +111,12 @@
                 <a href="contact.html">Contact</a>
             </div>
             <div class="footer-info">
-                <small>Not affiliated with Hytale or Hypixel Studios. All trademarks are property of their respective owners. </small>
+                <small>Not affiliated with Hytale or Hypixel Studios. All trademarks are property of their respective owners.</small>
             </div>
         </div>
     </footer>
 
+    <script src="js/gaia.js"></script>
     <!-- Bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
 </body>

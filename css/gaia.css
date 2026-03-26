@@ -32,6 +32,27 @@ a:link:hover {
     color: #fff;
 }
 
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: #000;
+    color: white;
+    padding: 8px;
+    text-decoration: none;
+    z-index: 100;
+}
+
+.skip-link:focus {
+    top: 0;
+    outline: 3px solid #ffcc00;
+}
+
+[role="contentinfo"] {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1rem;
+}
+
 .navbar {
     background-color: var(--tertiary-color);
     padding: 1rem 0;
