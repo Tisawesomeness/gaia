@@ -79,6 +79,13 @@ func userCanExecute(ctx *CommandContext, command *discordgo.ApplicationCommand) 
 }
 
 func infoCommand(ctx *CommandContext) {
+	var description string
+	if ctx.Config.IsSelfHosted {
+		description = ""
+	} else {
+		description = "**Play Minecraft?** [Also try Minecord!](https://minecord.github.io)"
+	}
+
 	fields := []*discordgo.MessageEmbedField{
 		{
 			Name:   "Author",
@@ -154,8 +161,9 @@ func infoCommand(ctx *CommandContext) {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Color:  0x0000ff,
-		Fields: fields,
+		Color:       0x0000ff,
+		Description: description,
+		Fields:      fields,
 	}
 	ctx.ReplyEmbed(embed)
 }
