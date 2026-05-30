@@ -15,76 +15,92 @@ type BreakerConfig struct {
 	FailureRatio        float64 `json:"failure_ratio"`
 }
 
+type CredentialsConfig struct {
+	DiscordToken    string `json:"discord_token"`
+	HytaleEmail     string `json:"hytale_email"`
+	HytalePassword  string `json:"hytale_password"`
+	Hytale2FASecret string `json:"hytale_2fa_secret"`
+}
+
+type ValkeyConfig struct {
+	Address  string `json:"address"`
+	Port     int    `json:"port"`
+	Password string `json:"password"`
+}
+
+type BrandingConfig struct {
+	Author          string `json:"author"`
+	AuthorTag       string `json:"author_tag"`
+	Invite          string `json:"invite"`
+	HelpServer      string `json:"help_server"`
+	Website         string `json:"website"`
+	Github          string `json:"github"`
+	Issues          string `json:"issues"`
+	HostingProvider string `json:"hosting_provider"`
+	HostingWebsite  string `json:"hosting_website"`
+	Terms           string `json:"terms"`
+	Privacy         string `json:"privacy"`
+}
+
+type KratosConfig struct {
+	RenewalHours    int           `json:"renewal_hours"`
+	Breaker         BreakerConfig `json:"breaker"`
+	AccountsBackend string        `json:"accounts_backend"`
+}
+
+type AuthConfig struct {
+	OAuthRefreshBuffer       int           `json:"oauth_refresh_buffer"`
+	GameSessionRefreshBuffer int           `json:"game_session_refresh_buffer"`
+	Breaker                  BreakerConfig `json:"breaker"`
+	ClientID                 string        `json:"client_id"`
+	Scope                    string        `json:"scope"`
+	DeviceAuth               string        `json:"device_auth"`
+	Token                    string        `json:"token"`
+	Profiles                 string        `json:"profiles"`
+	CreateGameSession        string        `json:"create_game_session"`
+	RefreshGameSession       string        `json:"refresh_game_session"`
+}
+
+type ProfileConfig struct {
+	ByUUID         string `json:"by_uuid"`
+	ByUsername     string `json:"by_username"`
+	Availability   string `json:"availability"`
+	Hyvatar        string `json:"hyvatar"`
+	ProfileWebsite string `json:"profile_website"`
+}
+
+type FeedsConfig struct {
+	PollOnStartup      bool   `json:"poll_on_startup"`
+	NotifyOnStartup    bool   `json:"notify_on_startup"`
+	Interval           int    `json:"interval"`
+	GameVersion        string `json:"game_version"`
+	LauncherRelease    string `json:"launcher_release"`
+	LauncherArticles   string `json:"launcher_articles"`
+	ArticleImagePrefix string `json:"article_image_prefix"`
+	MavenRepo          string `json:"maven_repo"`
+	MavenGroup         string `json:"maven_group"`
+	MavenArtifact      string `json:"maven_artifact"`
+}
+
+type HTTPConfig struct {
+	Timeout      int `json:"timeout"`
+	MaxIdleConns int `json:"max_idle_conns"`
+}
+
 type Config struct {
-	Credentials struct {
-		DiscordToken    string `json:"discord_token"`
-		HytaleEmail     string `json:"hytale_email"`
-		HytalePassword  string `json:"hytale_password"`
-		Hytale2FASecret string `json:"hytale_2fa_secret"`
-	} `json:"credentials"`
-	Valkey struct {
-		Address  string `json:"address"`
-		Port     int    `json:"port"`
-		Password string `json:"password"`
-	} `json:"valkey"`
-	TestServer              string `json:"test_server"`
-	LogWebhook              string `json:"log_webhook"`
-	IsSelfHosted            bool   `json:"is_self_hosted"`
-	CreateCommandsOnStartup bool   `json:"create_commands_on_startup"`
-	Playing                 string `json:"playing"`
-	Branding                struct {
-		Author          string `json:"author"`
-		AuthorTag       string `json:"author_tag"`
-		Invite          string `json:"invite"`
-		HelpServer      string `json:"help_server"`
-		Website         string `json:"website"`
-		Github          string `json:"github"`
-		Issues          string `json:"issues"`
-		HostingProvider string `json:"hosting_provider"`
-		HostingWebsite  string `json:"hosting_website"`
-		Terms           string `json:"terms"`
-		Privacy         string `json:"privacy"`
-	} `json:"branding"`
-	Kratos struct {
-		RenewalHours    int           `json:"renewal_hours"`
-		Breaker         BreakerConfig `json:"breaker"`
-		AccountsBackend string        `json:"accounts_backend"`
-	} `json:"kratos"`
-	Auth struct {
-		OAuthRefreshBuffer       int           `json:"oauth_refresh_buffer"`
-		GameSessionRefreshBuffer int           `json:"game_session_refresh_buffer"`
-		Breaker                  BreakerConfig `json:"breaker"`
-		ClientID                 string        `json:"client_id"`
-		Scope                    string        `json:"scope"`
-		DeviceAuth               string        `json:"device_auth"`
-		Token                    string        `json:"token"`
-		Profiles                 string        `json:"profiles"`
-		CreateGameSession        string        `json:"create_game_session"`
-		RefreshGameSession       string        `json:"refresh_game_session"`
-	} `json:"auth"`
-	Profile struct {
-		ByUUID         string `json:"by_uuid"`
-		ByUsername     string `json:"by_username"`
-		Availability   string `json:"availability"`
-		Hyvatar        string `json:"hyvatar"`
-		ProfileWebsite string `json:"profile_website"`
-	} `json:"profile"`
-	Feeds struct {
-		PollOnStartup      bool   `json:"poll_on_startup"`
-		NotifyOnStartup    bool   `json:"notify_on_startup"`
-		Interval           int    `json:"interval"`
-		GameVersion        string `json:"game_version"`
-		LauncherRelease    string `json:"launcher_release"`
-		LauncherArticles   string `json:"launcher_articles"`
-		ArticleImagePrefix string `json:"article_image_prefix"`
-		MavenRepo          string `json:"maven_repo"`
-		MavenGroup         string `json:"maven_group"`
-		MavenArtifact      string `json:"maven_artifact"`
-	} `json:"feeds"`
-	HTTP struct {
-		Timeout      int `json:"timeout"`
-		MaxIdleConns int `json:"max_idle_conns"`
-	} `json:"http"`
+	Credentials             CredentialsConfig `json:"credentials"`
+	Valkey                  ValkeyConfig      `json:"valkey"`
+	TestServer              string            `json:"test_server"`
+	LogWebhook              string            `json:"log_webhook"`
+	IsSelfHosted            bool              `json:"is_self_hosted"`
+	CreateCommandsOnStartup bool              `json:"create_commands_on_startup"`
+	Playing                 string            `json:"playing"`
+	Branding                BrandingConfig    `json:"branding"`
+	Kratos                  KratosConfig      `json:"kratos"`
+	Auth                    AuthConfig        `json:"auth"`
+	Profile                 ProfileConfig     `json:"profile"`
+	Feeds                   FeedsConfig       `json:"feeds"`
+	HTTP                    HTTPConfig        `json:"http"`
 }
 
 var defaultConfig = Config{
