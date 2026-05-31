@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not create data directory: %v", err)
 	}
-	database, err := db.NewDB(config)
+	database, err := db.NewDB(config.Valkey)
 	if err != nil {
 		log.Fatalf("Error creating Valkey client: %v", err)
 	}

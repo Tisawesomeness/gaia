@@ -35,3 +35,13 @@ GAIA_HYTALE_EMAIL
 GAIA_HYTALE_PASSWORD
 GAIA_HYTALE_2FA_SECRET
 ```
+
+## Test
+
+```sh
+# Start the Valkey test server
+valkey-server ./valkey_test.conf &
+
+# Run tests
+go test ./...
+```

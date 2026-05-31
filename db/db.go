@@ -15,12 +15,12 @@ type DB struct {
 	v valkey.Client
 }
 
-func NewDB(config config.Config) (*DB, error) {
+func NewDB(config config.ValkeyConfig) (*DB, error) {
 	options := valkey.ClientOption{
-		InitAddress: []string{config.Valkey.Address + ":" + strconv.Itoa(config.Valkey.Port)},
+		InitAddress: []string{config.Address + ":" + strconv.Itoa(config.Port)},
 	}
-	if config.Valkey.Password != "" {
-		options.Password = config.Valkey.Password
+	if config.Password != "" {
+		options.Password = config.Password
 	}
 	client, err := valkey.NewClient(options)
 	if err != nil {
@@ -324,4 +324,9 @@ func (db DB) SetKratosRefresh(refresh time.Time) error {
 	// set kratos_refresh <refresh>
 	command := db.v.B().Set().Key("kratos_refresh").Value(strconv.FormatInt(refresh.Unix(), 10)).Build()
 	return db.v.Do(context.Background(), command).Error()
+}
+
+func (db DB) ClearAll() {
+	command := db.v.B().Flushall().Build()
+	db.v.Do(context.Background(), command)
 }
