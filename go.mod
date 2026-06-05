@@ -4,12 +4,15 @@ go 1.25.6
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
+	github.com/stretchr/testify v1.10.0
 	github.com/valkey-io/valkey-go v1.0.70
 )
 
 require (
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
