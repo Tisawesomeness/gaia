@@ -155,10 +155,10 @@ type HytaleFeeds struct {
 	config    *config.Config
 	db        *db.DB
 	http      *http.Client
-	authStore *auth.AuthStore
+	authStore auth.AuthStore
 }
 
-func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authStore *auth.AuthStore) (*HytaleFeeds, error) {
+func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authStore auth.AuthStore) (*HytaleFeeds, error) {
 	feeds := &HytaleFeeds{
 		Feeds:     make(map[FeedType]Feed),
 		config:    config,

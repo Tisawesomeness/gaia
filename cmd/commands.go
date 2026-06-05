@@ -26,7 +26,7 @@ type CommandExecutor struct {
 	Config      *config.Config
 	DB          *db.DB
 	HTTP        *http.Client
-	AuthStore   *auth.AuthStore
+	AuthStore   auth.AuthStore
 	HytaleFeeds *hytale.HytaleFeeds
 	Breakers    *Breakers
 	BotMetadata *BotMetadata
@@ -43,7 +43,7 @@ func NewCommandExecutor(
 	config *config.Config,
 	db *db.DB,
 	httpClient *http.Client,
-	authStore *auth.AuthStore,
+	authStore auth.AuthStore,
 	hytaleFeeds *hytale.HytaleFeeds,
 	version string,
 	bootTime *time.Time,
@@ -93,7 +93,7 @@ type CommandContext struct {
 	Config      *config.Config
 	DB          *db.DB
 	HTTP        *http.Client
-	AuthStore   *auth.AuthStore
+	AuthStore   auth.AuthStore
 	HytaleFeeds *hytale.HytaleFeeds
 	Breakers    *Breakers
 	BotMetadata *BotMetadata
