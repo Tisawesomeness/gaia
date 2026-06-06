@@ -1,0 +1,16 @@
+{
+  "articles": [
+    {
+      "title": "Hotfix Notes",
+      "dest_url": "https://hytale.com/news/2026/1/hotfixes-january-2026",
+      "description": "Jan 15 - New fixes and improvements, check out the patch notes for more details. Check back here for more updates!",
+      "image_url": "images/patches.png"
+    },
+    {
+      "title": "Hytale is finally here!",
+      "dest_url": "https://hytale.com/news/2026/1/hytale-is-finally-here",
+      "description": "The moment has arrived, Hytale is releasing into Early Access today!",
+      "image_url": "images/launch.png"
+    }
+  ]
+}
