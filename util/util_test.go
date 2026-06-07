@@ -4,6 +4,39 @@ import (
 	"testing"
 )
 
+func TestCapitalizeFirstLetter(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Single word lowercase",
+			input:    "hello",
+			expected: "Hello",
+		},
+		{
+			name:     "Single word uppercase",
+			input:    "WORLD",
+			expected: "WORLD",
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CapitalizeFirstLetter(tt.input)
+			if result != tt.expected {
+				t.Errorf("CapitalizeFirstLetter(%q) = %q; want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestToSpacedWords(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"unicode"
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
@@ -53,7 +52,7 @@ func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *F
 		fields := []*discordgo.MessageEmbedField{}
 		for platform, urls := range f.Release.DownloadURLs {
 			for arch, downloadURL := range urls {
-				platformName := capitalizeFirstLetter(platform)
+				platformName := util.CapitalizeFirstLetter(platform)
 				fieldName := fmt.Sprintf("%s (%s)", platformName, arch)
 				fields = append(fields, &discordgo.MessageEmbedField{
 					Name:   fieldName,
@@ -68,15 +67,6 @@ func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *F
 	return &FeedMessage{
 		Embeds: []*discordgo.MessageEmbed{embed},
 	}
-}
-
-func capitalizeFirstLetter(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-	runes := []rune(s)
-	runes[0] = unicode.ToUpper(runes[0])
-	return string(runes)
 }
 
 func (f LauncherReleaseFeed) GetVersion() string {
