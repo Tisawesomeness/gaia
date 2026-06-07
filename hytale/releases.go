@@ -321,14 +321,17 @@ func getStoredMavenRelease(patchline Patchline, db *db.DB) (Feed, error) {
 	}, err
 }
 
-func fetchMavenRelease(patchline Patchline, feeds *HytaleFeeds) (Feed, error) {
-	config := feeds.config.Feeds
-	metadataUrl := fmt.Sprintf("%s/%s/%s/%s/maven-metadata.xml",
+func mavenMetadataUrl(patchline Patchline, config config.FeedsConfig) string {
+	return fmt.Sprintf("%s/%s/%s/%s/maven-metadata.xml",
 		config.MavenRepo,
 		patchline.ID(),
 		strings.ReplaceAll(config.MavenGroup, ".", "/"),
 		config.MavenArtifact,
 	)
+}
+
+func fetchMavenRelease(patchline Patchline, feeds *HytaleFeeds) (Feed, error) {
+	metadataUrl := mavenMetadataUrl(patchline, feeds.config.Feeds)
 
 	resp, err := feeds.http.Get(metadataUrl)
 	if err != nil {
