@@ -1,7 +1,6 @@
 package hytale
 
 import (
-	_ "embed"
 	"net/http"
 	"testing"
 	"time"
@@ -13,8 +12,6 @@ import (
 )
 
 var (
-	//go:embed sample/tis.json
-	sampleResponse string
 	sampleUUID     = "d798091b-f494-4208-a1ba-e24da5880786"
 	sampleUsername = "tis"
 	expected       = &PublicGameProfile{
@@ -78,7 +75,7 @@ func TestProfiles(t *testing.T) {
 	}
 
 	t.Run("fetch profile by username", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Profile.ByUsername+sampleUsername, httpmock.NewStringResponder(200, sampleResponse))
+		httpmock.RegisterResponder("GET", config.Profile.ByUsername+sampleUsername, httpmock.NewStringResponder(200, testutil.SampleProfileResponse))
 		profile, err := FetchProfileFromUsername(sampleUsername, config, http, authStore)
 		if err != nil {
 			t.Fatalf("%v", err)
@@ -96,7 +93,7 @@ func TestProfiles(t *testing.T) {
 	})
 
 	t.Run("fetch profile by uuid", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Profile.ByUUID+sampleUUID, httpmock.NewStringResponder(200, sampleResponse))
+		httpmock.RegisterResponder("GET", config.Profile.ByUUID+sampleUUID, httpmock.NewStringResponder(200, testutil.SampleProfileResponse))
 		profile, err := FetchProfileFromUUID(sampleUUID, config, http, authStore)
 		if err != nil {
 			t.Fatalf("%v", err)

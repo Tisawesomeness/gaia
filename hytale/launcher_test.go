@@ -1,7 +1,6 @@
 package hytale
 
 import (
-	_ "embed"
 	"net/http"
 	"testing"
 	"time"
@@ -14,8 +13,6 @@ import (
 )
 
 var (
-	//go:embed sample/launcher.json
-	sampleLauncherRelease   string
 	expectedLauncherRelease = LauncherReleaseFeed{
 		Release: &LauncherRelease{
 			Version: "2026.01.12-e43ec47",
@@ -41,9 +38,6 @@ var (
 			},
 		},
 	}
-
-	//go:embed sample/feed.json
-	sampleArticlesFeed   string
 	expectedArticlesFeed = LauncherPostFeed{
 		Articles: &ArticleList{
 			Articles: []*Article{
@@ -84,14 +78,14 @@ func TestLauncher(t *testing.T) {
 	}
 
 	t.Run("launcher release", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Feeds.LauncherRelease, httpmock.NewStringResponder(200, sampleLauncherRelease))
+		httpmock.RegisterResponder("GET", config.Feeds.LauncherRelease, httpmock.NewStringResponder(200, testutil.SampleLauncherRelease))
 		feed, err := fetchLauncherRelease(feeds)
 		assert.NoError(t, err)
 		td.Cmp(t, feed, expectedLauncherRelease)
 	})
 
 	t.Run("launcher articles", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Feeds.LauncherArticles, httpmock.NewStringResponder(200, sampleArticlesFeed))
+		httpmock.RegisterResponder("GET", config.Feeds.LauncherArticles, httpmock.NewStringResponder(200, testutil.SampleArticlesFeed))
 		feed, err := fetchArticles(feeds)
 		assert.NoError(t, err)
 		td.Cmp(t, feed, expectedArticlesFeed)
