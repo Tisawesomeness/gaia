@@ -22,7 +22,6 @@ func init() {
 		panic(err)
 	}
 	testDB = db
-	testDB.ClearAll()
 }
 
 func teardown() {

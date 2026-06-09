@@ -85,6 +85,8 @@ func makeBreaker(name string, config config.BreakerConfig) *gobreaker.CircuitBre
 	})
 }
 
+type OptionsMap map[string]*discordgo.ApplicationCommandInteractionDataOption
+
 // Contains utility methods that make commands less error-prone:
 //
 // - Reply... methods with mentions disabled by default and work whether deferred or not
@@ -103,7 +105,7 @@ type CommandContext interface {
 	Session() *discordgo.Session
 	Interaction() *discordgo.InteractionCreate
 
-	Options() map[string]*discordgo.ApplicationCommandInteractionDataOption
+	Options() OptionsMap
 	User() *discordgo.User
 	DeferReply()
 	Reply(content string)
@@ -142,7 +144,7 @@ func (ctx *commandContext) BotMetadata() *BotMetadata                 { return c
 func (ctx *commandContext) Session() *discordgo.Session               { return ctx.session }
 func (ctx *commandContext) Interaction() *discordgo.InteractionCreate { return ctx.interaction }
 
-func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.InteractionCreate) CommandContext {
+func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.InteractionCreate) *commandContext {
 	return &commandContext{
 		config:      ce.Config,
 		db:          ce.DB,
@@ -158,9 +160,9 @@ func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.I
 }
 
 // Generates a map of option ID to option data
-func (ctx *commandContext) Options() map[string]*discordgo.ApplicationCommandInteractionDataOption {
+func (ctx *commandContext) Options() OptionsMap {
 	options := ctx.Interaction().ApplicationCommandData().Options
-	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
+	optionMap := make(OptionsMap, len(options))
 	for _, opt := range options {
 		optionMap[opt.Name] = opt
 	}
@@ -205,6 +207,21 @@ func (ctx *commandContext) ReplyEmbed(embed *discordgo.MessageEmbed) {
 	})
 }
 
+func (ctx *commandContext) ReplyWarn(content string) {
+	ctx.ReplyEphemeral(":warning: " + content)
+}
+
+func (ctx *commandContext) ReplyExternalError(content string) {
+	ctx.ReplyEphemeral(":x: " + content)
+}
+
+func (ctx *commandContext) ReplyError(message string, err error) {
+	ctx.ReplyEphemeral(":boom: " + message)
+	if err != nil {
+		ctx.reportError(err)
+	}
+}
+
 func (ctx *commandContext) ReplyComplex(data *discordgo.InteractionResponseData) {
 	// Default to no mentions allowed
 	if data.AllowedMentions == nil {
@@ -245,21 +262,6 @@ func (ctx *commandContext) ReplyComplex(data *discordgo.InteractionResponseData)
 		})
 	}
 
-	if err != nil {
-		ctx.reportError(err)
-	}
-}
-
-func (ctx *commandContext) ReplyWarn(content string) {
-	ctx.ReplyEphemeral(":warning: " + content)
-}
-
-func (ctx *commandContext) ReplyExternalError(content string) {
-	ctx.ReplyEphemeral(":x: " + content)
-}
-
-func (ctx *commandContext) ReplyError(message string, err error) {
-	ctx.ReplyEphemeral(":boom: " + message)
 	if err != nil {
 		ctx.reportError(err)
 	}
