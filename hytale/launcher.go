@@ -32,7 +32,7 @@ type LauncherReleaseFeed struct {
 }
 
 func (f LauncherReleaseFeed) GetType() FeedType {
-	return LauncherPostFeedType
+	return LauncherReleaseFeedType
 }
 
 func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
