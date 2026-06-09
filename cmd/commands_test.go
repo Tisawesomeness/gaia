@@ -74,7 +74,6 @@ func InitMockExecutor() (*CommandExecutor, error) {
 }
 
 type MockGuildData struct {
-	guildID    string
 	channelIDs []string
 }
 
@@ -86,6 +85,11 @@ type CommandContextMock struct {
 	replies []*discordgo.InteractionResponseData
 }
 
+const (
+	TEST_USER_ID  = "123456789012345678"
+	TEST_GUILD_ID = "876543210987654321"
+)
+
 func (ctx *CommandContextMock) InteractionID() string {
 	return ctx.id
 }
@@ -96,7 +100,7 @@ func (ctx *CommandContextMock) Options() OptionsMap {
 
 func (ctx *CommandContextMock) User() *discordgo.User {
 	return &discordgo.User{
-		ID:            "123456789012345678",
+		ID:            TEST_USER_ID,
 		Username:      "testuser",
 		Discriminator: "0",
 	}
@@ -108,7 +112,7 @@ func (ctx *CommandContextMock) UserCanExecute(command *discordgo.ApplicationComm
 
 func (ctx *CommandContextMock) GuildID() string {
 	if ctx.guild != nil {
-		return ctx.guild.guildID
+		return TEST_GUILD_ID
 	} else {
 		return ""
 	}
@@ -168,21 +172,39 @@ func (ctx *CommandContextMock) ReplyComplex(data *discordgo.InteractionResponseD
 	ctx.replies = append(ctx.replies, data)
 }
 
-// Creates a mock command context, simulating a command called with the provided arguments in options.
+// NewMockContext creates a new mock command context with the given command executor.
 //
-// If options is nil, the command will be called with no arguments.
+// The command will be called outside of a guild with no arguments by default. Use WithOptions() and WithGuild() to override.
 //
 // BEWARE: `Session()` and `Interaction()` are both nil, which causes commands that rely on Discord-specific functionality
 // (such as pagination) to fail.
-func NewMockContext(ce *CommandExecutor, options OptionsMap) *CommandContextMock {
-	if options == nil {
-		options = make(OptionsMap)
-	}
+func NewMockContext(ce *CommandExecutor) *CommandContextMock {
 	return &CommandContextMock{
 		id:             randomID(),
-		options:        options,
+		options:        make(OptionsMap),
 		commandContext: ce.newCommandContext(nil, nil),
 	}
+}
+
+// Sets the arguments/options the command was called with.
+func (c *CommandContextMock) WithOptions(options OptionsMap) *CommandContextMock {
+	if options == nil {
+		panic("options must not be nil")
+	} else {
+		c.options = options
+	}
+	return c
+}
+
+// Causes the command to be run in a guild with the provided channel IDs.
+func (c *CommandContextMock) WithGuild(channelIDs ...string) *CommandContextMock {
+	if len(channelIDs) == 0 {
+		panic("channelIDs cannot be empty")
+	}
+	c.guild = &MockGuildData{
+		channelIDs: channelIDs,
+	}
+	return c
 }
 
 func randomID() string {

@@ -32,7 +32,7 @@ func TestCoreCommands(t *testing.T) {
 	t.Cleanup(teardownCore)
 
 	t.Run("/help", coreTestCase(func(t *testing.T) {
-		ctx := NewMockContext(coreCE, nil)
+		ctx := NewMockContext(coreCE)
 		helpCommand(ctx)
 		// Simply test that the bot sends one reply
 		assert.Equal(t, 1, len(ctx.replies))
@@ -41,7 +41,7 @@ func TestCoreCommands(t *testing.T) {
 	// /info not testable since it uses ctx.Session()
 
 	t.Run("/credits", coreTestCase(func(t *testing.T) {
-		ctx := NewMockContext(coreCE, nil)
+		ctx := NewMockContext(coreCE)
 		creditsCommand(ctx)
 		// Simply test that the bot sends one reply
 		assert.Equal(t, 1, len(ctx.replies))
