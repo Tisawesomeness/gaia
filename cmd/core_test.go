@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	testCE   *CommandExecutor
-	testCase = testutil.MakeTestCase(beforeEach, nil)
+	coreCE       *CommandExecutor
+	coreTestCase = testutil.MakeTestCase(beforeEachCore, nil)
 )
 
 func init() {
@@ -17,23 +17,33 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	testCE = ce
+	coreCE = ce
 }
 
-func teardown() {
-	testCE.DB.Close()
+func teardownCore() {
+	coreCE.DB.Close()
 }
 
-func beforeEach() {
-	testCE.DB.ClearAll()
+func beforeEachCore() {
+	coreCE.DB.ClearAll()
 }
 
-func TestCommands(t *testing.T) {
-	t.Cleanup(teardown)
+func TestCoreCommands(t *testing.T) {
+	t.Cleanup(teardownCore)
 
-	t.Run("/credits", testCase(func(t *testing.T) {
-		ctx := NewMockContext(testCE, nil)
+	t.Run("/help", coreTestCase(func(t *testing.T) {
+		ctx := NewMockContext(coreCE, nil)
+		helpCommand(ctx)
+		// Simply test that the bot sends one reply
+		assert.Equal(t, 1, len(ctx.replies))
+	}))
+
+	// /info not testable since it uses ctx.Session()
+
+	t.Run("/credits", coreTestCase(func(t *testing.T) {
+		ctx := NewMockContext(coreCE, nil)
 		creditsCommand(ctx)
+		// Simply test that the bot sends one reply
 		assert.Equal(t, 1, len(ctx.replies))
 	}))
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"time"
 
@@ -72,10 +73,21 @@ func InitMockExecutor() (*CommandExecutor, error) {
 	return &ce, nil
 }
 
+type MockGuildData struct {
+	guildID    string
+	channelIDs []string
+}
+
 type CommandContextMock struct {
 	*commandContext
+	id      string
+	guild   *MockGuildData
 	options OptionsMap
 	replies []*discordgo.InteractionResponseData
+}
+
+func (ctx *CommandContextMock) InteractionID() string {
+	return ctx.id
 }
 
 func (ctx *CommandContextMock) Options() OptionsMap {
@@ -84,9 +96,36 @@ func (ctx *CommandContextMock) Options() OptionsMap {
 
 func (ctx *CommandContextMock) User() *discordgo.User {
 	return &discordgo.User{
-		ID:            "012345678901234567",
+		ID:            "123456789012345678",
 		Username:      "testuser",
 		Discriminator: "0",
+	}
+}
+
+func (ctx *CommandContextMock) UserCanExecute(command *discordgo.ApplicationCommand) bool {
+	return true
+}
+
+func (ctx *CommandContextMock) GuildID() string {
+	if ctx.guild != nil {
+		return ctx.guild.guildID
+	} else {
+		return ""
+	}
+}
+
+func (ctx *CommandContextMock) GuildChannels(guildID string) ([]*discordgo.Channel, error) {
+	if ctx.guild != nil {
+		result := make([]*discordgo.Channel, len(ctx.guild.channelIDs))
+		for i, channelID := range ctx.guild.channelIDs {
+			result[i] = &discordgo.Channel{
+				ID:      channelID,
+				GuildID: guildID,
+			}
+		}
+		return result, nil
+	} else {
+		return []*discordgo.Channel{}, nil
 	}
 }
 
@@ -140,7 +179,12 @@ func NewMockContext(ce *CommandExecutor, options OptionsMap) *CommandContextMock
 		options = make(OptionsMap)
 	}
 	return &CommandContextMock{
+		id:             randomID(),
 		options:        options,
 		commandContext: ce.newCommandContext(nil, nil),
 	}
+}
+
+func randomID() string {
+	return fmt.Sprint(100_000_000_000_000_000 + rand.Int64N(900_000_000_000_000_000))
 }

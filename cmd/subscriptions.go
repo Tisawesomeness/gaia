@@ -177,7 +177,7 @@ func subscribeDMCommand(ctx CommandContext) {
 }
 
 func listCommand(ctx CommandContext) {
-	guildID := ctx.Interaction().GuildID
+	guildID := ctx.GuildID()
 	if guildID == "" {
 		userSubscriptions := make(map[hytale.FeedType]string)
 		for feedType := range ctx.HytaleFeeds().Feeds {
@@ -218,7 +218,7 @@ func listCommand(ctx CommandContext) {
 
 		ctx.ReplyEmbed(embed)
 	} else {
-		channels, err := ctx.Session().GuildChannels(guildID)
+		channels, err := ctx.GuildChannels(guildID)
 		if err != nil {
 			ctx.ReplyError("Error while fetching guild channels", err)
 			return
@@ -289,12 +289,12 @@ func listCommand(ctx CommandContext) {
 }
 
 func unsubscribeCommand(ctx CommandContext) {
-	guildID := ctx.Interaction().GuildID
+	guildID := ctx.GuildID()
 	options := ctx.Options()
 
 	if guildID == "" {
 		for feedType := range ctx.HytaleFeeds().Feeds {
-			if err := ctx.DB().RemoveSubscription(feedType.ID(), ctx.Interaction().User.ID); err != nil {
+			if err := ctx.DB().RemoveSubscription(feedType.ID(), ctx.User().ID); err != nil {
 				log.Printf("Error removing subscription for %s: %v", feedType.ID(), err)
 			}
 		}
@@ -302,8 +302,7 @@ func unsubscribeCommand(ctx CommandContext) {
 	} else {
 		var channelID string
 		if channelOpt, exists := options["channel"]; exists {
-			channel := channelOpt.ChannelValue(ctx.Session())
-			channelID = channel.ID
+			channelID = channelOpt.ChannelValue(nil).ID
 		}
 
 		if channelID != "" {
@@ -312,10 +311,10 @@ func unsubscribeCommand(ctx CommandContext) {
 					log.Printf("Error removing subscription for %s: %v", feedType.ID(), err)
 				}
 			}
-			channel := options["channel"].ChannelValue(ctx.Session())
+			channel := options["channel"].ChannelValue(nil)
 			ctx.Reply("Unsubscribed all feeds from channel: " + channel.Mention())
 		} else {
-			channels, err := ctx.Session().GuildChannels(guildID)
+			channels, err := ctx.GuildChannels(guildID)
 			if err != nil {
 				ctx.ReplyError("Error while fetching guild channels", err)
 				return

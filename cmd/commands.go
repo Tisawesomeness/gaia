@@ -102,11 +102,26 @@ type CommandContext interface {
 	HytaleFeeds() *hytale.HytaleFeeds
 	Breakers() *Breakers
 	BotMetadata() *BotMetadata
+	// The raw Discord session, prefer using CommandContext methods since this makes the command untestable
 	Session() *discordgo.Session
+	// The raw Discord event, prefer using CommandContext methods since this makes the command untestable
 	Interaction() *discordgo.InteractionCreate
 
+	InteractionID() string
+	// Generates a map of option ID to option data
 	Options() OptionsMap
+	// Gets the user that executed this command, works in both guilds and DMs
 	User() *discordgo.User
+	// Checks if the user has permission and is in the right context to execute the provided command
+	UserCanExecute(command *discordgo.ApplicationCommand) bool
+	// The ID of the guild the command was executed in. Empty if not executed in a guild.
+	GuildID() string
+	// Fetches the channels of the provided guild.
+	GuildChannels(guildID string) ([]*discordgo.Channel, error)
+
+	// Signals to Discord that the command was received and a follow-up will come later.
+	// After deferring, regular replies (InteractionResponseChannelMessageWithSource) will do nothing.
+	// Use the ctx.Reply... methods instead.
 	DeferReply()
 	Reply(content string)
 	ReplyEphemeral(content string)
@@ -126,23 +141,10 @@ type commandContext struct {
 	breakers    *Breakers
 	botMetadata *BotMetadata
 
-	// The raw Discord session, prefer using CommandContext methods
-	session *discordgo.Session
-	// The raw Discord event, prefer using CommandContext methods
+	session     *discordgo.Session
 	interaction *discordgo.InteractionCreate
 	hasDeferred bool
 }
-
-// Implements ICommandContext
-func (ctx *commandContext) Config() *config.Config                    { return ctx.config }
-func (ctx *commandContext) DB() *db.DB                                { return ctx.db }
-func (ctx *commandContext) HTTP() *http.Client                        { return ctx.http }
-func (ctx *commandContext) AuthStore() auth.AuthStore                 { return ctx.authStore }
-func (ctx *commandContext) HytaleFeeds() *hytale.HytaleFeeds          { return ctx.hytaleFeeds }
-func (ctx *commandContext) Breakers() *Breakers                       { return ctx.breakers }
-func (ctx *commandContext) BotMetadata() *BotMetadata                 { return ctx.botMetadata }
-func (ctx *commandContext) Session() *discordgo.Session               { return ctx.session }
-func (ctx *commandContext) Interaction() *discordgo.InteractionCreate { return ctx.interaction }
 
 func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.InteractionCreate) *commandContext {
 	return &commandContext{
@@ -159,7 +161,21 @@ func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.I
 	}
 }
 
-// Generates a map of option ID to option data
+// Implements ICommandContext
+func (ctx *commandContext) Config() *config.Config                    { return ctx.config }
+func (ctx *commandContext) DB() *db.DB                                { return ctx.db }
+func (ctx *commandContext) HTTP() *http.Client                        { return ctx.http }
+func (ctx *commandContext) AuthStore() auth.AuthStore                 { return ctx.authStore }
+func (ctx *commandContext) HytaleFeeds() *hytale.HytaleFeeds          { return ctx.hytaleFeeds }
+func (ctx *commandContext) Breakers() *Breakers                       { return ctx.breakers }
+func (ctx *commandContext) BotMetadata() *BotMetadata                 { return ctx.botMetadata }
+func (ctx *commandContext) Session() *discordgo.Session               { return ctx.session }
+func (ctx *commandContext) Interaction() *discordgo.InteractionCreate { return ctx.interaction }
+
+func (ctx *commandContext) InteractionID() string {
+	return ctx.Interaction().Interaction.ID
+}
+
 func (ctx *commandContext) Options() OptionsMap {
 	options := ctx.Interaction().ApplicationCommandData().Options
 	optionMap := make(OptionsMap, len(options))
@@ -169,7 +185,6 @@ func (ctx *commandContext) Options() OptionsMap {
 	return optionMap
 }
 
-// Gets the user that executed this command, works in both guilds and DMs
 func (ctx *commandContext) User() *discordgo.User {
 	if ctx.Interaction().Member != nil {
 		return ctx.Interaction().Member.User
@@ -178,9 +193,28 @@ func (ctx *commandContext) User() *discordgo.User {
 	}
 }
 
-// Signals to Discord that the command was received and a follow-up will come later.
-// After deferring, regular replies (InteractionResponseChannelMessageWithSource) will do nothing.
-// Use the ctx.Reply... methods instead.
+func (ctx *commandContext) UserCanExecute(command *discordgo.ApplicationCommand) bool {
+	if command.Contexts != nil && !slices.Contains(*command.Contexts, ctx.Interaction().Context) {
+		return false
+	}
+	if command.DefaultMemberPermissions == nil {
+		return true
+	}
+	if ctx.Interaction().Member != nil {
+		return (ctx.Interaction().Member.Permissions & *command.DefaultMemberPermissions) == *command.DefaultMemberPermissions
+	} else {
+		return true
+	}
+}
+
+func (ctx *commandContext) GuildID() string {
+	return ctx.Interaction().GuildID
+}
+
+func (ctx *commandContext) GuildChannels(guildID string) ([]*discordgo.Channel, error) {
+	return ctx.Session().GuildChannels(guildID)
+}
+
 func (ctx *commandContext) DeferReply() {
 	ctx.hasDeferred = true
 	ctx.Session().InteractionRespond(ctx.Interaction().Interaction, &discordgo.InteractionResponse{

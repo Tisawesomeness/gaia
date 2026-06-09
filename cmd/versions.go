@@ -157,7 +157,7 @@ func articlesCommand(ctx CommandContext) {
 		return
 	}
 
-	interactionID := ctx.Interaction().Interaction.ID
+	interactionID := ctx.InteractionID()
 	articleInteractions[interactionID] = &ArticleInteraction{
 		CurrentIndex: 0,
 		Articles:     articles,
