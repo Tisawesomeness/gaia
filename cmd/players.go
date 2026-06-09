@@ -91,7 +91,7 @@ func NewRenderCommand(name string, description string, renderType hytale.RenderT
 				},
 			},
 		},
-		handler: func(ctx *CommandContext) {
+		handler: func(ctx CommandContext) {
 			renderCommand(ctx, renderType)
 		},
 	}
@@ -244,19 +244,19 @@ func validateAndFormatUUID(uuid string) (string, bool) {
 	return fmt.Sprintf("%s-%s-%s-%s-%s", matches[1], matches[2], matches[3], matches[4], matches[5]), true
 }
 
-func tryFetchProfileFromUUID(uuid string, ctx *CommandContext) (*hytale.PublicGameProfile, error) {
-	return util.Execute(ctx.Breakers.HytaleSession, func() (*hytale.PublicGameProfile, error) {
-		return hytale.FetchProfileFromUUID(uuid, ctx.Config, ctx.HTTP, ctx.AuthStore)
+func tryFetchProfileFromUUID(uuid string, ctx CommandContext) (*hytale.PublicGameProfile, error) {
+	return util.Execute(ctx.Breakers().HytaleSession, func() (*hytale.PublicGameProfile, error) {
+		return hytale.FetchProfileFromUUID(uuid, ctx.Config(), ctx.HTTP(), ctx.AuthStore())
 	})
 }
 
-func tryFetchProfileFromUsername(username string, ctx *CommandContext) (*hytale.PublicGameProfile, error) {
-	return util.Execute(ctx.Breakers.HytaleSession, func() (*hytale.PublicGameProfile, error) {
-		return hytale.FetchProfileFromUsername(username, ctx.Config, ctx.HTTP, ctx.AuthStore)
+func tryFetchProfileFromUsername(username string, ctx CommandContext) (*hytale.PublicGameProfile, error) {
+	return util.Execute(ctx.Breakers().HytaleSession, func() (*hytale.PublicGameProfile, error) {
+		return hytale.FetchProfileFromUsername(username, ctx.Config(), ctx.HTTP(), ctx.AuthStore())
 	})
 }
 
-func profileCommand(ctx *CommandContext) {
+func profileCommand(ctx CommandContext) {
 	identifier := ctx.Options()["player"].StringValue()
 
 	var profile *hytale.PublicGameProfile
@@ -291,11 +291,11 @@ func profileCommand(ctx *CommandContext) {
 	ctx.ReplyEmbed(&discordgo.MessageEmbed{
 		Author: &discordgo.MessageEmbedAuthor{
 			Name:    "Profile for " + profile.Username,
-			URL:     ctx.Config.Profile.ProfileWebsite + profile.Username,
-			IconURL: hytale.RenderHead(ctx.Config, profile.Username, 128, 30),
+			URL:     ctx.Config().Profile.ProfileWebsite + profile.Username,
+			IconURL: hytale.RenderHead(ctx.Config(), profile.Username, 128, 30),
 		},
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: hytale.RenderFullBody(ctx.Config, profile.Username, 512, 360-30),
+			URL: hytale.RenderFullBody(ctx.Config(), profile.Username, 512, 360-30),
 		},
 		Description: fmt.Sprintf("Short UUID: `%s`\nLong UUID: `%s`",
 			strings.ReplaceAll(profile.UUID, "-", ""),
@@ -304,8 +304,8 @@ func profileCommand(ctx *CommandContext) {
 	})
 }
 
-func checkAvailability(username string, ctx *CommandContext) {
-	kratosClient, ok := ctx.AuthStore.GetKratosClient()
+func checkAvailability(username string, ctx CommandContext) {
+	kratosClient, ok := ctx.AuthStore().GetKratosClient()
 	if !ok {
 		ctx.ReplyEmbed(&discordgo.MessageEmbed{
 			Title:       "Profile for " + username,
@@ -314,8 +314,8 @@ func checkAvailability(username string, ctx *CommandContext) {
 		})
 	}
 
-	_, err := ctx.Breakers.KratosSession.Execute(func() (any, error) {
-		availability, err := hytale.CheckAvailability(username, ctx.Config, kratosClient)
+	_, err := ctx.Breakers().KratosSession.Execute(func() (any, error) {
+		availability, err := hytale.CheckAvailability(username, ctx.Config(), kratosClient)
 		if err != nil {
 			return nil, err
 		}
@@ -371,7 +371,7 @@ func checkAvailability(username string, ctx *CommandContext) {
 	}
 }
 
-func skinCommand(ctx *CommandContext) {
+func skinCommand(ctx CommandContext) {
 	identifier := ctx.Options()["player"].StringValue()
 
 	var profile *hytale.PublicGameProfile
@@ -405,11 +405,11 @@ func skinCommand(ctx *CommandContext) {
 	embed := &discordgo.MessageEmbed{
 		Author: &discordgo.MessageEmbedAuthor{
 			Name:    "Skin details for " + profile.Username,
-			URL:     ctx.Config.Profile.ProfileWebsite + profile.Username,
-			IconURL: hytale.RenderHead(ctx.Config, profile.Username, 128, 30),
+			URL:     ctx.Config().Profile.ProfileWebsite + profile.Username,
+			IconURL: hytale.RenderHead(ctx.Config(), profile.Username, 128, 30),
 		},
 		Image: &discordgo.MessageEmbedImage{
-			URL: hytale.RenderFullBody(ctx.Config, profile.Username, 2048, 0),
+			URL: hytale.RenderFullBody(ctx.Config(), profile.Username, 2048, 0),
 		},
 		Color: 0x00FF00,
 	}
@@ -457,7 +457,7 @@ func skinCommand(ctx *CommandContext) {
 	ctx.ReplyEmbed(embed)
 }
 
-func renderCommand(ctx *CommandContext, renderType hytale.RenderType) {
+func renderCommand(ctx CommandContext, renderType hytale.RenderType) {
 	options := ctx.Options()
 	identifier := options["player"].StringValue()
 
@@ -505,7 +505,7 @@ func renderCommand(ctx *CommandContext, renderType hytale.RenderType) {
 
 	embed := &discordgo.MessageEmbed{
 		Image: &discordgo.MessageEmbedImage{
-			URL: renderType.Render(ctx.Config, profile.Username, size, rotate),
+			URL: renderType.Render(ctx.Config(), profile.Username, size, rotate),
 		},
 	}
 

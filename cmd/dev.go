@@ -168,7 +168,7 @@ type variables struct {
 	Version    string
 }
 
-func mavenCommand(ctx *CommandContext) {
+func mavenCommand(ctx CommandContext) {
 	options := ctx.Options()
 
 	scriptSize := "dependency"
@@ -183,7 +183,7 @@ func mavenCommand(ctx *CommandContext) {
 	}
 }
 
-func gradleCommand(ctx *CommandContext) {
+func gradleCommand(ctx CommandContext) {
 	options := ctx.Options()
 
 	scriptSize := "dependency"
@@ -211,7 +211,7 @@ func gradleCommand(ctx *CommandContext) {
 	}
 }
 
-func buildScriptCommand(ctx *CommandContext, buildScript buildScript) {
+func buildScriptCommand(ctx CommandContext, buildScript buildScript) {
 	options := ctx.Options()
 
 	patchlineValue := "release"
@@ -225,7 +225,7 @@ func buildScriptCommand(ctx *CommandContext, buildScript buildScript) {
 		return
 	}
 
-	feed, exists := ctx.HytaleFeeds.Feeds[hytale.GetFeedType(patchline, hytale.Server)]
+	feed, exists := ctx.HytaleFeeds().Feeds[hytale.GetFeedType(patchline, hytale.Server)]
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale version.", nil)
 		return
@@ -238,9 +238,9 @@ func buildScriptCommand(ctx *CommandContext, buildScript buildScript) {
 	}
 
 	vars := variables{
-		Repository: ctx.Config.Feeds.MavenRepo,
-		Group:      ctx.Config.Feeds.MavenGroup,
-		Artifact:   ctx.Config.Feeds.MavenArtifact,
+		Repository: ctx.Config().Feeds.MavenRepo,
+		Group:      ctx.Config().Feeds.MavenGroup,
+		Artifact:   ctx.Config().Feeds.MavenArtifact,
 		Version:    version,
 	}
 	var buf bytes.Buffer

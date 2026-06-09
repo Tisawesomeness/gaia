@@ -5,9 +5,13 @@ import (
 	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
+	"github.com/Tisawesomeness/gaia/testutil"
 )
 
-var testDB *DB
+var (
+	testDB   *DB
+	testCase = testutil.MakeTestCase(beforeEach, nil)
+)
 
 func init() {
 	db, err := NewDB(config.ValkeyConfig{
@@ -18,6 +22,7 @@ func init() {
 		panic(err)
 	}
 	testDB = db
+	testDB.ClearAll()
 }
 
 func teardown() {
@@ -26,13 +31,6 @@ func teardown() {
 
 func beforeEach() {
 	testDB.ClearAll()
-}
-
-func testCase(test func(*testing.T)) func(*testing.T) {
-	return func(t *testing.T) {
-		beforeEach()
-		test(t)
-	}
 }
 
 func TestDB(t *testing.T) {

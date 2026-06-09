@@ -38,7 +38,7 @@ var (
 	donateLine = fmt.Sprintf(":sparkles: **[Donate](%s)** :sparkles: to support development", donateOriginal)
 )
 
-func helpCommand(ctx *CommandContext) {
+func helpCommand(ctx CommandContext) {
 	fields := []*discordgo.MessageEmbedField{}
 	for _, category := range categories {
 		var description strings.Builder
@@ -64,23 +64,23 @@ func helpCommand(ctx *CommandContext) {
 	ctx.ReplyEmbed(embed)
 }
 
-func userCanExecute(ctx *CommandContext, command *discordgo.ApplicationCommand) bool {
-	if command.Contexts != nil && !slices.Contains(*command.Contexts, ctx.Interaction.Context) {
+func userCanExecute(ctx CommandContext, command *discordgo.ApplicationCommand) bool {
+	if command.Contexts != nil && !slices.Contains(*command.Contexts, ctx.Interaction().Context) {
 		return false
 	}
 	if command.DefaultMemberPermissions == nil {
 		return true
 	}
-	if ctx.Interaction.Member != nil {
-		return (ctx.Interaction.Member.Permissions & *command.DefaultMemberPermissions) == *command.DefaultMemberPermissions
+	if ctx.Interaction().Member != nil {
+		return (ctx.Interaction().Member.Permissions & *command.DefaultMemberPermissions) == *command.DefaultMemberPermissions
 	} else {
 		return true
 	}
 }
 
-func infoCommand(ctx *CommandContext) {
+func infoCommand(ctx CommandContext) {
 	var description string
-	if ctx.Config.IsSelfHosted {
+	if ctx.Config().IsSelfHosted {
 		description = ""
 	} else {
 		description = "**Play Minecraft?** [Also try Minecord!](https://minecord.github.io)"
@@ -94,21 +94,21 @@ func infoCommand(ctx *CommandContext) {
 		},
 	}
 
-	if ctx.Config.IsSelfHosted {
+	if ctx.Config().IsSelfHosted {
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Self-Hoster",
-			Value:  fmt.Sprintf("%s", ctx.Config.Branding.Author),
+			Value:  fmt.Sprintf("%s", ctx.Config().Branding.Author),
 			Inline: true,
 		})
 	}
 
 	fields = append(fields, &discordgo.MessageEmbedField{
 		Name:   "Version",
-		Value:  fmt.Sprintf("`%s`", ctx.BotMetadata.Version),
+		Value:  fmt.Sprintf("`%s`", ctx.BotMetadata().Version),
 		Inline: true,
 	})
 
-	if !ctx.Config.IsSelfHosted {
+	if !ctx.Config().IsSelfHosted {
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Shard",
 			Value:  "1/1",
@@ -119,37 +119,37 @@ func infoCommand(ctx *CommandContext) {
 	fields = append(fields, []*discordgo.MessageEmbedField{
 		{
 			Name:   "Guilds",
-			Value:  fmt.Sprintf("%d", len(ctx.Session.State.Guilds)),
+			Value:  fmt.Sprintf("%d", len(ctx.Session().State.Guilds)),
 			Inline: true,
 		},
 		{
 			Name:   "Uptime",
-			Value:  formatUptime(*ctx.BotMetadata.BootTime),
+			Value:  formatUptime(*ctx.BotMetadata().BootTime),
 			Inline: true,
 		},
 		{
 			Name:   "Ping",
-			Value:  fmt.Sprintf("%dms", ctx.Session.HeartbeatLatency().Milliseconds()),
+			Value:  fmt.Sprintf("%dms", ctx.Session().HeartbeatLatency().Milliseconds()),
 			Inline: true,
 		},
 		{
 			Name: "Links",
 			Value: fmt.Sprintf("[INVITE](%s) | [SUPPORT](%s) | [WEBSITE](%s) | [GITHUB](%s)",
-				ctx.Config.Branding.Invite,
-				ctx.Config.Branding.HelpServer,
-				ctx.Config.Branding.Website,
-				ctx.Config.Branding.Github),
+				ctx.Config().Branding.Invite,
+				ctx.Config().Branding.HelpServer,
+				ctx.Config().Branding.Website,
+				ctx.Config().Branding.Github),
 			Inline: false,
 		},
 	}...)
 
-	if !ctx.Config.IsSelfHosted {
+	if !ctx.Config().IsSelfHosted {
 		fields = append(fields, []*discordgo.MessageEmbedField{
 			{
 				Name: "Legal",
 				Value: fmt.Sprintf("[TERMS](%s) | [PRIVACY](%s)",
-					ctx.Config.Branding.Terms,
-					ctx.Config.Branding.Privacy),
+					ctx.Config().Branding.Terms,
+					ctx.Config().Branding.Privacy),
 				Inline: false,
 			},
 			{
@@ -168,7 +168,7 @@ func infoCommand(ctx *CommandContext) {
 	ctx.ReplyEmbed(embed)
 }
 
-func creditsCommand(ctx *CommandContext) {
+func creditsCommand(ctx CommandContext) {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Gaia Credits",
 		Description: "Thanks to all these great people who helped to make the bot possible. :heart:",
@@ -181,7 +181,7 @@ func creditsCommand(ctx *CommandContext) {
 			},
 			{
 				Name:   "Contribute",
-				Value:  buildContributeString(ctx.Config),
+				Value:  buildContributeString(ctx.Config()),
 				Inline: true,
 			},
 			{
@@ -189,7 +189,7 @@ func creditsCommand(ctx *CommandContext) {
 				Value:  apisValue,
 				Inline: false,
 			},
-			buildHostingField(ctx.Config),
+			buildHostingField(ctx.Config()),
 			{
 				Name:   "Special Thanks",
 				Value:  fmt.Sprintf("%s for using Gaia!", ctx.User().Mention()),

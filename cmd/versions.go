@@ -78,7 +78,7 @@ func cleanupOldInteractions() {
 	}
 }
 
-func versionCommand(ctx *CommandContext) {
+func versionCommand(ctx CommandContext) {
 	options := ctx.Options()
 
 	var side hytale.Side
@@ -103,27 +103,27 @@ func versionCommand(ctx *CommandContext) {
 		ctx.ReplyWarn("Invalid patchline")
 	}
 
-	feed, exists := ctx.HytaleFeeds.Feeds[hytale.GetFeedType(patchline, side)]
+	feed, exists := ctx.HytaleFeeds().Feeds[hytale.GetFeedType(patchline, side)]
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale version.", nil)
 		return
 	}
 
-	message := feed.BuildMessage(ctx.Config, false)
+	message := feed.BuildMessage(ctx.Config(), false)
 	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Embeds:     message.Embeds,
 		Components: message.Components,
 	})
 }
 
-func launcherCommand(ctx *CommandContext) {
-	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedType]
+func launcherCommand(ctx CommandContext) {
+	feed, exists := ctx.HytaleFeeds().Feeds[hytale.LauncherReleaseFeedType]
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale Launcher version.", nil)
 		return
 	}
 
-	message := feed.BuildMessage(ctx.Config, false)
+	message := feed.BuildMessage(ctx.Config(), false)
 	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Embeds:     message.Embeds,
 		Components: message.Components,
@@ -139,8 +139,8 @@ type ArticleInteraction struct {
 
 var articleInteractions = make(map[string]*ArticleInteraction)
 
-func articlesCommand(ctx *CommandContext) {
-	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherPostFeedType]
+func articlesCommand(ctx CommandContext) {
+	feed, exists := ctx.HytaleFeeds().Feeds[hytale.LauncherPostFeedType]
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale article.", nil)
 		return
@@ -157,7 +157,7 @@ func articlesCommand(ctx *CommandContext) {
 		return
 	}
 
-	interactionID := ctx.Interaction.Interaction.ID
+	interactionID := ctx.Interaction().Interaction.ID
 	articleInteractions[interactionID] = &ArticleInteraction{
 		CurrentIndex: 0,
 		Articles:     articles,
@@ -165,7 +165,7 @@ func articlesCommand(ctx *CommandContext) {
 	}
 
 	latestArticle := articles[0]
-	message := latestArticle.BuildMessage(ctx.Config)
+	message := latestArticle.BuildMessage(ctx.Config())
 
 	// Note: going *back* in time means going *forward* in the articles array
 	buttons := []discordgo.MessageComponent{
@@ -194,7 +194,7 @@ func isArticleInteraction(customID string) bool {
 	return strings.HasPrefix(customID, "article_back_") || strings.HasPrefix(customID, "article_forward_")
 }
 
-func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, ctx CommandContext) {
 	customID := i.MessageComponentData().CustomID
 	interactionID := strings.TrimPrefix(customID, "article_back_")
 	interactionID = strings.TrimPrefix(interactionID, "article_forward_")
@@ -215,7 +215,7 @@ func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, c
 
 	currentArticle := interaction.Articles[interaction.CurrentIndex]
 
-	message := currentArticle.BuildMessage(ctx.Config)
+	message := currentArticle.BuildMessage(ctx.Config())
 
 	// Note: going *back* in time means going *forward* in the articles array
 	buttons := []discordgo.MessageComponent{

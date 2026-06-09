@@ -113,7 +113,7 @@ func TestReleases(t *testing.T) {
 		})
 
 		t.Run(fmt.Sprintf("maven %s", tt.patchline.Display()), func(t *testing.T) {
-			httpmock.RegisterResponder("GET", mavenMetadataUrl(tt.patchline, config.Feeds), httpmock.NewStringResponder(200, tt.sampleMaven))
+			httpmock.RegisterResponder("GET", MavenMetadataUrl(tt.patchline, config.Feeds), httpmock.NewStringResponder(200, tt.sampleMaven))
 			feed, err := fetchMavenRelease(tt.patchline, feeds)
 			assert.NoError(t, err)
 			td.Cmp(t, feed, expectedMavenFeed(tt.patchline))
