@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 
 	"github.com/Tisawesomeness/gaia/hytale"
@@ -100,9 +99,6 @@ func NewRenderCommand(name string, description string, renderType hytale.RenderT
 var (
 	minDegrees = -360.0
 	maxDegrees = 360.0
-
-	uuidRegex     = regexp.MustCompile(`^([0-9a-fA-F]{8})-?([0-9a-fA-F]{4})-?([0-9a-fA-F]{4})-?([0-9a-fA-F]{4})-?([0-9a-fA-F]{12})$`)
-	usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]{3,16}$`)
 
 	cosmeticGroups = []cosmeticGroup{
 		{
@@ -235,15 +231,6 @@ type cosmeticGroup struct {
 	cosmetics []cosmeticType
 }
 
-// Checks if the provided UUID is valid and formats it with dashes if necessary.
-func validateAndFormatUUID(uuid string) (string, bool) {
-	matches := uuidRegex.FindStringSubmatch(uuid)
-	if matches == nil {
-		return "", false
-	}
-	return fmt.Sprintf("%s-%s-%s-%s-%s", matches[1], matches[2], matches[3], matches[4], matches[5]), true
-}
-
 func tryFetchProfileFromUUID(uuid string, ctx CommandContext) (*hytale.PublicGameProfile, error) {
 	return util.Execute(ctx.Breakers().HytaleSession, func() (*hytale.PublicGameProfile, error) {
 		return hytale.FetchProfileFromUUID(uuid, ctx.Config(), ctx.HTTP(), ctx.AuthStore())
@@ -261,11 +248,11 @@ func profileCommand(ctx CommandContext) {
 
 	var profile *hytale.PublicGameProfile
 	var err error
-	uuid, isUUID := validateAndFormatUUID(identifier)
+	uuid, isUUID := hytale.ValidateUUID(identifier)
 	if isUUID {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
-	} else if usernameRegex.MatchString(identifier) {
+	} else if hytale.ValidateUsername(identifier) {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
@@ -376,11 +363,11 @@ func skinCommand(ctx CommandContext) {
 
 	var profile *hytale.PublicGameProfile
 	var err error
-	uuid, isUUID := validateAndFormatUUID(identifier)
+	uuid, isUUID := hytale.ValidateUUID(identifier)
 	if isUUID {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
-	} else if usernameRegex.MatchString(identifier) {
+	} else if hytale.ValidateUsername(identifier) {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
@@ -479,11 +466,11 @@ func renderCommand(ctx CommandContext, renderType hytale.RenderType) {
 
 	var profile *hytale.PublicGameProfile
 	var err error
-	uuid, isUUID := validateAndFormatUUID(identifier)
+	uuid, isUUID := hytale.ValidateUUID(identifier)
 	if isUUID {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
-	} else if usernameRegex.MatchString(identifier) {
+	} else if hytale.ValidateUsername(identifier) {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
