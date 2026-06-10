@@ -30,6 +30,7 @@ func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
 
 	c.Valkey.Address = "127.0.0.1"
 	c.Valkey.Port = 9999
+	c.Valkey.DatabaseIndex = 2
 
 	c.Feeds.LauncherRelease = "https://launcher.example.com/version/release/launcher.json"
 	c.Feeds.LauncherArticles = "https://launcher.example.com/launcher-feed/release/feed.json"
@@ -50,7 +51,7 @@ func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.ClearAll()
+	db.Clear()
 
 	http := &http.Client{
 		Timeout: time.Duration(10) * time.Second,

@@ -15,8 +15,9 @@ var (
 
 func init() {
 	db, err := NewDB(config.ValkeyConfig{
-		Address: "127.0.0.1",
-		Port:    9999,
+		Address:       "127.0.0.1",
+		Port:          9999,
+		DatabaseIndex: 1,
 	})
 	if err != nil {
 		panic(err)
@@ -29,7 +30,7 @@ func teardown() {
 }
 
 func beforeEach() {
-	testDB.ClearAll()
+	testDB.Clear()
 }
 
 func TestDB(t *testing.T) {

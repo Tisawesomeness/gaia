@@ -29,7 +29,7 @@ func teardownPlayers() {
 }
 
 func beforeEachPlayers() {
-	playersCE.DB.ClearAll()
+	playersCE.DB.Clear()
 }
 
 const (

@@ -25,7 +25,7 @@ func teardownCore() {
 }
 
 func beforeEachCore() {
-	coreCE.DB.ClearAll()
+	coreCE.DB.Clear()
 }
 
 func TestCoreCommands(t *testing.T) {

@@ -18,6 +18,7 @@ type DB struct {
 func NewDB(config config.ValkeyConfig) (*DB, error) {
 	options := valkey.ClientOption{
 		InitAddress: []string{config.Address + ":" + strconv.Itoa(config.Port)},
+		SelectDB:    config.DatabaseIndex,
 	}
 	if config.Password != "" {
 		options.Password = config.Password
@@ -326,7 +327,7 @@ func (db DB) SetKratosRefresh(refresh time.Time) error {
 	return db.v.Do(context.Background(), command).Error()
 }
 
-func (db DB) ClearAll() {
-	command := db.v.B().Flushall().Build()
+func (db DB) Clear() {
+	command := db.v.B().Flushdb().Sync().Build()
 	db.v.Do(context.Background(), command)
 }

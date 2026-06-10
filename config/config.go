@@ -23,9 +23,10 @@ type CredentialsConfig struct {
 }
 
 type ValkeyConfig struct {
-	Address  string `json:"address"`
-	Port     int    `json:"port"`
-	Password string `json:"password"`
+	Address       string `json:"address"`
+	Port          int    `json:"port"`
+	Password      string `json:"password"`
+	DatabaseIndex int    `json:"database_index"`
 }
 
 type BrandingConfig struct {
