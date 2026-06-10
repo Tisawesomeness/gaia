@@ -13,7 +13,7 @@ var (
 )
 
 func init() {
-	ce, err := InitMockExecutor()
+	ce, err := InitMockExecutor(nil)
 	if err != nil {
 		panic(err)
 	}

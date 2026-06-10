@@ -2,9 +2,12 @@
 package itestutil
 
 import (
+	"testing"
+
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/hytale"
 	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/bwmarrin/discordgo"
 	"github.com/jarcoal/httpmock"
 )
 
@@ -29,4 +32,22 @@ func RegisterFeedResponders(config *config.Config) error {
 		httpmock.RegisterResponder("GET", hytale.MavenMetadataUrl(tt.patchline, config.Feeds), httpmock.NewStringResponder(200, tt.sampleMaven))
 	}
 	return nil
+}
+
+// Asserts that **either** the embed's author name or title matches the expected string.
+func AssertEmbedTitle(t *testing.T, expected string, actual *discordgo.MessageEmbed) {
+	if actual == nil {
+		t.Fatal("embed is nil")
+	}
+	if actual.Title == expected {
+		return
+	}
+	if actual.Author != nil {
+		authorName := actual.Author.Name
+		if authorName != expected {
+			t.Fatalf("embed title `%q`, but is `%q` (or author name `%q`)", expected, actual.Title, authorName)
+		}
+	} else {
+		t.Fatalf("embed title `%q`, but is `%q` (or author name nil)", expected, actual.Title)
+	}
 }

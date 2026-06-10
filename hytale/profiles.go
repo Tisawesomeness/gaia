@@ -121,6 +121,32 @@ const (
 	Unknown
 )
 
+func (a Availability) ExpectedResponse() *string {
+	if a == Unknown {
+		return nil
+	} else {
+		s := a.expectedResponse()
+		return &s
+	}
+}
+
+func (a Availability) expectedResponse() string {
+	switch a {
+	case InUse:
+		return "Username is already in use"
+	case Reserved:
+		return "Username is already reserved"
+	case HytaleReserved:
+		return "reserved by the Hytale Team"
+	case Prohibited:
+		return "prohibited word"
+	case Available:
+		return ""
+	default:
+		panic("unknown availability")
+	}
+}
+
 // Checks a username's availability. Requires that the provided http client is signed in to Kratos.
 func CheckAvailability(username string, config *config.Config, kratosClient *http.Client) (Availability, error) {
 	req, err := http.NewRequest("GET", config.Profile.Availability, nil)

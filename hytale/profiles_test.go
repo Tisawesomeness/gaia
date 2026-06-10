@@ -111,6 +111,15 @@ func TestProfiles(t *testing.T) {
 	})
 
 	t.Run("username availability", func(t *testing.T) {
+		httpmock.RegisterResponder("GET", config.Profile.Availability, httpmock.NewStringResponder(200, ""))
+		availability, err := CheckAvailability(sampleUsername, config, kratosClient)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		td.Cmp(t, availability, Available)
+	})
+
+	t.Run("username availability reserved", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.Availability, httpmock.NewStringResponder(200, "reserved by the Hytale Team"))
 		availability, err := CheckAvailability(sampleUsername, config, kratosClient)
 		if err != nil {

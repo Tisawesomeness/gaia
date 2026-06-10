@@ -17,40 +17,36 @@ import (
 
 // Creates a mock command executor.
 //
+// The provided config (or a new config if nil passed) will be modified with:
+// - Test DB parameters
+// - URLs for feeds and profile lookups
+// - Disabled breakers
+//
 // This will start the test DB. Be sure to clear the database before each test and cleanup when done.
-func InitMockExecutor() (*CommandExecutor, error) {
-	config := &config.Config{
-		Valkey: config.ValkeyConfig{
-			Address: "127.0.0.1",
-			Port:    9999,
-		},
-		Feeds: config.FeedsConfig{
-			LauncherRelease:  "https://launcher.example.com/version/release/launcher.json",
-			LauncherArticles: "https://launcher.example.com/launcher-feed/release/feed.json",
-			GameVersion:      "https://account-data.example.com/game-assets/version/",
-			MavenRepo:        "https://maven.example.com",
-			MavenGroup:       "com.hypixel.hytale",
-			MavenArtifact:    "Server",
-		},
-		Profile: config.ProfileConfig{
-			ByUUID:       "https://account-data.example.com/profile/uuid/",
-			ByUsername:   "https://account-data.example.com/profile/username/",
-			Availability: "https://accounts.example.com/api/account/username-reservations/availability",
-			Hyvatar:      "https://hyvatar.example.com/",
-		},
-		Auth: config.AuthConfig{
-			Breaker: config.BreakerConfig{
-				Enabled: false,
-			},
-		},
-		Kratos: config.KratosConfig{
-			Breaker: config.BreakerConfig{
-				Enabled: false,
-			},
-		},
+func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
+	if c == nil {
+		c = &config.Config{}
 	}
 
-	db, err := db.NewDB(config.Valkey)
+	c.Valkey.Address = "127.0.0.1"
+	c.Valkey.Port = 9999
+
+	c.Feeds.LauncherRelease = "https://launcher.example.com/version/release/launcher.json"
+	c.Feeds.LauncherArticles = "https://launcher.example.com/launcher-feed/release/feed.json"
+	c.Feeds.GameVersion = "https://account-data.example.com/game-assets/version/"
+	c.Feeds.MavenRepo = "https://maven.example.com"
+	c.Feeds.MavenGroup = "com.hypixel.hytale"
+	c.Feeds.MavenArtifact = "Server"
+
+	c.Profile.ByUUID = "https://account-data.example.com/profile/uuid/"
+	c.Profile.ByUsername = "https://account-data.example.com/profile/username/"
+	c.Profile.Availability = "https://accounts.example.com/api/account/username-reservations/availability"
+	c.Profile.Hyvatar = "https://hyvatar.example.com/"
+
+	c.Auth.Breaker.Enabled = false
+	c.Kratos.Breaker.Enabled = false
+
+	db, err := db.NewDB(c.Valkey)
 	if err != nil {
 		return nil, err
 	}
@@ -60,16 +56,16 @@ func InitMockExecutor() (*CommandExecutor, error) {
 		Timeout: time.Duration(10) * time.Second,
 	}
 	httpmock.ActivateNonDefault(http)
-	itestutil.RegisterFeedResponders(config)
+	itestutil.RegisterFeedResponders(c)
 
 	authStore := testutil.NewTestAuthStore(http)
-	feeds, err := hytale.NewHytaleFeeds(config, db, http, authStore)
+	feeds, err := hytale.NewHytaleFeeds(c, db, http, authStore)
 	if err != nil {
 		return nil, err
 	}
 	bootTime := time.Now()
 
-	ce := NewCommandExecutor(config, db, http, authStore, feeds, "0.1.0", &bootTime)
+	ce := NewCommandExecutor(c, db, http, authStore, feeds, "0.1.0", &bootTime)
 	return &ce, nil
 }
 
@@ -187,11 +183,11 @@ func NewMockContext(ce *CommandExecutor) *CommandContextMock {
 }
 
 // Sets the arguments/options the command was called with.
-func (c *CommandContextMock) WithOptions(options OptionsMap) *CommandContextMock {
-	if options == nil {
-		panic("options must not be nil")
-	} else {
-		c.options = options
+func (c *CommandContextMock) WithOption(name string, typ discordgo.ApplicationCommandOptionType, value interface{}) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  typ,
+		Value: value,
 	}
 	return c
 }
