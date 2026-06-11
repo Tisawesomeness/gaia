@@ -361,6 +361,18 @@ func init() {
 	}
 }
 
+func getCommand(name string) *Command {
+	commandName := strings.TrimPrefix(name, "test-")
+	for _, category := range categories {
+		for _, command := range category.commands {
+			if commandName == command.discord.Name {
+				return command
+			}
+		}
+	}
+	return nil
+}
+
 func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
@@ -373,15 +385,10 @@ func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *disco
 			}
 		}()
 
-		commandName := strings.TrimPrefix(i.ApplicationCommandData().Name, "test-")
-		for _, category := range categories {
-			for _, command := range category.commands {
-				if commandName == command.discord.Name {
-					ctx := ce.newCommandContext(s, i)
-					command.handler(ctx)
-					return
-				}
-			}
+		command := getCommand(i.ApplicationCommandData().Name)
+		if command != nil {
+			ctx := ce.newCommandContext(s, i)
+			command.handler(ctx)
 		}
 
 	case discordgo.InteractionMessageComponent:

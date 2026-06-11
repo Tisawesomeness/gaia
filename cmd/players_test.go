@@ -89,7 +89,7 @@ func TestProfile(t *testing.T) {
 		registerUsername("tis", testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "tis")
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -103,7 +103,7 @@ func TestProfile(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, testUuid)
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -115,7 +115,7 @@ func TestProfile(t *testing.T) {
 
 	t.Run("/profile Invalid format", playersTestCase(func(t *testing.T) {
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "-")
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -125,7 +125,7 @@ func TestProfile(t *testing.T) {
 
 	t.Run("/profile Username too long", playersTestCase(func(t *testing.T) {
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "veryverylongusername")
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -137,7 +137,7 @@ func TestProfile(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+"errorPlayer", httpmock.NewStringResponder(500, ""))
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "errorPlayer")
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -149,7 +149,7 @@ func TestProfile(t *testing.T) {
 		registerUUID(invalidUuid, "")
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, invalidUuid)
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -161,7 +161,7 @@ func TestProfile(t *testing.T) {
 		registerUsernameUnused("nonexistent", hytale.Available)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "nonexistent")
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -175,7 +175,7 @@ func TestProfile(t *testing.T) {
 		registerUsernameUnused("reservedUser", hytale.Reserved)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "reservedUser")
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -189,7 +189,7 @@ func TestProfile(t *testing.T) {
 		registerUsernameUnused("badword", hytale.Prohibited)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "badword")
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -203,7 +203,7 @@ func TestProfile(t *testing.T) {
 		registerUsernameUnused("unknownStatus", hytale.Unknown)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "unknownStatus")
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -217,7 +217,7 @@ func TestProfile(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.Availability, httpmock.NewStringResponder(500, ""))
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "error")
-		profileCommand(ctx)
+		getCommand("profile").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -233,7 +233,7 @@ func TestSkin(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, testUuid)
-		skinCommand(ctx)
+		getCommand("skin").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -260,7 +260,7 @@ func TestSkin(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponseNoSkin)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, testUuid)
-		skinCommand(ctx)
+		getCommand("skin").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -276,7 +276,7 @@ func TestSkin(t *testing.T) {
 		registerUsername("tis", testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "tis")
-		skinCommand(ctx)
+		getCommand("skin").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -293,7 +293,7 @@ func TestSkin(t *testing.T) {
 		registerUsername("tis", testutil.SampleProfileResponseExtra)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "tis")
-		skinCommand(ctx)
+		getCommand("skin").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -308,7 +308,7 @@ func TestSkin(t *testing.T) {
 
 	t.Run("/skin Invalid format", playersTestCase(func(t *testing.T) {
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "-")
-		skinCommand(ctx)
+		getCommand("skin").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -318,7 +318,7 @@ func TestSkin(t *testing.T) {
 
 	t.Run("/skin Username too long", playersTestCase(func(t *testing.T) {
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "veryverylongusername")
-		skinCommand(ctx)
+		getCommand("skin").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -330,7 +330,7 @@ func TestSkin(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+"errorPlayer", httpmock.NewStringResponder(500, ""))
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "errorPlayer")
-		skinCommand(ctx)
+		getCommand("skin").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -342,7 +342,7 @@ func TestSkin(t *testing.T) {
 		registerUUID(invalidUuid, "")
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, invalidUuid)
-		skinCommand(ctx)
+		getCommand("skin").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -354,7 +354,7 @@ func TestSkin(t *testing.T) {
 		registerUsernameUnused("doesnotexist", hytale.Available)
 
 		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "doesnotexist")
-		skinCommand(ctx)
+		getCommand("skin").handler(ctx)
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
