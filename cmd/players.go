@@ -484,8 +484,8 @@ func renderCommand(ctx CommandContext, renderType hytale.RenderType) {
 		return
 	}
 
-	_, hasCape := profile.Skin["cape"]
-	if !hasCape && renderType == hytale.CapeRender {
+	cape, hasCape := profile.Skin["cape"]
+	if (!hasCape || cape == nil) && renderType == hytale.CapeRender {
 		ctx.Reply("That player does not have a cape.")
 		return
 	}
