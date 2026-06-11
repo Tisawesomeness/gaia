@@ -73,6 +73,10 @@ var (
 	//go:embed sample/maven-metadata.xml
 	SampleMaven string
 
-	//go:embed sample/tis.json
+	//go:embed sample/profile.json
 	SampleProfileResponse string
+	//go:embed sample/profile_extra.json
+	SampleProfileResponseExtra string
+	//go:embed sample/profile_no_skin.json
+	SampleProfileResponseNoSkin string
 )

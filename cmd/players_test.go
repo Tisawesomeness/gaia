@@ -224,3 +224,141 @@ func TestProfile(t *testing.T) {
 		assert.Equal(t, ":x: An error occurred while contacting Hytale servers.", reply.Content)
 	}))
 }
+
+func TestSkin(t *testing.T) {
+	t.Cleanup(teardownPlayers)
+	config := playersCE.Config
+
+	t.Run("/skin Valid UUID with skin", playersTestCase(func(t *testing.T) {
+		registerUUID(testUuid, testutil.SampleProfileResponse)
+
+		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, testUuid)
+		skinCommand(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		reply := ctx.replies[0]
+		assert.Equal(t, 1, len(reply.Embeds))
+		embed := reply.Embeds[0]
+		itestutil.AssertEmbedTitle(t, "Skin details for tis", embed)
+		assert.Regexp(t, `.*full/tis.*`, embed.Image.URL)
+		assert.NotEmpty(t, embed.Fields)
+		head := itestutil.FindField(embed, "Head")
+		assert.NotNil(t, head)
+		assert.Contains(t, head.Value, "Haircut: `SuperSlickback.BlondCaramel`")
+		assert.Contains(t, head.Value, "Eyes: `Almond_Eyes.Grey`")
+		assert.Contains(t, head.Value, "Facial Hair: (none)")
+		underwear := itestutil.FindField(embed, "General")
+		assert.NotNil(t, underwear)
+		assert.Contains(t, underwear.Value, "Underwear: `Suit.Blue`")
+		assert.Contains(t, underwear.Value, "Body Characteristic: `Muscular.10`")
+		assert.Contains(t, underwear.Value, "Face: `Face_Almond_Eyes`")
+		assert.Contains(t, underwear.Value, "Mouth: `Mouth_Default`")
+		assert.Contains(t, underwear.Value, "Ears: `Elf_Ears`")
+	}))
+
+	t.Run("/skin Valid UUID without skin", playersTestCase(func(t *testing.T) {
+		registerUUID(testUuid, testutil.SampleProfileResponseNoSkin)
+
+		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, testUuid)
+		skinCommand(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		reply := ctx.replies[0]
+		assert.Equal(t, 1, len(reply.Embeds))
+		embed := reply.Embeds[0]
+		itestutil.AssertEmbedTitle(t, "Skin details for tis", embed)
+		assert.NotEmpty(t, embed.Image.URL)
+		assert.Equal(t, "(no skin)", embed.Description)
+		assert.Empty(t, embed.Fields)
+	}))
+
+	t.Run("/skin Valid Username with skin", playersTestCase(func(t *testing.T) {
+		registerUsername("tis", testutil.SampleProfileResponse)
+
+		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "tis")
+		skinCommand(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		reply := ctx.replies[0]
+		assert.Equal(t, 1, len(reply.Embeds))
+		embed := reply.Embeds[0]
+		itestutil.AssertEmbedTitle(t, "Skin details for tis", embed)
+		assert.Regexp(t, `.*full/tis.*`, embed.Image.URL)
+		head := itestutil.FindField(embed, "Head")
+		assert.NotNil(t, head)
+		assert.Contains(t, head.Value, "Haircut: `SuperSlickback.BlondCaramel`")
+	}))
+
+	t.Run("/skin Valid Username with skin and unknown cosmetic", playersTestCase(func(t *testing.T) {
+		registerUsername("tis", testutil.SampleProfileResponseExtra)
+
+		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "tis")
+		skinCommand(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		reply := ctx.replies[0]
+		assert.Equal(t, 1, len(reply.Embeds))
+		embed := reply.Embeds[0]
+		itestutil.AssertEmbedTitle(t, "Skin details for tis", embed)
+		assert.Regexp(t, `.*full/tis.*`, embed.Image.URL)
+		extra := itestutil.FindField(embed, "Extra")
+		assert.NotNil(t, extra)
+		assert.Contains(t, extra.Value, "Booster: `RocketBoosters`")
+	}))
+
+	t.Run("/skin Invalid format", playersTestCase(func(t *testing.T) {
+		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "-")
+		skinCommand(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		reply := ctx.replies[0]
+		assert.Empty(t, reply.Embeds)
+		assert.Contains(t, reply.Content, "`-` is not a valid username or UUID")
+	}))
+
+	t.Run("/skin Username too long", playersTestCase(func(t *testing.T) {
+		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "veryverylongusername")
+		skinCommand(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		reply := ctx.replies[0]
+		assert.Empty(t, reply.Embeds)
+		assert.Contains(t, reply.Content, "`veryverylongusername` is not a valid username or UUID")
+	}))
+
+	t.Run("/skin Fetch error", playersTestCase(func(t *testing.T) {
+		httpmock.RegisterResponder("GET", config.Profile.ByUsername+"errorPlayer", httpmock.NewStringResponder(500, ""))
+
+		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "errorPlayer")
+		skinCommand(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		reply := ctx.replies[0]
+		assert.Empty(t, reply.Embeds)
+		assert.Contains(t, reply.Content, ":x: An error occurred while contacting Hytale servers.")
+	}))
+
+	t.Run("/skin UUID not found", playersTestCase(func(t *testing.T) {
+		registerUUID(invalidUuid, "")
+
+		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, invalidUuid)
+		skinCommand(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		reply := ctx.replies[0]
+		assert.Empty(t, reply.Embeds)
+		assert.Contains(t, reply.Content, "There is no player with the UUID")
+	}))
+
+	t.Run("/skin Username not found", playersTestCase(func(t *testing.T) {
+		registerUsernameUnused("doesnotexist", hytale.Available)
+
+		ctx := NewMockContext(playersCE).WithOption("player", discordgo.ApplicationCommandOptionString, "doesnotexist")
+		skinCommand(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		reply := ctx.replies[0]
+		assert.Empty(t, reply.Embeds)
+		assert.Contains(t, reply.Content, "There is no player with the username")
+	}))
+}

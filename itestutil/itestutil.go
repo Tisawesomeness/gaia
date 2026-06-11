@@ -34,6 +34,15 @@ func RegisterFeedResponders(config *config.Config) error {
 	return nil
 }
 
+func FindField(embed *discordgo.MessageEmbed, name string) *discordgo.MessageEmbedField {
+	for _, field := range embed.Fields {
+		if field.Name == name {
+			return field
+		}
+	}
+	return nil
+}
+
 // Asserts that **either** the embed's author name or title matches the expected string.
 func AssertEmbedTitle(t *testing.T, expected string, actual *discordgo.MessageEmbed) {
 	if actual == nil {
