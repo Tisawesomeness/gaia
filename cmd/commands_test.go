@@ -183,11 +183,73 @@ func NewMockContext(ce *CommandExecutor) *CommandContextMock {
 	}
 }
 
-// Sets the arguments/options the command was called with.
-func (c *CommandContextMock) WithOption(name string, typ discordgo.ApplicationCommandOptionType, value interface{}) *CommandContextMock {
+func (c *CommandContextMock) WithOptionString(name string, value string) *CommandContextMock {
 	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
-		Type:  typ,
+		Type:  discordgo.ApplicationCommandOptionString,
+		Value: value,
+	}
+	return c
+}
+
+func (c *CommandContextMock) WithOptionInteger(name string, value int64) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  discordgo.ApplicationCommandOptionInteger,
+		Value: float64(value),
+	}
+	return c
+}
+
+func (c *CommandContextMock) WithOptionBoolean(name string, value bool) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  discordgo.ApplicationCommandOptionBoolean,
+		Value: value,
+	}
+	return c
+}
+
+func (c *CommandContextMock) WithOptionUser(name string, value string) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  discordgo.ApplicationCommandOptionUser,
+		Value: value,
+	}
+	return c
+}
+
+func (c *CommandContextMock) WithOptionChannel(name string, value string) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  discordgo.ApplicationCommandOptionChannel,
+		Value: value,
+	}
+	return c
+}
+
+func (c *CommandContextMock) WithOptionRole(name string, value string) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  discordgo.ApplicationCommandOptionRole,
+		Value: value,
+	}
+	return c
+}
+
+func (c *CommandContextMock) WithOptionMentionable(name string, value string) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  discordgo.ApplicationCommandOptionMentionable,
+		Value: value,
+	}
+	return c
+}
+
+func (c *CommandContextMock) WithOptionNumber(name string, value float64) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  discordgo.ApplicationCommandOptionNumber,
 		Value: value,
 	}
 	return c

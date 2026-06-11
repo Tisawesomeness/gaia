@@ -75,6 +75,8 @@ var (
 
 	//go:embed sample/profile.json
 	SampleProfileResponse string
+	//go:embed sample/profile_cape.json
+	SampleProfileResponseCape string
 	//go:embed sample/profile_extra.json
 	SampleProfileResponseExtra string
 	//go:embed sample/profile_no_skin.json
