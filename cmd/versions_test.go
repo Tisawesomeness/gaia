@@ -53,14 +53,21 @@ func setVersion(side hytale.Side, patchline hytale.Patchline, version string) {
 						Version: version,
 					},
 				},
-				LastUpdated: "20260605155755",
 			},
 			Patchline: patchline,
 		}
 	}
 }
 
-func TestVersionsCommands(t *testing.T) {
+func setLauncherRelease(version string) {
+	versionsCE.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedType] = hytale.LauncherReleaseFeed{
+		Release: &hytale.LauncherRelease{
+			Version: version,
+		},
+	}
+}
+
+func TestVersion(t *testing.T) {
 	t.Cleanup(teardownVersions)
 
 	t.Run("/version client", versionsTestCase(func(t *testing.T) {
@@ -144,5 +151,31 @@ func TestVersionsCommands(t *testing.T) {
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Contains(t, ctx.replies[0].Content, "Could not retrieve the latest Hytale version")
+	}))
+}
+
+func TestLauncher(t *testing.T) {
+	t.Cleanup(teardownVersions)
+
+	t.Run("/launcher success", versionsTestCase(func(t *testing.T) {
+		version := "2026.01.12-e43ec47"
+		setLauncherRelease(version)
+
+		ctx := NewMockContext(versionsCE)
+		getCommand("launcher").handler(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		assert.Equal(t, 1, len(ctx.replies[0].Embeds))
+		embed := ctx.replies[0].Embeds[0]
+		itestutil.AssertEmbedTitleContains(t, embed, "Latest Hytale Launcher Version")
+		assert.Contains(t, embed.Description, version)
+	}))
+
+	t.Run("/launcher missing feed", versionsTestCase(func(t *testing.T) {
+		ctx := NewMockContext(versionsCE)
+		getCommand("launcher").handler(ctx)
+
+		assert.Equal(t, 1, len(ctx.replies))
+		assert.Contains(t, ctx.replies[0].Content, "Could not retrieve the latest Hytale Launcher version")
 	}))
 }
