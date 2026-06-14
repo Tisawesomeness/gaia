@@ -12,7 +12,7 @@ import (
 
 var (
 	devCE       *CommandExecutor
-	devTestCase = testutil.MakeTestCase(beforeEachCore, nil)
+	devTestCase = testutil.MakeTestCase(beforeEachDev, nil)
 )
 
 func init() {
@@ -25,6 +25,10 @@ func init() {
 
 func teardownDev() {
 	devCE.DB.Close()
+}
+
+func beforeEachDev() {
+	devCE.DB.Clear()
 }
 
 func assertContentOrFileName(t *testing.T, reply *discordgo.InteractionResponseData, content string) {
