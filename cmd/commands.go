@@ -107,7 +107,10 @@ type CommandContext interface {
 	// The raw Discord event, prefer using CommandContext methods since this makes the command untestable
 	Interaction() *discordgo.InteractionCreate
 
+	// A unique ID for each interaction with the bot (ex: slash command invocation, button press)
 	InteractionID() string
+	// The ID of the component clicked. Empty if no component was clicked.
+	ComponentID() string
 	// Generates a map of option ID to option data
 	Options() OptionsMap
 	// Gets the user that executed this command, works in both guilds and DMs
@@ -130,6 +133,7 @@ type CommandContext interface {
 	ReplyWarn(content string)
 	ReplyExternalError(content string)
 	ReplyError(message string, err error)
+	Edit(data *discordgo.InteractionResponseData)
 }
 
 type commandContext struct {
@@ -174,6 +178,13 @@ func (ctx *commandContext) Interaction() *discordgo.InteractionCreate { return c
 
 func (ctx *commandContext) InteractionID() string {
 	return ctx.Interaction().Interaction.ID
+}
+
+func (ctx *commandContext) ComponentID() string {
+	if ctx.Interaction().Type == discordgo.InteractionMessageComponent {
+		return ctx.Interaction().MessageComponentData().CustomID
+	}
+	return ""
 }
 
 func (ctx *commandContext) Options() OptionsMap {
@@ -301,6 +312,13 @@ func (ctx *commandContext) ReplyComplex(data *discordgo.InteractionResponseData)
 	}
 }
 
+func (ctx *commandContext) Edit(data *discordgo.InteractionResponseData) {
+	ctx.Session().InteractionRespond(ctx.Interaction().Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: data,
+	})
+}
+
 func (ctx *commandContext) reportError(err error) {
 	id := ctx.Interaction().ApplicationCommandData().Name
 	options := formatCommandOptions(ctx.Interaction().ApplicationCommandData().Options)
@@ -329,7 +347,15 @@ type Command struct {
 	handler func(ctx CommandContext)
 }
 
-var categories []*Category
+type Interaction struct {
+	prefix  string
+	handler func(ctx CommandContext)
+}
+
+var (
+	categories   []*Category
+	interactions []*Interaction
+)
 
 func init() {
 	categories = []*Category{
@@ -359,6 +385,9 @@ func init() {
 			{GradleCommand, gradleCommand},
 		}},
 	}
+	interactions = []*Interaction{
+		{"article", handleArticleButton},
+	}
 }
 
 func getCommand(name string) *Command {
@@ -368,6 +397,15 @@ func getCommand(name string) *Command {
 			if commandName == command.discord.Name {
 				return command
 			}
+		}
+	}
+	return nil
+}
+
+func getInteraction(customID string) *Interaction {
+	for _, interaction := range interactions {
+		if strings.HasPrefix(customID, interaction.prefix) {
+			return interaction
 		}
 	}
 	return nil
@@ -400,9 +438,10 @@ func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *disco
 			}
 		}()
 
-		if isArticleInteraction(customID) {
+		interaction := getInteraction(customID)
+		if interaction != nil {
 			ctx := ce.newCommandContext(s, i)
-			HandleArticleButton(s, i, ctx)
+			interaction.handler(ctx)
 		}
 	}
 }

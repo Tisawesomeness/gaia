@@ -190,12 +190,8 @@ func articlesCommand(ctx CommandContext) {
 	})
 }
 
-func isArticleInteraction(customID string) bool {
-	return strings.HasPrefix(customID, "article_back_") || strings.HasPrefix(customID, "article_forward_")
-}
-
-func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, ctx CommandContext) {
-	customID := i.MessageComponentData().CustomID
+func handleArticleButton(ctx CommandContext) {
+	customID := ctx.ComponentID()
 	interactionID := strings.TrimPrefix(customID, "article_back_")
 	interactionID = strings.TrimPrefix(interactionID, "article_forward_")
 
@@ -235,13 +231,10 @@ func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, c
 
 	// Edit the original message
 	paginateMessage(message, buttons)
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:          message.Embeds,
-			Components:      message.Components,
-			AllowedMentions: &discordgo.MessageAllowedMentions{},
-		},
+	ctx.Edit(&discordgo.InteractionResponseData{
+		Embeds:          message.Embeds,
+		Components:      message.Components,
+		AllowedMentions: &discordgo.MessageAllowedMentions{},
 	})
 }
 

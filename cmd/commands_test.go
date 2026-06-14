@@ -76,10 +76,14 @@ type MockGuildData struct {
 
 type CommandContextMock struct {
 	*commandContext
-	id      string
-	guild   *MockGuildData
-	options OptionsMap
+
+	id          string
+	guild       *MockGuildData
+	componentId string
+	options     OptionsMap
+
 	replies []*discordgo.InteractionResponseData
+	edits   []*discordgo.InteractionResponseData
 }
 
 const (
@@ -89,6 +93,10 @@ const (
 
 func (ctx *CommandContextMock) InteractionID() string {
 	return ctx.id
+}
+
+func (ctx *CommandContextMock) ComponentID() string {
+	return ctx.componentId
 }
 
 func (ctx *CommandContextMock) Options() OptionsMap {
@@ -169,18 +177,37 @@ func (ctx *CommandContextMock) ReplyComplex(data *discordgo.InteractionResponseD
 	ctx.replies = append(ctx.replies, data)
 }
 
+func (ctx *CommandContextMock) Edit(data *discordgo.InteractionResponseData) {
+	ctx.edits = append(ctx.edits, data)
+}
+
 // NewMockContext creates a new mock command context with the given command executor.
 //
 // The command will be called outside of a guild with no arguments by default. Use WithOptions() and WithGuild() to override.
 //
-// BEWARE: `Session()` and `Interaction()` are both nil, which causes commands that rely on Discord-specific functionality
-// (such as pagination) to fail.
+// BEWARE: `Session()` and `Interaction()` are both nil, which causes Discord-specific functionality to fail.
 func NewMockContext(ce *CommandExecutor) *CommandContextMock {
 	return &CommandContextMock{
 		id:             randomID(),
 		options:        make(OptionsMap),
 		commandContext: ce.newCommandContext(nil, nil),
 	}
+}
+
+func (c *CommandContextMock) WithOptionSubCommand(name string) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name: name,
+		Type: discordgo.ApplicationCommandOptionSubCommand,
+	}
+	return c
+}
+
+func (c *CommandContextMock) WithOptionSubCommandGroup(name string) *CommandContextMock {
+	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+		Name: name,
+		Type: discordgo.ApplicationCommandOptionSubCommandGroup,
+	}
+	return c
 }
 
 func (c *CommandContextMock) WithOptionString(name string, value string) *CommandContextMock {
@@ -263,6 +290,19 @@ func (c *CommandContextMock) WithGuild(channelIDs ...string) *CommandContextMock
 	c.guild = &MockGuildData{
 		channelIDs: channelIDs,
 	}
+	return c
+}
+
+// Simulates clicking a component with the given ID. Required when calling an interaction handler.
+//
+//	ctx := NewMockContext(ce)
+//	getCommand("example").handler(ctx) // Run /example
+//
+//	componentID := "example_next_" + ctx.InteractionID() // Recreate component ID used in /example
+//	ctx2 := NewMockContext(ce).WithComponent(componentID)
+//	getInteraction("paginated").handler(ctx) // Interact with component
+func (c *CommandContextMock) WithComponent(componentID string) *CommandContextMock {
+	c.componentId = componentID
 	return c
 }
 
