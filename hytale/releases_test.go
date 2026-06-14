@@ -31,9 +31,6 @@ var (
 		},
 		Patchline: PreRelease,
 	}
-
-	expectedMavenRelease    = expectedMavenFeed(Release)
-	expectedMavenPreRelease = expectedMavenFeed(PreRelease)
 )
 
 func expectedMavenFeed(patchline Patchline) MavenFeed {

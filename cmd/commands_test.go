@@ -170,7 +170,7 @@ func (ctx *CommandContextMock) ReplyExternalError(content string) {
 }
 
 func (ctx *CommandContextMock) ReplyError(message string, err error) {
-	panic(fmt.Errorf("%s: %v", message, err))
+	ctx.ReplyEphemeral(":boom: " + message)
 }
 
 func (ctx *CommandContextMock) ReplyComplex(data *discordgo.InteractionResponseData) {

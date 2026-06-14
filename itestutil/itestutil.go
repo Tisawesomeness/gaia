@@ -86,9 +86,27 @@ func AssertEmbedTitle(t *testing.T, expected string, actual *discordgo.MessageEm
 	if actual.Author != nil {
 		authorName := actual.Author.Name
 		if authorName != expected {
-			t.Fatalf("embed title `%q`, but is `%q` (or author name `%q`)", expected, actual.Title, authorName)
+			t.Fatalf("embed title `%q` (or author name `%q`) does not equal `%q`", actual.Title, authorName, expected)
 		}
 	} else {
-		t.Fatalf("embed title `%q`, but is `%q` (or author name nil)", expected, actual.Title)
+		t.Fatalf("embed title `%q` (or author name nil) does not equal `%q`", actual.Title, expected)
+	}
+}
+
+// Asserts that **either** the embed's author name or title contains the expected string.
+func AssertEmbedTitleContains(t *testing.T, embed *discordgo.MessageEmbed, contains string) {
+	if embed == nil {
+		t.Fatal("embed is nil")
+	}
+	if strings.Contains(embed.Title, contains) {
+		return
+	}
+	if embed.Author != nil {
+		authorName := embed.Author.Name
+		if !strings.Contains(authorName, contains) {
+			t.Fatalf("embed title `%q` (or author name `%q`) does not contain `%q`", embed.Title, authorName, contains)
+		}
+	} else {
+		t.Fatalf("embed title `%q` (or author name nil) does not contain `%q`", embed.Title, contains)
 	}
 }

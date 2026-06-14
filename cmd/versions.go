@@ -88,6 +88,7 @@ func versionCommand(ctx CommandContext) {
 		side = hytale.Server
 	} else {
 		ctx.ReplyWarn("Invalid side")
+		return
 	}
 
 	option, exists := options["patchline"]
@@ -101,6 +102,7 @@ func versionCommand(ctx CommandContext) {
 	patchline, err := hytale.ParsePatchline(patchlineValue)
 	if err != nil {
 		ctx.ReplyWarn("Invalid patchline")
+		return
 	}
 
 	feed, exists := ctx.HytaleFeeds().Feeds[hytale.GetFeedType(patchline, side)]
