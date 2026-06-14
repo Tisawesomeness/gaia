@@ -2,6 +2,8 @@
 package itestutil
 
 import (
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/Tisawesomeness/gaia/config"
@@ -41,6 +43,36 @@ func FindField(embed *discordgo.MessageEmbed, name string) *discordgo.MessageEmb
 		}
 	}
 	return nil
+}
+
+// Finds and returns the main text content of the response. The "main text content" is:
+//   - The `Content` string
+//   - The description of any `Embeds`
+//   - The contents of any `Files`
+//   - (attachments are not supported)
+//
+// If text content is found in more than one place, they are joined with newlines.
+func ExtractMainContent(data *discordgo.InteractionResponseData) string {
+	var result []string
+
+	if data.Content != "" {
+		result = append(result, data.Content)
+	}
+
+	for _, embed := range data.Embeds {
+		if embed.Description != "" {
+			result = append(result, embed.Description)
+		}
+	}
+
+	for _, file := range data.Files {
+		buf, err := io.ReadAll(file.Reader)
+		if err != nil {
+			result = append(result, string(buf))
+		}
+	}
+
+	return strings.Join(result, "\n")
 }
 
 // Asserts that **either** the embed's author name or title matches the expected string.
