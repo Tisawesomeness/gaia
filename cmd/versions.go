@@ -206,8 +206,14 @@ func handleArticleButton(ctx CommandContext) {
 	interaction.LastUsed = time.Now()
 
 	if strings.HasPrefix(customID, "article_back_") {
+		if interaction.CurrentIndex == len(interaction.Articles)-1 {
+			return // ignore invalid button press
+		}
 		interaction.CurrentIndex++
 	} else if strings.HasPrefix(customID, "article_forward_") {
+		if interaction.CurrentIndex == 0 {
+			return // ignore invalid button press
+		}
 		interaction.CurrentIndex--
 	}
 

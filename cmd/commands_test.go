@@ -307,8 +307,9 @@ func (c *CommandContextMock) WithGuild(channelIDs ...string) *CommandContextMock
 //
 //	ctx := NewMockContext(ce)
 //	getCommand("example").handler(ctx) // Run /example
+//	button := // Extract button from ctx.replies
 //
-//	componentID := "example_next_" + ctx.InteractionID() // Recreate component ID used in /example
+//	componentID := button.CustomID
 //	ctx2 := NewMockContext(ce).WithComponent(componentID)
 //	getInteraction("paginated").handler(ctx) // Interact with component
 func (c *CommandContextMock) WithComponent(componentID string) *CommandContextMock {
