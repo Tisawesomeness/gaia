@@ -426,7 +426,9 @@ func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *disco
 		command := getCommand(i.ApplicationCommandData().Name)
 		if command != nil {
 			ctx := ce.newCommandContext(s, i)
-			command.handler(ctx)
+			if ctx.UserCanExecute(command.discord) {
+				command.handler(ctx)
+			}
 		}
 
 	case discordgo.InteractionMessageComponent:
