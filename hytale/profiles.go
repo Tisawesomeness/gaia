@@ -68,8 +68,11 @@ func fetchProfile(url string, authStore auth.AuthStore, httpClient *http.Client)
 
 	var profile publicGameProfileResponse
 	err = json.Unmarshal(body, &profile)
+	if err != nil {
+		return nil, err
+	}
 
-	skin, err := parseSkin(err, profile.Skin)
+	skin, err := parseSkin(profile.Skin)
 	if err != nil {
 		return nil, err
 	}
@@ -81,13 +84,13 @@ func fetchProfile(url string, authStore auth.AuthStore, httpClient *http.Client)
 	}, nil
 }
 
-func parseSkin(err error, skinJson *string) (map[string]*string, error) {
+func parseSkin(skinJson *string) (map[string]*string, error) {
 	if skinJson == nil {
 		return make(map[string]*string), nil
 	}
 
 	var skinData map[string]any
-	err = json.Unmarshal([]byte(*skinJson), &skinData)
+	err := json.Unmarshal([]byte(*skinJson), &skinData)
 	if err != nil {
 		return nil, err
 	}
