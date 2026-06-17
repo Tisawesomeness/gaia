@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"net/http"
 	"testing"
+
+	"github.com/jarcoal/httpmock"
 )
 
 type TestCaseFunc func(func(*testing.T)) func(*testing.T)
@@ -20,6 +22,19 @@ func MakeTestCase(beforeEach func(), afterEach func()) TestCaseFunc {
 				afterEach()
 			}
 		}
+	}
+}
+
+// Creates a [httpmock.Responder] that attaches the [http.Request] to the returned [http.Response].
+// Required so `resp.Request.URL` does not panic.
+func WithRequest(r httpmock.Responder) httpmock.Responder {
+	return func(req *http.Request) (*http.Response, error) {
+		resp, err := r(req)
+		if err != nil {
+			return nil, err
+		}
+		resp.Request = req
+		return resp, nil
 	}
 }
 
