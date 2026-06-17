@@ -84,6 +84,10 @@ func KratosLogin(config *config.Config, httpClient *http.Client) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return util.NewBadResponseError("failed to submit login", resp)
+	}
+
 	// Expect a redirect to another flow ID for 2FA
 	finalURL = resp.Request.URL.String()
 	flowID, err = extractFlowID(finalURL)
@@ -91,6 +95,7 @@ func KratosLogin(config *config.Config, httpClient *http.Client) error {
 		return fmt.Errorf("failed to extract 2FA flow ID, is 2FA enabled?: %v", err)
 	}
 
+	// Step 3: 2FA
 	err = submit2FA(flowID, config, httpClient)
 	if err != nil {
 		return fmt.Errorf("2FA verification failed: %v", err)
@@ -120,6 +125,10 @@ func submit2FA(flowID string, config *config.Config, httpClient *http.Client) er
 		return fmt.Errorf("failed to submit 2FA form: %v", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return util.NewBadResponseError("failed to submit 2FA", resp)
+	}
 
 	// A successful login redirects to the account settings page
 	finalURL := resp.Request.URL.String()
