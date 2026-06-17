@@ -15,10 +15,11 @@ import (
 )
 
 type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	IDToken      string `json:"id_token"`
-	Error        string `json:"error"`
+	AccessToken      string `json:"access_token"`
+	RefreshToken     string `json:"refresh_token"`
+	IDToken          string `json:"id_token"`
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
 	// In seconds from request time
 	ExpiresIn int `json:"expires_in"`
 }
@@ -153,6 +154,9 @@ func pollForToken(deviceAuthResponse DeviceAuthResponse, config *config.Config, 
 
 			if tokenResponse.Error == "" {
 				return tokenResponse, nil
+			}
+			if tokenResponse.Error != "authorization_pending" {
+				return TokenResponse{}, fmt.Errorf("error polling for token: `%s`: %s", tokenResponse.Error, tokenResponse.ErrorDescription)
 			}
 
 		case <-timeout:
