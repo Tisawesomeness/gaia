@@ -53,7 +53,7 @@ func TestDevCommands(t *testing.T) {
 
 	t.Run("/maven", devTestCase(func(t *testing.T) {
 		ctx := NewMockContext(devCE)
-		getCommand("maven").handler(ctx)
+		ctx.RunCommand("maven")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assertContentOrFileName(t, ctx.replies[0], "xml")
@@ -61,7 +61,7 @@ func TestDevCommands(t *testing.T) {
 
 	t.Run("/maven type=full", devTestCase(func(t *testing.T) {
 		ctx := NewMockContext(devCE).WithOptionString("type", "full")
-		getCommand("maven").handler(ctx)
+		ctx.RunCommand("maven")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assertContentOrFileName(t, ctx.replies[0], "xml")
@@ -69,7 +69,7 @@ func TestDevCommands(t *testing.T) {
 
 	t.Run("/maven patchline=pre-release", devTestCase(func(t *testing.T) {
 		ctx := NewMockContext(devCE).WithOptionString("patchline", "pre-release")
-		getCommand("maven").handler(ctx)
+		ctx.RunCommand("maven")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assertContentOrFileName(t, ctx.replies[0], "xml")
@@ -77,7 +77,7 @@ func TestDevCommands(t *testing.T) {
 
 	t.Run("/gradle", devTestCase(func(t *testing.T) {
 		ctx := NewMockContext(devCE)
-		getCommand("gradle").handler(ctx)
+		ctx.RunCommand("gradle")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assertContentOrFileName(t, ctx.replies[0], "kts")
@@ -85,7 +85,7 @@ func TestDevCommands(t *testing.T) {
 
 	t.Run("/gradle type=full", devTestCase(func(t *testing.T) {
 		ctx := NewMockContext(devCE).WithOptionString("type", "full")
-		getCommand("gradle").handler(ctx)
+		ctx.RunCommand("gradle")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assertContentOrFileName(t, ctx.replies[0], "kts")
@@ -93,7 +93,7 @@ func TestDevCommands(t *testing.T) {
 
 	t.Run("/gradle flavor=groovy", devTestCase(func(t *testing.T) {
 		ctx := NewMockContext(devCE).WithOptionString("flavor", "groovy")
-		getCommand("gradle").handler(ctx)
+		ctx.RunCommand("gradle")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assertContentOrFileName(t, ctx.replies[0], "gradle")
@@ -101,7 +101,7 @@ func TestDevCommands(t *testing.T) {
 
 	t.Run("/gradle flavor=groovy type=full", devTestCase(func(t *testing.T) {
 		ctx := NewMockContext(devCE).WithOptionString("flavor", "groovy").WithOptionString("type", "full")
-		getCommand("gradle").handler(ctx)
+		ctx.RunCommand("gradle")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assertContentOrFileName(t, ctx.replies[0], "gradle")

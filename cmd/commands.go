@@ -17,6 +17,11 @@ import (
 	"github.com/sony/gobreaker"
 )
 
+const (
+	CleanupInterval   = 5 * time.Minute
+	InteractionExpiry = 30 * time.Minute
+)
+
 type BotMetadata struct {
 	Version  string
 	BootTime *time.Time
@@ -87,6 +92,36 @@ func makeBreaker(name string, config config.BreakerConfig) *gobreaker.CircuitBre
 
 type OptionsMap map[string]*discordgo.ApplicationCommandInteractionDataOption
 
+type CustomID struct {
+	InteractionType string
+	Action          string
+	SessionID       string
+}
+
+func (c CustomID) String() string {
+	return fmt.Sprintf("%s_%s_%s", c.InteractionType, c.Action, c.SessionID)
+}
+
+func (c CustomID) WithAction(action string) CustomID {
+	return CustomID{
+		InteractionType: c.InteractionType,
+		Action:          action,
+		SessionID:       c.SessionID,
+	}
+}
+
+func parseCustomID(customID string) *CustomID {
+	arr := strings.Split(customID, "_")
+	if len(arr) != 3 {
+		return nil
+	}
+	return &CustomID{
+		InteractionType: arr[0],
+		Action:          arr[1],
+		SessionID:       arr[2],
+	}
+}
+
 // Contains utility methods that make commands less error-prone:
 //
 // - Reply... methods with mentions disabled by default and work whether deferred or not
@@ -107,10 +142,6 @@ type CommandContext interface {
 	// The raw Discord event, prefer using CommandContext methods since this makes the command untestable
 	Interaction() *discordgo.InteractionCreate
 
-	// A unique ID for each interaction with the bot (ex: slash command invocation, button press)
-	InteractionID() string
-	// The ID of the component clicked. Empty if no component was clicked.
-	ComponentID() string
 	// Generates a map of option ID to option data
 	Options() OptionsMap
 	// Gets the user that executed this command, works in both guilds and DMs
@@ -121,6 +152,13 @@ type CommandContext interface {
 	GuildID() string
 	// Fetches the channels of the provided guild.
 	GuildChannels(guildID string) ([]*discordgo.Channel, error)
+
+	// A unique ID for each interaction with the bot (ex: slash command invocation, button press)
+	InteractionID() string
+	// The ID of the component clicked. Empty if no component was clicked.
+	CustomID() *CustomID
+	// Tracks a new interaction with the provided ID and state. Overwrites old interactions.
+	NewInteraction(id string, state any)
 
 	// Signals to Discord that the command was received and a follow-up will come later.
 	// After deferring, regular replies (InteractionResponseChannelMessageWithSource) will do nothing.
@@ -176,17 +214,6 @@ func (ctx *commandContext) BotMetadata() *BotMetadata                 { return c
 func (ctx *commandContext) Session() *discordgo.Session               { return ctx.session }
 func (ctx *commandContext) Interaction() *discordgo.InteractionCreate { return ctx.interaction }
 
-func (ctx *commandContext) InteractionID() string {
-	return ctx.Interaction().Interaction.ID
-}
-
-func (ctx *commandContext) ComponentID() string {
-	if ctx.Interaction().Type == discordgo.InteractionMessageComponent {
-		return ctx.Interaction().MessageComponentData().CustomID
-	}
-	return ""
-}
-
 func (ctx *commandContext) Options() OptionsMap {
 	options := ctx.Interaction().ApplicationCommandData().Options
 	optionMap := make(OptionsMap, len(options))
@@ -224,6 +251,25 @@ func (ctx *commandContext) GuildID() string {
 
 func (ctx *commandContext) GuildChannels(guildID string) ([]*discordgo.Channel, error) {
 	return ctx.Session().GuildChannels(guildID)
+}
+
+func (ctx *commandContext) InteractionID() string {
+	return ctx.Interaction().Interaction.ID
+}
+
+func (ctx *commandContext) CustomID() *CustomID {
+	if ctx.Interaction().Type != discordgo.InteractionMessageComponent {
+		return nil
+	}
+	return parseCustomID(ctx.Interaction().MessageComponentData().CustomID)
+}
+
+func (ctx *commandContext) NewInteraction(id string, state any) {
+	interactionSessions[id] = &InteractionSession{
+		State:    state,
+		UserID:   ctx.User().ID,
+		LastUsed: time.Now(),
+	}
 }
 
 func (ctx *commandContext) DeferReply() {
@@ -347,14 +393,21 @@ type Command struct {
 	handler func(ctx CommandContext)
 }
 
-type Interaction struct {
+type InteractionType struct {
 	prefix  string
-	handler func(ctx CommandContext)
+	handler func(ctx CommandContext, state any)
+}
+
+type InteractionSession struct {
+	State    any
+	UserID   string
+	LastUsed time.Time
 }
 
 var (
-	categories   []*Category
-	interactions []*Interaction
+	categories          []*Category
+	interactionTypes    []*InteractionType
+	interactionSessions map[string]*InteractionSession
 )
 
 func init() {
@@ -385,9 +438,10 @@ func init() {
 			{GradleCommand, gradleCommand},
 		}},
 	}
-	interactions = []*Interaction{
+	interactionTypes = []*InteractionType{
 		{"article", handleArticleButton},
 	}
+	interactionSessions = make(map[string]*InteractionSession)
 }
 
 func getCommand(name string) *Command {
@@ -402,9 +456,9 @@ func getCommand(name string) *Command {
 	return nil
 }
 
-func getInteraction(customID string) *Interaction {
-	for _, interaction := range interactions {
-		if strings.HasPrefix(customID, interaction.prefix) {
+func getInteractionType(interactionType string) *InteractionType {
+	for _, interaction := range interactionTypes {
+		if interaction.prefix == interactionType {
 			return interaction
 		}
 	}
@@ -423,27 +477,46 @@ func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *disco
 			}
 		}()
 
-		command := getCommand(i.ApplicationCommandData().Name)
-		if command != nil {
-			ctx := ce.newCommandContext(s, i)
-			if ctx.UserCanExecute(command.discord) {
-				command.handler(ctx)
-			}
-		}
+		ctx := ce.newCommandContext(s, i)
+		handleCommand(ctx, i.ApplicationCommandData().ID)
 
 	case discordgo.InteractionMessageComponent:
-		customID := i.MessageComponentData().CustomID
-
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("Panic in interaction %s:\n%v", customID, r)
+				log.Printf("Panic in interaction %s:\n%v", i.MessageComponentData().CustomID, r)
 			}
 		}()
 
-		interaction := getInteraction(customID)
-		if interaction != nil {
-			ctx := ce.newCommandContext(s, i)
-			interaction.handler(ctx)
+		ctx := ce.newCommandContext(s, i)
+		handleInteraction(ctx)
+	}
+}
+
+func handleCommand(ctx CommandContext, name string) {
+	command := getCommand(name)
+	if command != nil {
+		if ctx.UserCanExecute(command.discord) {
+			command.handler(ctx)
+		}
+	}
+}
+
+func handleInteraction(ctx CommandContext) {
+	customID := ctx.CustomID()
+	interactionType := getInteractionType(customID.InteractionType)
+	if interactionType != nil {
+		interactionSession := interactionSessions[customID.SessionID]
+		if interactionSession != nil {
+			if ctx.User().ID != interactionSession.UserID {
+				ctx.ReplyEphemeral("You cannot interact with someone else's menu.")
+				return
+			}
+			if time.Now().After(interactionSession.LastUsed.Add(InteractionExpiry)) {
+				ctx.ReplyEphemeral("That menu has expired.")
+				return
+			}
+			interactionSession.LastUsed = time.Now()
+			interactionType.handler(ctx, interactionSession.State)
 		}
 	}
 }
@@ -456,8 +529,26 @@ func InitCommands(session *discordgo.Session, config config.Config) error {
 		}
 		log.Println("Commands created")
 	}
-	StartInteractionCleanup()
+	startInteractionCleanup()
 	return nil
+}
+
+func startInteractionCleanup() {
+	ticker := time.NewTicker(CleanupInterval)
+	go func() {
+		for range ticker.C {
+			cleanupOldInteractions()
+		}
+	}()
+}
+
+func cleanupOldInteractions() {
+	now := time.Now()
+	for id, interaction := range interactionSessions {
+		if now.Sub(interaction.LastUsed) > InteractionExpiry {
+			delete(interactionSessions, id)
+		}
+	}
 }
 
 func deployCommands(session *discordgo.Session, config config.Config) error {

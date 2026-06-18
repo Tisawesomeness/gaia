@@ -33,7 +33,7 @@ func TestCoreCommands(t *testing.T) {
 
 	t.Run("/help", coreTestCase(func(t *testing.T) {
 		ctx := NewMockContext(coreCE)
-		getCommand("help").handler(ctx)
+		ctx.RunCommand("help")
 		// Simply test that the bot sends one reply
 		assert.Equal(t, 1, len(ctx.replies))
 	}))
@@ -42,7 +42,7 @@ func TestCoreCommands(t *testing.T) {
 
 	t.Run("/credits", coreTestCase(func(t *testing.T) {
 		ctx := NewMockContext(coreCE)
-		getCommand("credits").handler(ctx)
+		ctx.RunCommand("credits")
 		// Simply test that the bot sends one reply
 		assert.Equal(t, 1, len(ctx.replies))
 	}))

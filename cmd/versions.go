@@ -1,16 +1,8 @@
 package cmd
 
 import (
-	"strings"
-	"time"
-
 	"github.com/Tisawesomeness/gaia/hytale"
 	"github.com/bwmarrin/discordgo"
-)
-
-const (
-	CleanupInterval   = 5 * time.Minute
-	InteractionExpiry = 30 * time.Minute
 )
 
 var (
@@ -59,24 +51,6 @@ var (
 		Description: "Get the latest Hytale article",
 	}
 )
-
-func StartInteractionCleanup() {
-	ticker := time.NewTicker(CleanupInterval)
-	go func() {
-		for range ticker.C {
-			cleanupOldInteractions()
-		}
-	}()
-}
-
-func cleanupOldInteractions() {
-	now := time.Now()
-	for id, interaction := range articleInteractions {
-		if now.Sub(interaction.LastUsed) > InteractionExpiry {
-			delete(articleInteractions, id)
-		}
-	}
-}
 
 func versionCommand(ctx CommandContext) {
 	options := ctx.Options()
@@ -133,13 +107,10 @@ func launcherCommand(ctx CommandContext) {
 }
 
 // Article browsing session state
-type ArticleInteraction struct {
+type ArticleState struct {
 	CurrentIndex int
 	Articles     []*hytale.Article
-	LastUsed     time.Time
 }
-
-var articleInteractions = make(map[string]*ArticleInteraction)
 
 func articlesCommand(ctx CommandContext) {
 	feed, exists := ctx.HytaleFeeds().Feeds[hytale.LauncherPostFeedType]
@@ -160,27 +131,32 @@ func articlesCommand(ctx CommandContext) {
 	}
 
 	interactionID := ctx.InteractionID()
-	articleInteractions[interactionID] = &ArticleInteraction{
+	ctx.NewInteraction(interactionID, &ArticleState{
 		CurrentIndex: 0,
 		Articles:     articles,
-		LastUsed:     time.Now(),
-	}
+	})
 
 	latestArticle := articles[0]
 	message := latestArticle.BuildMessage(ctx.Config())
+
+	customID := CustomID{
+		InteractionType: "article",
+		Action:          "",
+		SessionID:       interactionID,
+	}
 
 	// Note: going *back* in time means going *forward* in the articles array
 	buttons := []discordgo.MessageComponent{
 		discordgo.Button{
 			Label:    "Back",
 			Style:    discordgo.PrimaryButton,
-			CustomID: "article_back_" + interactionID,
+			CustomID: customID.WithAction("back").String(),
 			Disabled: len(articles) <= 1, // Disable if there's only one article
 		},
 		discordgo.Button{
 			Label:    "Forward",
 			Style:    discordgo.PrimaryButton,
-			CustomID: "article_forward_" + interactionID,
+			CustomID: customID.WithAction("forward").String(),
 			Disabled: true, // Disable if it's the first article
 		},
 	}
@@ -192,29 +168,22 @@ func articlesCommand(ctx CommandContext) {
 	})
 }
 
-func handleArticleButton(ctx CommandContext) {
-	customID := ctx.ComponentID()
-	interactionID := strings.TrimPrefix(customID, "article_back_")
-	interactionID = strings.TrimPrefix(interactionID, "article_forward_")
-
-	interaction, exists := articleInteractions[interactionID]
-	if !exists {
-		ctx.ReplyEphemeral("This interaction has expired.")
-		return
-	}
-
-	interaction.LastUsed = time.Now()
-
-	if strings.HasPrefix(customID, "article_back_") {
+func handleArticleButton(ctx CommandContext, state any) {
+	interaction := state.(*ArticleState)
+	customID := ctx.CustomID()
+	switch customID.Action {
+	case "back":
 		if interaction.CurrentIndex == len(interaction.Articles)-1 {
 			return // ignore invalid button press
 		}
 		interaction.CurrentIndex++
-	} else if strings.HasPrefix(customID, "article_forward_") {
+	case "forward":
 		if interaction.CurrentIndex == 0 {
 			return // ignore invalid button press
 		}
 		interaction.CurrentIndex--
+	default:
+		return // ignore unknown action
 	}
 
 	currentArticle := interaction.Articles[interaction.CurrentIndex]
@@ -226,13 +195,13 @@ func handleArticleButton(ctx CommandContext) {
 		discordgo.Button{
 			Label:    "Back",
 			Style:    discordgo.PrimaryButton,
-			CustomID: "article_back_" + interactionID,
+			CustomID: customID.WithAction("back").String(),
 			Disabled: interaction.CurrentIndex == len(interaction.Articles)-1,
 		},
 		discordgo.Button{
 			Label:    "Forward",
 			Style:    discordgo.PrimaryButton,
-			CustomID: "article_forward_" + interactionID,
+			CustomID: customID.WithAction("forward").String(),
 			Disabled: interaction.CurrentIndex == 0,
 		},
 	}

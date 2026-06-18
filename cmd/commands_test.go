@@ -77,10 +77,10 @@ type MockGuildData struct {
 type CommandContextMock struct {
 	*commandContext
 
-	id          string
-	guild       *MockGuildData
-	componentId string
-	options     OptionsMap
+	id       string
+	guild    *MockGuildData
+	customID string
+	options  OptionsMap
 
 	replies []*discordgo.InteractionResponseData
 	edits   []*discordgo.InteractionResponseData
@@ -90,14 +90,6 @@ const (
 	TEST_USER_ID  = "123456789012345678"
 	TEST_GUILD_ID = "876543210987654321"
 )
-
-func (ctx *CommandContextMock) InteractionID() string {
-	return ctx.id
-}
-
-func (ctx *CommandContextMock) ComponentID() string {
-	return ctx.componentId
-}
 
 func (ctx *CommandContextMock) Options() OptionsMap {
 	return ctx.options
@@ -135,6 +127,22 @@ func (ctx *CommandContextMock) GuildChannels(guildID string) ([]*discordgo.Chann
 		return result, nil
 	} else {
 		return []*discordgo.Channel{}, nil
+	}
+}
+
+func (ctx *CommandContextMock) InteractionID() string {
+	return ctx.id
+}
+
+func (ctx *CommandContextMock) CustomID() *CustomID {
+	return parseCustomID(ctx.customID)
+}
+
+func (ctx *CommandContextMock) NewInteraction(id string, state any) {
+	interactionSessions[id] = &InteractionSession{
+		State:    state,
+		UserID:   ctx.User().ID,
+		LastUsed: time.Now(),
 	}
 }
 
@@ -195,128 +203,139 @@ func NewMockContext(ce *CommandExecutor) *CommandContextMock {
 }
 
 // Selects the subcommand `name`
-func (c *CommandContextMock) WithOptionSubCommand(name string) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionSubCommand(name string) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name: name,
 		Type: discordgo.ApplicationCommandOptionSubCommand,
 	}
-	return c
+	return ctx
 }
 
 // Selects the subcommand group `name`
-func (c *CommandContextMock) WithOptionSubCommandGroup(name string) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionSubCommandGroup(name string) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name: name,
 		Type: discordgo.ApplicationCommandOptionSubCommandGroup,
 	}
-	return c
+	return ctx
 }
 
 // Selects a string option. Also used for choice/enum options.
-func (c *CommandContextMock) WithOptionString(name string, value string) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionString(name string, value string) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionString,
 		Value: value,
 	}
-	return c
+	return ctx
 }
 
 // Selects an integer option.
-func (c *CommandContextMock) WithOptionInteger(name string, value int64) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionInteger(name string, value int64) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionInteger,
 		Value: float64(value), // discordgo library expects float64 since that is what the json deserializes to
 	}
-	return c
+	return ctx
 }
 
 // Selects a boolean option.
-func (c *CommandContextMock) WithOptionBoolean(name string, value bool) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionBoolean(name string, value bool) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionBoolean,
 		Value: value,
 	}
-	return c
+	return ctx
 }
 
 // Selects a user option with the given ID.
-func (c *CommandContextMock) WithOptionUser(name string, userID string) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionUser(name string, userID string) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionUser,
 		Value: userID,
 	}
-	return c
+	return ctx
 }
 
 // Selects a channel option with the given ID.
-func (c *CommandContextMock) WithOptionChannel(name string, channelID string) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionChannel(name string, channelID string) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionChannel,
 		Value: channelID,
 	}
-	return c
+	return ctx
 }
 
 // Selects a role option with the given ID.
-func (c *CommandContextMock) WithOptionRole(name string, roleID string) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionRole(name string, roleID string) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionRole,
 		Value: roleID,
 	}
-	return c
+	return ctx
 }
 
 // Selects a user/role option with the given ID.
-func (c *CommandContextMock) WithOptionMentionable(name string, mentionableID string) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionMentionable(name string, mentionableID string) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionMentionable,
 		Value: mentionableID,
 	}
-	return c
+	return ctx
 }
 
 // Selects a floating-point option.
-func (c *CommandContextMock) WithOptionNumber(name string, value float64) *CommandContextMock {
-	c.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
+func (ctx *CommandContextMock) WithOptionNumber(name string, value float64) *CommandContextMock {
+	ctx.options[name] = &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionNumber,
 		Value: value,
 	}
-	return c
+	return ctx
 }
 
 // Causes the command to be run in a guild with the provided channel IDs.
-func (c *CommandContextMock) WithGuild(channelIDs ...string) *CommandContextMock {
+func (ctx *CommandContextMock) WithGuild(channelIDs ...string) *CommandContextMock {
 	if len(channelIDs) == 0 {
 		panic("channelIDs cannot be empty")
 	}
-	c.guild = &MockGuildData{
+	ctx.guild = &MockGuildData{
 		channelIDs: channelIDs,
 	}
-	return c
+	return ctx
 }
 
 // Simulates clicking a component with the given ID. Required when calling an interaction handler.
 //
 //	ctx := NewMockContext(ce)
-//	getCommand("example").handler(ctx) // Run /example
+//	ctx.RunCommand("example") // Run /example
 //	button := // Extract button from ctx.replies
 //
 //	componentID := button.CustomID
 //	ctx2 := NewMockContext(ce).WithComponent(componentID)
-//	getInteraction("paginated").handler(ctx) // Interact with component
-func (c *CommandContextMock) WithComponent(componentID string) *CommandContextMock {
-	c.componentId = componentID
-	return c
+//	ctx2.RunInteraction() // Interact with component
+func (ctx *CommandContextMock) WithComponent(componentID string) *CommandContextMock {
+	ctx.customID = componentID
+	return ctx
 }
 
 func randomID() string {
 	return fmt.Sprint(100_000_000_000_000_000 + rand.Int64N(900_000_000_000_000_000))
+}
+
+func (ctx *CommandContextMock) RunCommand(name string) {
+	handleCommand(ctx, name)
+}
+
+func (ctx *CommandContextMock) RunInteraction() {
+	if ctx.customID == "" {
+		panic("Custom ID cannot be empty")
+	}
+	handleInteraction(ctx)
 }

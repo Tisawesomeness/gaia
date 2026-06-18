@@ -69,7 +69,7 @@ func TestVersion(t *testing.T) {
 		setVersion(hytale.Client, hytale.Release, version)
 
 		ctx := NewMockContext(versionsCE).WithOptionSubCommand("client")
-		getCommand("version").handler(ctx)
+		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		embeds := ctx.replies[0].Embeds
@@ -86,7 +86,7 @@ func TestVersion(t *testing.T) {
 
 		ctx := NewMockContext(versionsCE).WithOptionSubCommand("client")
 		ctx = ctx.WithOptionString("patchline", "pre-release")
-		getCommand("version").handler(ctx)
+		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		embeds := ctx.replies[0].Embeds
@@ -102,7 +102,7 @@ func TestVersion(t *testing.T) {
 		setVersion(hytale.Server, hytale.Release, version)
 
 		ctx := NewMockContext(versionsCE).WithOptionSubCommand("server")
-		getCommand("version").handler(ctx)
+		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		embeds := ctx.replies[0].Embeds
@@ -119,7 +119,7 @@ func TestVersion(t *testing.T) {
 
 		ctx := NewMockContext(versionsCE).WithOptionSubCommand("server")
 		ctx = ctx.WithOptionString("patchline", "pre-release")
-		getCommand("version").handler(ctx)
+		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		embeds := ctx.replies[0].Embeds
@@ -133,7 +133,7 @@ func TestVersion(t *testing.T) {
 	t.Run("invalid patchline", versionsTestCase(func(t *testing.T) {
 		ctx := NewMockContext(versionsCE).WithOptionSubCommand("client")
 		ctx = ctx.WithOptionString("patchline", "invalid")
-		getCommand("version").handler(ctx)
+		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Contains(t, ctx.replies[0].Content, "Invalid patchline")
@@ -141,7 +141,7 @@ func TestVersion(t *testing.T) {
 
 	t.Run("missing feed", versionsTestCase(func(t *testing.T) {
 		ctx := NewMockContext(versionsCE).WithOptionSubCommand("client")
-		getCommand("version").handler(ctx)
+		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Contains(t, ctx.replies[0].Content, "Could not retrieve the latest Hytale version")
@@ -164,7 +164,7 @@ func TestLauncher(t *testing.T) {
 		setLauncherRelease(version)
 
 		ctx := NewMockContext(versionsCE)
-		getCommand("launcher").handler(ctx)
+		ctx.RunCommand("launcher")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Equal(t, 1, len(ctx.replies[0].Embeds))
@@ -175,7 +175,7 @@ func TestLauncher(t *testing.T) {
 
 	t.Run("/launcher missing feed", versionsTestCase(func(t *testing.T) {
 		ctx := NewMockContext(versionsCE)
-		getCommand("launcher").handler(ctx)
+		ctx.RunCommand("launcher")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Contains(t, ctx.replies[0].Content, "Could not retrieve the latest Hytale Launcher version")
@@ -224,7 +224,7 @@ func TestArticles(t *testing.T) {
 		setLauncherArticles(articles)
 
 		ctx := NewMockContext(versionsCE)
-		getCommand("articles").handler(ctx)
+		ctx.RunCommand("articles")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Contains(t, ctx.replies[0].Content, "No articles found.")
@@ -244,7 +244,7 @@ func TestArticles(t *testing.T) {
 		setLauncherArticles(articles)
 
 		ctx := NewMockContext(versionsCE)
-		getCommand("articles").handler(ctx)
+		ctx.RunCommand("articles")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Equal(t, 1, len(ctx.replies[0].Embeds))
@@ -270,15 +270,15 @@ func TestArticles(t *testing.T) {
 		setLauncherArticles(articles)
 
 		ctx := NewMockContext(versionsCE)
-		getCommand("articles").handler(ctx)
+		ctx.RunCommand("articles")
 		back, forward := extractButtons(ctx.replies[0].Components)
 
 		ctx2 := NewMockContext(versionsCE).WithComponent(back.CustomID)
-		getInteraction("articles").handler(ctx2)
+		ctx2.RunInteraction()
 		assert.Equal(t, 0, len(ctx2.edits)) // nothing changed
 
 		ctx3 := NewMockContext(versionsCE).WithComponent(forward.CustomID)
-		getInteraction("articles").handler(ctx3)
+		ctx3.RunInteraction()
 		assert.Equal(t, 0, len(ctx3.edits)) // nothing changed
 	}))
 
@@ -303,7 +303,7 @@ func TestArticles(t *testing.T) {
 
 		// Run /articles
 		ctx := NewMockContext(versionsCE)
-		getCommand("articles").handler(ctx)
+		ctx.RunCommand("articles")
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Equal(t, "Latest", ctx.replies[0].Embeds[0].Title)
 		back, forward := extractButtons(ctx.replies[0].Components)
@@ -312,7 +312,7 @@ func TestArticles(t *testing.T) {
 
 		// Click back
 		ctx2 := NewMockContext(versionsCE).WithComponent(back.CustomID)
-		getInteraction("articles").handler(ctx2)
+		ctx2.RunInteraction()
 		assert.Equal(t, 1, len(ctx2.edits))
 		assert.Equal(t, "Earlier", ctx2.edits[0].Embeds[0].Title)
 		back2, forward2 := extractButtons(ctx2.edits[0].Components)
@@ -321,7 +321,7 @@ func TestArticles(t *testing.T) {
 
 		// Click forward
 		ctx3 := NewMockContext(versionsCE).WithComponent(forward2.CustomID)
-		getInteraction("articles").handler(ctx3)
+		ctx3.RunInteraction()
 		assert.Equal(t, 1, len(ctx3.edits))
 		assert.Equal(t, "Latest", ctx3.edits[0].Embeds[0].Title)
 		back3, forward3 := extractButtons(ctx3.edits[0].Components)
@@ -356,7 +356,7 @@ func TestArticles(t *testing.T) {
 
 		// Run /articles
 		ctx := NewMockContext(versionsCE)
-		getCommand("articles").handler(ctx)
+		ctx.RunCommand("articles")
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Equal(t, "Latest", ctx.replies[0].Embeds[0].Title)
 		back, forward := extractButtons(ctx.replies[0].Components)
@@ -365,7 +365,7 @@ func TestArticles(t *testing.T) {
 
 		// Click back to Middle
 		ctx2 := NewMockContext(versionsCE).WithComponent(back.CustomID)
-		getInteraction("articles").handler(ctx2)
+		ctx2.RunInteraction()
 		assert.Equal(t, 1, len(ctx2.edits))
 		assert.Equal(t, "Middle", ctx2.edits[0].Embeds[0].Title)
 		back2, forward2 := extractButtons(ctx2.edits[0].Components)
@@ -374,7 +374,7 @@ func TestArticles(t *testing.T) {
 
 		// Click back again to Earliest (index 2)
 		ctx3 := NewMockContext(versionsCE).WithComponent(back2.CustomID)
-		getInteraction("articles").handler(ctx3)
+		ctx3.RunInteraction()
 		assert.Equal(t, 1, len(ctx3.edits))
 		assert.Equal(t, "Earliest", ctx3.edits[0].Embeds[0].Title)
 		back3, forward3 := extractButtons(ctx3.edits[0].Components)
@@ -383,7 +383,7 @@ func TestArticles(t *testing.T) {
 
 		// Click forward to Middle (index 1)
 		ctx4 := NewMockContext(versionsCE).WithComponent(forward3.CustomID)
-		getInteraction("articles").handler(ctx4)
+		ctx4.RunInteraction()
 		assert.Equal(t, 1, len(ctx4.edits))
 		assert.Equal(t, "Middle", ctx4.edits[0].Embeds[0].Title)
 		back4, forward4 := extractButtons(ctx4.edits[0].Components)
@@ -392,7 +392,7 @@ func TestArticles(t *testing.T) {
 
 		// Click forward again to Latest (index 0)
 		ctx5 := NewMockContext(versionsCE).WithComponent(forward4.CustomID)
-		getInteraction("articles").handler(ctx5)
+		ctx5.RunInteraction()
 		assert.Equal(t, 1, len(ctx5.edits))
 		assert.Equal(t, "Latest", ctx5.edits[0].Embeds[0].Title)
 		back5, forward5 := extractButtons(ctx5.edits[0].Components)

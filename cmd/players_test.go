@@ -88,7 +88,7 @@ func TestProfile(t *testing.T) {
 		registerUsername("tis", testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "tis")
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -102,7 +102,7 @@ func TestProfile(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid)
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -114,7 +114,7 @@ func TestProfile(t *testing.T) {
 
 	t.Run("/profile Invalid format", playersTestCase(func(t *testing.T) {
 		ctx := NewMockContext(playersCE).WithOptionString("player", "-")
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -124,7 +124,7 @@ func TestProfile(t *testing.T) {
 
 	t.Run("/profile Username too long", playersTestCase(func(t *testing.T) {
 		ctx := NewMockContext(playersCE).WithOptionString("player", "veryverylongusername")
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -136,7 +136,7 @@ func TestProfile(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+"errorPlayer", httpmock.NewStringResponder(500, ""))
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "errorPlayer")
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -148,7 +148,7 @@ func TestProfile(t *testing.T) {
 		registerUUID(invalidUuid, "")
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", invalidUuid)
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -160,7 +160,7 @@ func TestProfile(t *testing.T) {
 		registerUsernameUnused("nonexistent", hytale.Available)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "nonexistent")
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -174,7 +174,7 @@ func TestProfile(t *testing.T) {
 		registerUsernameUnused("reservedUser", hytale.Reserved)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "reservedUser")
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -188,7 +188,7 @@ func TestProfile(t *testing.T) {
 		registerUsernameUnused("badword", hytale.Prohibited)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "badword")
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -202,7 +202,7 @@ func TestProfile(t *testing.T) {
 		registerUsernameUnused("unknownStatus", hytale.Unknown)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "unknownStatus")
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -216,7 +216,7 @@ func TestProfile(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.Availability, httpmock.NewStringResponder(500, ""))
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "error")
-		getCommand("profile").handler(ctx)
+		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -232,7 +232,7 @@ func TestSkin(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid)
-		getCommand("skin").handler(ctx)
+		ctx.RunCommand("skin")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -259,7 +259,7 @@ func TestSkin(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponseNoSkin)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid)
-		getCommand("skin").handler(ctx)
+		ctx.RunCommand("skin")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -275,7 +275,7 @@ func TestSkin(t *testing.T) {
 		registerUsername("tis", testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "tis")
-		getCommand("skin").handler(ctx)
+		ctx.RunCommand("skin")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -292,7 +292,7 @@ func TestSkin(t *testing.T) {
 		registerUsername("tis", testutil.SampleProfileResponseExtra)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "tis")
-		getCommand("skin").handler(ctx)
+		ctx.RunCommand("skin")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -307,7 +307,7 @@ func TestSkin(t *testing.T) {
 
 	t.Run("/skin Invalid format", playersTestCase(func(t *testing.T) {
 		ctx := NewMockContext(playersCE).WithOptionString("player", "-")
-		getCommand("skin").handler(ctx)
+		ctx.RunCommand("skin")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -317,7 +317,7 @@ func TestSkin(t *testing.T) {
 
 	t.Run("/skin Username too long", playersTestCase(func(t *testing.T) {
 		ctx := NewMockContext(playersCE).WithOptionString("player", "veryverylongusername")
-		getCommand("skin").handler(ctx)
+		ctx.RunCommand("skin")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -329,7 +329,7 @@ func TestSkin(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+"errorPlayer", httpmock.NewStringResponder(500, ""))
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "errorPlayer")
-		getCommand("skin").handler(ctx)
+		ctx.RunCommand("skin")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -341,7 +341,7 @@ func TestSkin(t *testing.T) {
 		registerUUID(invalidUuid, "")
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", invalidUuid)
-		getCommand("skin").handler(ctx)
+		ctx.RunCommand("skin")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -353,7 +353,7 @@ func TestSkin(t *testing.T) {
 		registerUsernameUnused("doesnotexist", hytale.Available)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "doesnotexist")
-		getCommand("skin").handler(ctx)
+		ctx.RunCommand("skin")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -369,7 +369,7 @@ func TestRender(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid)
-		getCommand("head").handler(ctx)
+		ctx.RunCommand("head")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -380,7 +380,7 @@ func TestRender(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid).WithOptionInteger("size", 2048).WithOptionInteger("rotate", 90)
-		getCommand("head").handler(ctx)
+		ctx.RunCommand("head")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -394,7 +394,7 @@ func TestRender(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid).WithOptionInteger("size", 1024)
-		getCommand("head").handler(ctx)
+		ctx.RunCommand("head")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -407,7 +407,7 @@ func TestRender(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid).WithOptionInteger("rotate", 180)
-		getCommand("head").handler(ctx)
+		ctx.RunCommand("head")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -420,7 +420,7 @@ func TestRender(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid)
-		getCommand("body").handler(ctx)
+		ctx.RunCommand("body")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -431,7 +431,7 @@ func TestRender(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponseCape)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid)
-		getCommand("cape").handler(ctx)
+		ctx.RunCommand("cape")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
@@ -442,7 +442,7 @@ func TestRender(t *testing.T) {
 		registerUUID(testUuid, testutil.SampleProfileResponse)
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", testUuid)
-		getCommand("cape").handler(ctx)
+		ctx.RunCommand("cape")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
