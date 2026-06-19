@@ -60,11 +60,11 @@ func setupMockClient(t *testing.T) *http.Client {
 func assertKratosSession(t *testing.T, http *http.Client) {
 	url, _ := url.Parse("http://mock.kratos")
 	for _, cookie := range http.Jar.Cookies(url) {
-		if cookie.Name == "ory_kratos_session" {
+		if cookie.Name == KratosSessionCookie {
 			return
 		}
 	}
-	t.Error("Could not find ory_kratos_session cookie")
+	t.Error("Could not find " + KratosSessionCookie + " cookie")
 }
 
 func TestKratos(t *testing.T) {

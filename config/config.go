@@ -44,9 +44,9 @@ type BrandingConfig struct {
 }
 
 type KratosConfig struct {
-	RenewalHours    int           `json:"renewal_hours"`
-	Breaker         BreakerConfig `json:"breaker"`
-	AccountsBackend string        `json:"accounts_backend"`
+	RenewalBufferSeconds int           `json:"renewal_buffer_seconds"`
+	Breaker              BreakerConfig `json:"breaker"`
+	AccountsBackend      string        `json:"accounts_backend"`
 }
 
 type AuthConfig struct {

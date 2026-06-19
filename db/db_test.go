@@ -340,30 +340,28 @@ func TestDB(t *testing.T) {
 		}
 	}))
 
-	t.Run("set get kratos refresh", testCase(func(t *testing.T) {
-		refreshTime := time.Now().Add(time.Minute)
-		err := testDB.SetKratosRefresh(refreshTime)
+	t.Run("get kratos cookies when set", testCase(func(t *testing.T) {
+		cookies := "csrf_token=123456"
+		err := testDB.SetKratosCookies(cookies)
 		if err != nil {
 			t.Fatal(err)
 		}
-		result, err := testDB.GetKratosRefresh()
+		result, err := testDB.GetKratosCookies()
 		if err != nil {
 			t.Fatal(err)
 		}
-		expectedUnix := refreshTime.Unix()
-		actualUnix := result.Unix()
-		if expectedUnix != actualUnix {
-			t.Errorf("Got unix %d, want %d", actualUnix, expectedUnix)
+		if result != cookies {
+			t.Errorf("Got %q, want %s", result, cookies)
 		}
 	}))
 
-	t.Run("get kratos refresh returns nil when not set", testCase(func(t *testing.T) {
-		result, err := testDB.GetKratosRefresh()
+	t.Run("get kratos cookies returns empty when not set", testCase(func(t *testing.T) {
+		result, err := testDB.GetKratosCookies()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if result != nil {
-			t.Error("expected nil when not set")
+		if result != "" {
+			t.Errorf("Got %q, want empty", result)
 		}
 	}))
 

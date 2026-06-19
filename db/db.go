@@ -297,33 +297,28 @@ func (db DB) SetGameSession(sessionToken GameSessionToken) error {
 	return db.v.Do(context.Background(), command).Error()
 }
 
-// May return nil!
-func (db DB) GetKratosRefresh() (*time.Time, error) {
-	// get kratos_refresh
-	command := db.v.B().Get().Key("kratos_refresh").Build()
+// May return empty!
+func (db DB) GetKratosCookies() (string, error) {
+	// get kratos_cookies
+	command := db.v.B().Get().Key("kratos_cookies").Build()
 	resp := db.v.Do(context.Background(), command)
 	err := resp.Error()
 	if err != nil {
 		if valkey.IsValkeyNil(err) {
-			return nil, nil
+			return "", nil
 		}
-		return nil, err
+		return "", err
 	}
 	raw, err := resp.AsBytes()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	refreshUnix, err := strconv.ParseInt(string(raw), 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	refreshTime := time.Unix(refreshUnix, 0)
-	return &refreshTime, nil
+	return string(raw), nil
 }
 
-func (db DB) SetKratosRefresh(refresh time.Time) error {
-	// set kratos_refresh <refresh>
-	command := db.v.B().Set().Key("kratos_refresh").Value(strconv.FormatInt(refresh.Unix(), 10)).Build()
+func (db DB) SetKratosCookies(cookies string) error {
+	// set kratos_cookies <cookies>
+	command := db.v.B().Set().Key("kratos_cookies").Value(cookies).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 

@@ -14,6 +14,8 @@ import (
 	"github.com/pquerna/otp/totp"
 )
 
+const KratosSessionCookie = "ory_kratos_session"
+
 func extractFlowID(url string) (string, error) {
 	re := regexp.MustCompile(`flow=([a-f0-9-]+)`)
 	matches := re.FindStringSubmatch(url)
@@ -137,7 +139,7 @@ func submit2FA(flowID string, config *config.Config, httpClient *http.Client) er
 	}
 
 	for _, cookie := range httpClient.Jar.Cookies(finalURL) {
-		if cookie.Name == "ory_kratos_session" {
+		if cookie.Name == KratosSessionCookie {
 			return nil
 		}
 	}

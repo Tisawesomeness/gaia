@@ -111,6 +111,14 @@ func NewBadResponseError(description string, resp *http.Response) error {
 	}
 }
 
+func AsCookieHeader(cookies []*http.Cookie) string {
+	cookieStrings := make([]string, len(cookies))
+	for i, cookie := range cookies {
+		cookieStrings[i] = cookie.String()
+	}
+	return strings.Join(cookieStrings, "; ")
+}
+
 // Wraps an angle in degrees to a value between 0 and 359.
 func WrapDegrees(degrees int) int {
 	if degrees >= 0 {

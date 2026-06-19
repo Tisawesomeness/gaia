@@ -5,18 +5,26 @@ import (
 	"log"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"sync"
 	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/util"
+	tld "github.com/jpillora/go-tld"
 )
 
 // Keeps an OAuth and Hytale game session up-to-date by scheduling refreshes shortly before expiry.
 type AuthStore interface {
+	// Retrieves the current OAuth access token.
+	// Returns an error if the token is expired, as the background task should keep it up-to-date.
 	GetOAuthToken() (string, error)
+	// Retrieves the current game session token.
+	// Returns an error if the token is expired, as the background task should keep it up-to-date.
 	GetGameSessionToken() (string, error)
+	// Returns the HTTP client with Kratos login cookies stored, and whether it exists.
+	// Must ONLY be used for the hytale.com domain, since this HTTP client does not separate cookies by domain.
 	GetKratosClient() (*http.Client, bool)
 }
 
@@ -37,12 +45,15 @@ type authStore struct {
 	kratosRefreshTimer *time.Timer
 }
 
-var expiredOAuthError = errors.New("Expired OAuth")
-var expiredGameSessionError = errors.New("Expired game session")
+var (
+	expiredOAuthError       = errors.New("Expired OAuth")
+	expiredGameSessionError = errors.New("Expired game session")
+	expiredKratosError      = errors.New("Expired Kratos")
+)
 
-// Authenticates to Hytale OAuth and creates a game session.
+// Authenticates to Hytale OAuth, creates a game session, and authenticates to Kratos auth (if configured).
 // Will resume from tokens stored in database if available.
-// Otherwise, asks the user to complete the OAuth flow.
+// Otherwise, asks the bot admin to complete the OAuth flow.
 func NewAuthStore(config *config.Config, db *db.DB, httpClient *http.Client) (AuthStore, error) {
 	store := &authStore{
 		config:     config,
@@ -65,9 +76,8 @@ func (a *authStore) initialize() error {
 		return err
 	}
 
-	var kratosRefresh *time.Time
 	if a.config.Credentials.HytaleEmail != "" && a.config.Credentials.HytalePassword != "" {
-		kratosRefresh, err = a.initKratos()
+		err = a.initKratos()
 		if err != nil {
 			log.Printf("Could not init Kratos: %v", err)
 		}
@@ -75,8 +85,8 @@ func (a *authStore) initialize() error {
 
 	a.scheduleOAuthRefresh()
 	a.scheduleGameSessionRefresh()
-	if a.kratosClient != nil && kratosRefresh != nil {
-		a.scheduleKratosRefresh(kratosRefresh)
+	if a.kratosClient != nil {
+		a.scheduleKratosRefresh()
 	}
 	return nil
 }
@@ -127,59 +137,25 @@ func (a *authStore) initSessions() error {
 	return nil
 }
 
-func (a *authStore) initKratos() (*time.Time, error) {
-	kratosClient, err := initHTTPWithCookies(a.config)
+func (a *authStore) initKratos() error {
+	kratosClient, err := a.initializeFreshKratos()
 	if err != nil {
-		return nil, err
-	}
-	a.kratosClient = kratosClient
-
-	kratosRefresh, err := a.db.GetKratosRefresh()
-	if err == nil && kratosRefresh != nil {
-		log.Println("Found Kratos session")
-		if !time.Now().After(*kratosRefresh) {
-			return kratosRefresh, nil
+		if errors.Is(err, expiredKratosError) {
+			log.Println("Kratos session expired, starting new flow...")
 		} else {
-			log.Println("Kratos session expired")
+			log.Printf("Failed to initialize Kratos: %v", err)
+			log.Println("Starting new Kratos flow...")
 		}
-	}
 
-	newKratosRefresh, err := a.kratosLoginAndStore(kratosClient)
-	if err != nil {
-		return nil, err
+		newKratosClient, err := a.kratosLoginAndStore()
+		if err != nil {
+			return err
+		}
+		a.kratosClient = newKratosClient
+	} else {
+		a.kratosClient = kratosClient
 	}
-	return newKratosRefresh, nil
-}
-
-func (a *authStore) kratosLoginAndStore(kratosClient *http.Client) (*time.Time, error) {
-	log.Println("Starting Kratos login...")
-	err := KratosLogin(a.config, kratosClient)
-	if err != nil {
-		return nil, err
-	}
-	log.Println("Kratos login successful")
-
-	kratosRefresh := time.Now().Add(time.Duration(a.config.Kratos.RenewalHours) * time.Hour)
-	err = a.db.SetKratosRefresh(kratosRefresh)
-	if err != nil {
-		return nil, err
-	}
-	return &kratosRefresh, nil
-}
-
-func initHTTPWithCookies(config *config.Config) (*http.Client, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, err
-	}
-	tr := &http.Transport{
-		MaxIdleConns: config.HTTP.MaxIdleConns,
-	}
-	return &http.Client{
-		Transport: tr,
-		Timeout:   time.Duration(config.HTTP.Timeout) * time.Second,
-		Jar:       jar,
-	}, nil
+	return nil
 }
 
 // Attempts to initialize the OAuth token directly from storage
@@ -244,6 +220,40 @@ func (a *authStore) initializeProfile(oAuthToken db.OAuthToken) (string, error) 
 		log.Printf("Found stored profile: %s", storedUUID)
 		return storedUUID, nil
 	}
+}
+
+func (a *authStore) initializeFreshKratos() (*http.Client, error) {
+	kratosClient, err := initHTTPWithCookies(a.config)
+	if err != nil {
+		return nil, err
+	}
+	baseUrl, err := a.baseHytaleUrl()
+	if err != nil {
+		return nil, err
+	}
+
+	storedKratosCookies, err := a.db.GetKratosCookies()
+	if err != nil || storedKratosCookies == "" {
+		return nil, errors.New("No stored Kratos cookies found")
+	}
+	log.Println("Found stored Kratos cookies")
+
+	cookies, err := http.ParseCookie(storedKratosCookies)
+	if err != nil {
+		return nil, err
+	}
+	kratosClient.Jar.SetCookies(baseUrl, cookies)
+
+	expiry := a.kratosExpiry(kratosClient)
+	if expiry == nil || time.Now().After(*expiry) {
+		return nil, expiredKratosError
+	}
+	err = a.ensureKratosRefreshed(kratosClient)
+	if err != nil {
+		return nil, err
+	}
+
+	return kratosClient, nil
 }
 
 func (a authStore) performOAuthAndStore() (db.OAuthToken, error) {
@@ -316,6 +326,32 @@ func (a authStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUU
 	return session, nil
 }
 
+func (a authStore) kratosLoginAndStore() (*http.Client, error) {
+	kratosClient, err := initHTTPWithCookies(a.config)
+	if err != nil {
+		return nil, err
+	}
+	baseUrl, err := a.baseHytaleUrl()
+	if err != nil {
+		return nil, err
+	}
+
+	log.Println("Starting Kratos login...")
+	err = KratosLogin(a.config, kratosClient)
+	if err != nil {
+		return nil, err
+	}
+	log.Println("Kratos login successful")
+
+	cookies := kratosClient.Jar.Cookies(baseUrl)
+	err = a.db.SetKratosCookies(util.AsCookieHeader(cookies))
+	if err != nil {
+		return nil, err
+	}
+
+	return kratosClient, nil
+}
+
 // Refreshes the token if expired, otherwise returns the original token
 func (a authStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
 	if time.Now().Add(time.Duration(a.config.Auth.OAuthRefreshBuffer) * time.Second).After(oAuthToken.ExpiresAt) {
@@ -377,6 +413,39 @@ func (a authStore) refreshGameSessionAndStore(gameSession db.GameSessionToken, p
 	}
 
 	return session, nil
+}
+
+func (a authStore) ensureKratosRefreshed(kratosClient *http.Client) error {
+	var expiresAt time.Time
+	expiry := a.kratosExpiry(a.kratosClient)
+	if expiry == nil {
+		expiresAt = time.Now()
+	} else {
+		expiresAt = *expiry
+	}
+
+	if time.Now().Add(time.Duration(a.config.Kratos.RenewalBufferSeconds) * time.Second).After(expiresAt) {
+		return a.refreshKratosAndStore(kratosClient)
+	}
+	return nil
+}
+
+func (a authStore) refreshKratosAndStore(kratosClient *http.Client) error {
+	baseUrl, err := a.baseHytaleUrl()
+	if err != nil {
+		return err
+	}
+
+	log.Println("Refreshing Kratos...")
+	err = KratosLogin(a.config, a.kratosClient)
+	if err != nil {
+		return err
+	}
+
+	cookies := kratosClient.Jar.Cookies(baseUrl)
+	err = a.db.SetKratosCookies(util.AsCookieHeader(cookies))
+
+	return nil
 }
 
 func (a *authStore) scheduleOAuthRefresh() {
@@ -451,22 +520,72 @@ func (a *authStore) scheduleGameSessionRefresh() {
 	})
 }
 
-func (a *authStore) scheduleKratosRefresh(refreshAt *time.Time) {
-	timeUntilRefresh := max(time.Until(*refreshAt), 0)
+func (a *authStore) scheduleKratosRefresh() {
+	var expiresAt time.Time
+	expiry := a.kratosExpiry(a.kratosClient)
+	if expiry == nil {
+		expiresAt = time.Now()
+	} else {
+		expiresAt = *expiry
+	}
+
+	timeUntilRefresh := max(time.Until(expiresAt)-time.Duration(a.config.Kratos.RenewalBufferSeconds)*time.Second, 0)
 
 	a.kratosRefreshTimer = time.AfterFunc(timeUntilRefresh, func() {
-		err := KratosLogin(a.config, a.kratosClient)
+		err := a.ensureKratosRefreshed(a.kratosClient)
 		if err != nil {
-			log.Printf("Error refreshing Kratos: %v", err)
+			util.DiscordLogf(a.config, a.httpClient, "Error refreshing Kratos: %v", err)
+			return
 		}
 
-		refreshTime := time.Now().Add(time.Duration(a.config.Kratos.RenewalHours) * time.Hour)
-		a.scheduleKratosRefresh(&refreshTime)
+		a.scheduleKratosRefresh()
 	})
 }
 
-// Retrieves the current OAuth access token.
-// Returns an error if the token is expired, as the background task should keep it up-to-date.
+func initHTTPWithCookies(config *config.Config) (*http.Client, error) {
+	// No PublicSuffixList is OK as long as client obeys instructions
+	// to only use for hytale.com domain
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+	tr := &http.Transport{
+		MaxIdleConns: config.HTTP.MaxIdleConns,
+	}
+	return &http.Client{
+		Transport: tr,
+		Timeout:   time.Duration(config.HTTP.Timeout) * time.Second,
+		Jar:       jar,
+	}, nil
+}
+
+func (a *authStore) baseHytaleUrl() (*url.URL, error) {
+	parsed, err := tld.Parse(a.config.Kratos.AccountsBackend)
+	if err != nil {
+		return nil, err
+	}
+	return &url.URL{
+		Scheme: "https",
+		Host:   parsed.Domain + "." + parsed.TLD,
+	}, nil
+}
+
+func (a *authStore) kratosExpiry(kratosClient *http.Client) *time.Time {
+	baseUrl, err := a.baseHytaleUrl()
+	if err != nil {
+		return nil
+	}
+	cookies := kratosClient.Jar.Cookies(baseUrl)
+	for _, cookie := range cookies {
+		if cookie.Name == KratosSessionCookie {
+			// While server can send either Max-Age or Expires,
+			// Go's default HTTP client always sets the Expires field
+			return &cookie.Expires
+		}
+	}
+	return nil
+}
+
 func (a *authStore) GetOAuthToken() (string, error) {
 	a.tokenMutex.Lock()
 	defer a.tokenMutex.Unlock()
@@ -478,8 +597,6 @@ func (a *authStore) GetOAuthToken() (string, error) {
 	return a.oauthToken.AccessToken, nil
 }
 
-// Retrieves the current game session token.
-// Returns an error if the token is expired, as the background task should keep it up-to-date.
 func (a *authStore) GetGameSessionToken() (string, error) {
 	a.tokenMutex.Lock()
 	defer a.tokenMutex.Unlock()
@@ -491,7 +608,6 @@ func (a *authStore) GetGameSessionToken() (string, error) {
 	return a.gameSession.SessionToken, nil
 }
 
-// Returns the HTTP client with Kratos login cookies stored, and whether it exists
 func (a *authStore) GetKratosClient() (*http.Client, bool) {
 	return a.kratosClient, a.kratosClient != nil
 }
