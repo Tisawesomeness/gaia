@@ -131,10 +131,15 @@ func submit2FA(flowID string, config *config.Config, httpClient *http.Client) er
 	}
 
 	// A successful login redirects to the account settings page
-	finalURL := resp.Request.URL.String()
-	if !strings.Contains(finalURL, "/settings") {
+	finalURL := resp.Request.URL
+	if !strings.Contains(finalURL.String(), "/settings") {
 		return fmt.Errorf("Bad login, ended up at %s", finalURL)
 	}
 
-	return nil
+	for _, cookie := range httpClient.Jar.Cookies(finalURL) {
+		if cookie.Name == "ory_kratos_session" {
+			return nil
+		}
+	}
+	return errors.New("Missing session cookie")
 }

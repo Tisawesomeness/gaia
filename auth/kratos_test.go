@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"testing"
 	"time"
 
@@ -56,6 +57,16 @@ func setupMockClient(t *testing.T) *http.Client {
 	return mockClient
 }
 
+func assertKratosSession(t *testing.T, http *http.Client) {
+	url, _ := url.Parse("http://mock.kratos")
+	for _, cookie := range http.Jar.Cookies(url) {
+		if cookie.Name == "ory_kratos_session" {
+			return
+		}
+	}
+	t.Error("Could not find ory_kratos_session cookie")
+}
+
 func TestKratos(t *testing.T) {
 	config := &config.Config{
 		Credentials: config.CredentialsConfig{
@@ -96,15 +107,18 @@ func TestKratos(t *testing.T) {
 			testutil.WithRequest(loginFlowResponder("http://mock.kratos/example-login-page?flow=2fapage", "http://mock.kratos/settings/public/uid/testuser")),
 		)
 
-		// Finish: Return settings page
+		// Finish: Return settings page with login cookie
 		httpmock.RegisterResponder(
 			"GET",
 			"http://mock.kratos/settings/public/uid/testuser",
-			testutil.WithRequest(httpmock.NewStringResponder(200, "<html><body>you did it</body></html>")),
+			testutil.WithRequest(httpmock.NewStringResponder(200, "<html><body>you did it</body></html>").HeaderSet(http.Header{
+				"Set-Cookie": []string{"ory_kratos_session=eyJhb; Path=/"},
+			})),
 		)
 
 		err := KratosLogin(config, mockClient)
 		assert.NoError(t, err)
+		assertKratosSession(t, mockClient)
 	})
 
 	t.Run("fails when httpClient has no cookiejar", func(t *testing.T) {
@@ -292,5 +306,44 @@ func TestKratos(t *testing.T) {
 
 		err := KratosLogin(config, mockClient)
 		assert.ErrorContains(t, err, "Bad login")
+	})
+
+	t.Run("fails when login does not set session cookie", func(t *testing.T) {
+		mockClient := setupMockClient(t)
+
+		// Step 1a: Redirect to login page
+		httpmock.RegisterResponder(
+			"GET",
+			"http://mock.kratos/self-service/login/browser",
+			testutil.WithRequest(httpmock.NewStringResponder(302, "").HeaderSet(http.Header{
+				"Location": []string{"http://mock.kratos/example-login-page?flow=abc123-def456"},
+			})),
+		)
+
+		// Step 1b: Return login page with CSRF token
+		httpmock.RegisterResponder(
+			"GET",
+			"http://mock.kratos/example-login-page",
+			testutil.WithRequest(httpmock.NewStringResponder(200, "").HeaderSet(http.Header{
+				"Set-Cookie": []string{"csrf_token=123456"},
+			})),
+		)
+
+		// Step 2-3: Form submission (password and 2FA)
+		httpmock.RegisterResponder(
+			"POST",
+			"http://mock.kratos/self-service/login",
+			testutil.WithRequest(loginFlowResponder("http://mock.kratos/example-login-page?flow=2fapage", "http://mock.kratos/settings/public/uid/testuser")),
+		)
+
+		// Finish: Return settings page WITHOUT login cookie
+		httpmock.RegisterResponder(
+			"GET",
+			"http://mock.kratos/settings/public/uid/testuser",
+			testutil.WithRequest(httpmock.NewStringResponder(200, "<html><body>you did it</body></html>")),
+		)
+
+		err := KratosLogin(config, mockClient)
+		assert.ErrorContains(t, err, "Missing session cookie")
 	})
 }
