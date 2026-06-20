@@ -59,6 +59,11 @@ func (t TestAuthStore) GetKratosClient() (*http.Client, bool) {
 	return t.HTTPClient, t.HTTPClient != nil
 }
 
+// SaveKratosClient implements [AuthStore].
+func (t TestAuthStore) SaveKratosClient() error {
+	return nil
+}
+
 func NewTestAuthStore(http *http.Client) TestAuthStore {
 	return TestAuthStore{
 		OAuthToken:       "sample",

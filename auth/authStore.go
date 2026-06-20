@@ -26,6 +26,9 @@ type AuthStore interface {
 	// Returns the HTTP client with Kratos login cookies stored, and whether it exists.
 	// Must ONLY be used for the hytale.com domain, since this HTTP client does not separate cookies by domain.
 	GetKratosClient() (*http.Client, bool)
+	// Saves the Kratos client cookies to restore later.
+	// Does nothing if Kratos is not enabled.
+	SaveKratosClient() error
 }
 
 type authStore struct {
@@ -610,4 +613,16 @@ func (a *authStore) GetGameSessionToken() (string, error) {
 
 func (a *authStore) GetKratosClient() (*http.Client, bool) {
 	return a.kratosClient, a.kratosClient != nil
+}
+
+func (a *authStore) SaveKratosClient() error {
+	baseUrl, err := a.baseHytaleUrl()
+	if err != nil {
+		return nil
+	}
+	if a.kratosClient != nil {
+		cookies := a.kratosClient.Jar.Cookies(baseUrl)
+		return a.db.SetKratosCookies(util.AsCookieHeader(cookies))
+	}
+	return nil
 }
