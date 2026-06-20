@@ -26,11 +26,6 @@ var (
 		"expires_in": 20
 	}`
 
-	sampleTokenErrorResponse = `{
-		"error": "access_denied",
-		"error_description": "User denied access"
-	}`
-
 	sampleLauncherResponse = `{
 		"owner": "owner",
 		"profiles": [
@@ -44,11 +39,47 @@ var (
 	sampleGameSessionResponse = `{
 		"sessionToken": "test-session-token",
 		"identityToken": "test-identity-token",
-		"expiresAt": "2024-01-01T00:00:00Z"
+		"expiresAt": "` + time.Now().Add(time.Hour).Format(time.RFC3339Nano) + `"
 	}`
 
 	testUuid = "99c08079-3875-4aec-b329-34c4c88edc5a"
 )
+
+func registerOAuthSuccess(config *config.Config) {
+	httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(200, sampleDeviceAuthResponse))
+	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(200, sampleTokenResponse))
+}
+func registerOAuthFailure(config *config.Config) {
+	httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(500, ""))
+}
+
+func registerOAuthRefreshSuccess(config *config.Config) {
+	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(200, sampleTokenResponse))
+}
+func registerTokenFailure(config *config.Config) {
+	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
+}
+
+func registerProfilesSuccess(config *config.Config) {
+	httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(200, sampleLauncherResponse))
+}
+func registerProfilesFailure(config *config.Config) {
+	httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
+}
+
+func registerGameSessionSuccess(config *config.Config) {
+	httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(200, sampleGameSessionResponse))
+}
+func registerGameSessionFailure(config *config.Config) {
+	httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(500, ""))
+}
+
+func registerGameSessionRefreshSuccess(config *config.Config) {
+	httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(200, sampleGameSessionResponse))
+}
+func registerGameSessionRefreshFailure(config *config.Config) {
+	httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(500, ""))
+}
 
 func TestAuth(t *testing.T) {
 	if testing.Short() {
@@ -72,51 +103,12 @@ func TestAuth(t *testing.T) {
 		},
 	}
 
-	t.Run("StartDeviceAuth_Success", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(200, sampleDeviceAuthResponse))
+	t.Run("OAuthDeviceFlow_Success", func(t *testing.T) {
+		registerOAuthSuccess(config)
 
-		resp, err := startDeviceAuth(config, httpClient)
+		token, err := OAuthDeviceFlow(config, httpClient)
 		if err != nil {
-			t.Fatalf("startDeviceAuth failed: %v", err)
-		}
-
-		if resp.DeviceCode != "test-device-code" {
-			t.Errorf("expected DeviceCode=test-device-code, got %s", resp.DeviceCode)
-		}
-		if resp.UserCode != "ABCD" {
-			t.Errorf("expected UserCode=ABCD, got %s", resp.UserCode)
-		}
-	})
-
-	t.Run("StartDeviceAuth_BadResponse", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(400, ""))
-
-		_, err := startDeviceAuth(config, httpClient)
-		if err == nil {
-			t.Fatalf("expected error for bad response")
-		}
-	})
-
-	t.Run("StartDeviceAuth_ServerError", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(500, ""))
-
-		_, err := startDeviceAuth(config, httpClient)
-		if err == nil {
-			t.Fatalf("expected error for server error")
-		}
-	})
-
-	t.Run("PollForToken_Success", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.Token,
-			httpmock.NewStringResponder(200, sampleTokenErrorResponse))
-		httpmock.RegisterResponder("POST", config.Auth.Token,
-			httpmock.NewStringResponder(200, sampleTokenResponse))
-
-		response := defaultDeviceAuthResponse()
-
-		token, err := pollForToken(response, config, httpClient)
-		if err != nil {
-			t.Fatalf("pollForToken failed: %v", err)
+			t.Fatalf("OAuthDeviceFlow failed: %v", err)
 		}
 
 		if token.AccessToken != "test-access-token" {
@@ -124,7 +116,26 @@ func TestAuth(t *testing.T) {
 		}
 	})
 
-	t.Run("PollForToken_400Then401", func(t *testing.T) {
+	t.Run("OAuthDeviceFlow_BadResponse", func(t *testing.T) {
+		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(400, ""))
+
+		_, err := OAuthDeviceFlow(config, httpClient)
+		if err == nil {
+			t.Fatalf("expected error for bad response")
+		}
+	})
+
+	t.Run("OAuthDeviceFlow_ServerError", func(t *testing.T) {
+		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(500, ""))
+
+		_, err := OAuthDeviceFlow(config, httpClient)
+		if err == nil {
+			t.Fatalf("expected error for server error")
+		}
+	})
+
+	t.Run("OAuthDeviceFlow_400Then401", func(t *testing.T) {
+		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(200, sampleDeviceAuthResponse))
 		// Create a responder that tracks call count and returns appropriate responses
 		responseCount := 0
 		httpmock.RegisterResponder("POST", config.Auth.Token, func(req *http.Request) (*http.Response, error) {
@@ -143,47 +154,38 @@ func TestAuth(t *testing.T) {
 			}`), nil
 		})
 
-		response := defaultDeviceAuthResponse()
-		response.Interval = 1 // Faster polling for tests
-
-		_, err := pollForToken(response, config, httpClient)
+		_, err := OAuthDeviceFlow(config, httpClient)
 		if err == nil {
 			t.Fatalf("expected error")
 		}
 	})
 
-	t.Run("PollForToken_500ServerError", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.Token,
-			httpmock.NewStringResponder(500, ""))
+	t.Run("OAuthDeviceFlow_500ServerError", func(t *testing.T) {
+		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(200, sampleDeviceAuthResponse))
+		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
 
-		response := defaultDeviceAuthResponse()
-
-		_, err := pollForToken(response, config, httpClient)
+		_, err := OAuthDeviceFlow(config, httpClient)
 		if err == nil {
 			t.Fatalf("expected error for server error")
 		}
 	})
 
-	t.Run("PollForToken_Timeout", func(t *testing.T) {
+	t.Run("OAuthDeviceFlow_Timeout", func(t *testing.T) {
+		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(200, sampleDeviceAuthResponse))
 		// Simulate authorization_pending forever to trigger timeout
-		httpmock.RegisterResponder("POST", config.Auth.Token,
-			httpmock.NewStringResponder(200, `{
-				"error": "authorization_pending",
-				"error_description": "Please wait before polling"
-			}`))
+		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(200, `{
+			"error": "authorization_pending",
+			"error_description": "Please wait before polling"
+		}`))
 
-		response := defaultDeviceAuthResponse()
-		response.Interval = 1
-		response.ExpiresIn = 3
-
-		_, err := pollForToken(response, config, httpClient)
+		_, err := OAuthDeviceFlow(config, httpClient)
 		if err == nil {
 			t.Fatalf("expected timeout error")
 		}
 	})
 
 	t.Run("OAuthRefresh_Success", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(200, sampleTokenResponse))
+		registerOAuthRefreshSuccess(config)
 
 		token, err := OAuthRefresh("test-refresh-token", config, httpClient)
 		if err != nil {
@@ -218,8 +220,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("GetAccountProfiles_Success", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Auth.Profiles,
-			httpmock.NewStringResponder(200, sampleLauncherResponse))
+		registerProfilesSuccess(config)
 
 		result, err := GetAccountProfiles("Bearer test-access-token", config, httpClient)
 		if err != nil {
@@ -235,8 +236,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("GetAccountProfiles_401", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Auth.Profiles,
-			httpmock.NewStringResponder(401, ""))
+		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(401, ""))
 
 		_, err := GetAccountProfiles("Bearer test-access-token", config, httpClient)
 		if err == nil {
@@ -245,8 +245,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("GetAccountProfiles_500", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Auth.Profiles,
-			httpmock.NewStringResponder(500, ""))
+		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
 
 		_, err := GetAccountProfiles("Bearer test-access-token", config, httpClient)
 		if err == nil {
@@ -255,8 +254,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("CreateGameSession_Success", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.CreateGameSession,
-			httpmock.NewStringResponder(200, sampleGameSessionResponse))
+		registerGameSessionSuccess(config)
 
 		session, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
 		if err != nil {
@@ -269,8 +267,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("CreateGameSession_401", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.CreateGameSession,
-			httpmock.NewStringResponder(401, ""))
+		httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(401, ""))
 
 		_, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
 		if err == nil {
@@ -279,8 +276,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("CreateGameSession_ServerError", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.CreateGameSession,
-			httpmock.NewStringResponder(500, ""))
+		httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(500, ""))
 
 		_, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
 		if err == nil {
@@ -289,8 +285,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("RefreshGameSession_Success", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession,
-			httpmock.NewStringResponder(200, sampleGameSessionResponse))
+		registerGameSessionRefreshSuccess(config)
 
 		session, err := RefreshGameSession("Bearer test-session-token", testUuid, config, httpClient)
 		if err != nil {
@@ -303,8 +298,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("RefreshGameSession_401", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession,
-			httpmock.NewStringResponder(401, ""))
+		httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(401, ""))
 
 		_, err := RefreshGameSession("Bearer test-session-token", testUuid, config, httpClient)
 		if err == nil {
