@@ -1,20 +1,47 @@
 {
   "credentials": {
+    // Discord bot token used to authenticate with the Discord API.
+    // Create a Discord bot and copy the token at https://discord.com/developers/applications
+    // Overridden by GAIA_DISCORD_TOKEN env var.
     "token": "YOUR_DISCORD_BOT_TOKEN",
+    // The email address you use to log in to your Hytale account.
+    // Required for username reservation.
+    // Overridden by GAIA_HYTALE_EMAIL env var.
     "hytale_email": "YOUR_HYTALE_EMAIL",
+    // The password you use to log in to your Hytale account.
+    // Required for username reservation.
+    // Overridden by GAIA_HYTALE_PASSWORD env var.
     "hytale_password": "YOUR_HYTALE_PASSWORD",
+    // The 2FA secret for your Hytale account. Your account must have 2FA enabed.
+    // Required for username reservation.
+    // Overridden by GAIA_HYTALE_2FA_SECRET env var.
     "hytale_2fa_secret": "YOUR_HYTALE_2FA_SECRET"
   },
   "valkey": {
+    // Valkey/Redis address to connect to.
     "address": "127.0.0.1",
+    // Port number for the Valkey instance.
     "port": 6379,
+    // Optional password for Valkey authentication.
+    // Overridden by GAIA_VALKEY_PASS env var.
     "password": "",
+    // The logical database index to connect to.
     "database_index": 0
   },
+  // Discord ID of the testing server (guild).
+  // If create_commands_on_startup is true, creates copies of normal slash commands with
+  // the `test-` prefix. Since these are guild-specific commands, they are created instantly.
   "test_server": "",
+  // Discord webhook URL where important logs are sent.
   "log_webhook": "",
+  // Whether the bot is self-hosted.
   "is_self_hosted": true,
+  // Whether slash commands are created on startup.
+  // Slash command updates can take up to an hour to propagate across Discord, and in the meantime
+  // clients will see "outdated" errors. Only set to true when the command format changes, then
+  // set back to false after the command update succeeds.
   "create_commands_on_startup": true,
+  // Status message shown in the bot presence.
   "playing": "/help | Playing Hytale",
   "branding": {
     "author": "",
@@ -27,6 +54,11 @@
     "terms": "",
     "privacy": ""
   },
+
+  // ===================================
+  // ===== Advanced Settings Below =====
+  // ===================================
+
   "kratos": {
     "renewal_buffer_seconds": 86400,
     "breaker": {

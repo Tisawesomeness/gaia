@@ -3,8 +3,11 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
+
+	"github.com/tidwall/jsonc"
 )
 
 type BreakerConfig struct {
@@ -109,12 +112,12 @@ var defaultConfig = Config{
 }
 
 func LoadConfig() (Config, error) {
-	configFile, err := os.ReadFile("config.json")
+	configFile, err := readConfig()
 	if err != nil {
 		return Config{}, err
 	}
 	config := defaultConfig
-	err = json.Unmarshal(configFile, &config)
+	err = json.Unmarshal(jsonc.ToJSON(configFile), &config)
 	if err != nil {
 		return Config{}, err
 	}
@@ -157,4 +160,16 @@ func LoadConfig() (Config, error) {
 	}
 
 	return config, nil
+}
+
+func readConfig() ([]byte, error) {
+	configFile, err1 := os.ReadFile("config.jsonc")
+	if err1 == nil {
+		return configFile, nil
+	}
+	configFile, err2 := os.ReadFile("config.json")
+	if err2 == nil {
+		return configFile, nil
+	}
+	return nil, fmt.Errorf("Could not read either config.jsonc or config.json: %v, %v", err1, err2)
 }

@@ -18,6 +18,7 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/jpillora/go-tld v1.2.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/tidwall/jsonc v0.3.3 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
