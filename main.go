@@ -83,7 +83,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = cmd.InitCommands(session, config)
+	err = cmd.InitCommands(session, &config)
 	if err != nil {
 		util.DiscordLogf(&config, httpClient, "Error while registering commands: %v", err)
 		os.Exit(1)

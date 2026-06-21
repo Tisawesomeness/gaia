@@ -59,6 +59,10 @@
   // ===== Advanced Settings Below =====
   // ===================================
 
+  "discord": {
+    "interaction_expiry_time": 900,
+    "interaction_cleanup_interval": 180
+  },
   "kratos": {
     "renewal_buffer_seconds": 86400,
     "breaker": {

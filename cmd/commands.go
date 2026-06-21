@@ -17,11 +17,6 @@ import (
 	"github.com/sony/gobreaker"
 )
 
-const (
-	CleanupInterval   = 5 * time.Minute
-	InteractionExpiry = 30 * time.Minute
-)
-
 type BotMetadata struct {
 	Version  string
 	BootTime *time.Time
@@ -230,7 +225,8 @@ func handleInteraction(ctx CommandContext) {
 				ctx.ReplyEphemeral("You cannot interact with someone else's menu.")
 				return
 			}
-			if time.Now().After(interactionSession.LastUsed.Add(InteractionExpiry)) {
+			expiresAfter := time.Duration(ctx.Config().Discord.InteractionCleanupInterval) * time.Second
+			if time.Now().After(interactionSession.LastUsed.Add(expiresAfter)) {
 				ctx.ReplyEphemeral("That menu has expired.")
 				return
 			}
@@ -240,7 +236,7 @@ func handleInteraction(ctx CommandContext) {
 	}
 }
 
-func InitCommands(session *discordgo.Session, config config.Config) error {
+func InitCommands(session *discordgo.Session, config *config.Config) error {
 	if config.CreateCommandsOnStartup {
 		err := deployCommands(session, config)
 		if err != nil {
@@ -248,11 +244,11 @@ func InitCommands(session *discordgo.Session, config config.Config) error {
 		}
 		log.Println("Commands created")
 	}
-	startInteractionCleanup()
+	startInteractionCleanup(config)
 	return nil
 }
 
-func deployCommands(session *discordgo.Session, config config.Config) error {
+func deployCommands(session *discordgo.Session, config *config.Config) error {
 	var commands []*discordgo.ApplicationCommand
 	var testCommands []*discordgo.ApplicationCommand
 
@@ -289,19 +285,21 @@ func deployCommands(session *discordgo.Session, config config.Config) error {
 	return nil
 }
 
-func startInteractionCleanup() {
-	ticker := time.NewTicker(CleanupInterval)
+func startInteractionCleanup(config *config.Config) {
+	cleanupInterval := time.Duration(config.Discord.InteractionCleanupInterval) * time.Second
+	ticker := time.NewTicker(cleanupInterval)
 	go func() {
 		for range ticker.C {
-			cleanupOldInteractions()
+			cleanupOldInteractions(config)
 		}
 	}()
 }
 
-func cleanupOldInteractions() {
+func cleanupOldInteractions(config *config.Config) {
 	now := time.Now()
 	for id, interaction := range interactionSessions {
-		if now.Sub(interaction.LastUsed) > InteractionExpiry {
+		expiresAfter := time.Duration(config.Discord.InteractionCleanupInterval) * time.Second
+		if now.Sub(interaction.LastUsed) > expiresAfter {
 			delete(interactionSessions, id)
 		}
 	}

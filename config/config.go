@@ -46,6 +46,11 @@ type BrandingConfig struct {
 	Privacy         string `json:"privacy"`
 }
 
+type DiscordConfig struct {
+	InteractionExpiryTime      int `json:"interaction_expiry_time"`
+	InteractionCleanupInterval int `json:"interaction_cleanup_interval"`
+}
+
 type KratosConfig struct {
 	RenewalBufferSeconds int           `json:"renewal_buffer_seconds"`
 	Breaker              BreakerConfig `json:"breaker"`
@@ -100,6 +105,7 @@ type Config struct {
 	CreateCommandsOnStartup bool              `json:"create_commands_on_startup"`
 	Playing                 string            `json:"playing"`
 	Branding                BrandingConfig    `json:"branding"`
+	Discord                 DiscordConfig     `json:"discord"`
 	Kratos                  KratosConfig      `json:"kratos"`
 	Auth                    AuthConfig        `json:"auth"`
 	Profile                 ProfileConfig     `json:"profile"`
