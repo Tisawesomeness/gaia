@@ -68,15 +68,15 @@ func registerOAuthFailure(config *config.Config) {
 func registerOAuthRefreshSuccess(t *testing.T, config *config.Config, expires time.Duration) {
 	expiresSeconds := int((expires / time.Second))
 	sampleTokenResponse = fmt.Sprintf(`{
-		"access_token": "test-access-token-2",
-		"refresh_token": "test-refresh-token-2",
+		"access_token": "test-access-token-refreshed",
+		"refresh_token": "test-refresh-token-refreshed",
 		"id_token": "test-id-token",
 		"expires_in": %d
 	}`, expiresSeconds)
 
 	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(200, sampleTokenResponse).Once(t.Log))
 }
-func registerTokenFailure(config *config.Config) {
+func registerOAuthRefreshFailure(config *config.Config) {
 	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
 }
 
@@ -108,7 +108,7 @@ func registerGameSessionRefreshSuccess(t *testing.T, config *config.Config, expi
 	expiresAtString := time.Now().Add(expires).Format(time.RFC3339Nano)
 
 	sampleGameSessionResponse = fmt.Sprintf(`{
-		"sessionToken": "test-session-token-2",
+		"sessionToken": "test-session-token-refreshed",
 		"identityToken": "test-identity-token-2",
 		"expiresAt": "%s"
 	}`, expiresAtString)
@@ -229,8 +229,8 @@ func TestAuth(t *testing.T) {
 			t.Fatalf("OAuthRefresh failed: %v", err)
 		}
 
-		if token.AccessToken != "test-access-token-2" {
-			t.Errorf("expected AccessToken=test-access-token-2, got %s", token.AccessToken)
+		if token.AccessToken != "test-access-token-refreshed" {
+			t.Errorf("expected AccessToken=test-access-token-refreshed, got %s", token.AccessToken)
 		}
 	})
 
@@ -329,8 +329,8 @@ func TestAuth(t *testing.T) {
 			t.Fatalf("RefreshGameSession failed: %v", err)
 		}
 
-		if session.SessionToken != "test-session-token-2" {
-			t.Errorf("expected SessionToken=test-session-token-2, got %s", session.SessionToken)
+		if session.SessionToken != "test-session-token-refreshed" {
+			t.Errorf("expected SessionToken=test-session-token-refreshed, got %s", session.SessionToken)
 		}
 	})
 

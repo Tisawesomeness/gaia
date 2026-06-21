@@ -37,7 +37,29 @@ func beforeEachAuthStore() {
 	authStoreDB.Clear()
 }
 
-func sampleConfig(kratosEnabled bool) *config.Config {
+// Stores a test OAuth token in the test database that expires after the given duration
+func storeOAuthToken(expires time.Duration) {
+	authStoreDB.SetOAuthToken(db.OAuthToken{
+		AccessToken:  "test-access-token-stored",
+		RefreshToken: "test-refresh-token-stored",
+		ExpiresAt:    time.Now().Add(expires),
+	})
+}
+
+// Stores the test profile UUID in the test database
+func storeProfile() {
+	authStoreDB.SetProfileUUID(testUuid)
+}
+
+// Stores a test game session token in the test database that expires after the given duration
+func storeGameSession(expires time.Duration) {
+	authStoreDB.SetGameSession(db.GameSessionToken{
+		SessionToken: "test-session-token-stored",
+		ExpiresAt:    time.Now().Add(expires),
+	})
+}
+
+func sampleConfig(secondsBeforeRefresh int, kratosEnabled bool) *config.Config {
 	var creds config.CredentialsConfig
 	if kratosEnabled {
 		creds = config.CredentialsConfig{
@@ -49,12 +71,12 @@ func sampleConfig(kratosEnabled bool) *config.Config {
 	return &config.Config{
 		Credentials: creds,
 		Kratos: config.KratosConfig{
-			RenewalBufferSeconds: 5, // Schedule refresh for 5 seconds before expiry
+			RenewalBufferSeconds: secondsBeforeRefresh,
 			AccountsBackend:      "http://mock.kratos",
 		},
 		Auth: config.AuthConfig{
-			OAuthRefreshBuffer:       5, // Schedule refresh for 5 seconds before expiry
-			GameSessionRefreshBuffer: 5, // Schedule refresh for 5 seconds before expiry
+			OAuthRefreshBuffer:       secondsBeforeRefresh,
+			GameSessionRefreshBuffer: secondsBeforeRefresh,
 			ClientID:                 "test-client-id",
 			Scope:                    "openid profile",
 			DeviceAuth:               "https://example.com/oauth/device",
@@ -70,6 +92,15 @@ func sampleConfig(kratosEnabled bool) *config.Config {
 	}
 }
 
+func assertTokens(t *testing.T, expectedAuthToken string, expectedSessionToken string, authStore AuthStore) {
+	authToken, err := authStore.GetOAuthToken()
+	assert.NoError(t, err)
+	assert.Equal(t, expectedAuthToken, authToken)
+	sessionToken, err := authStore.GetGameSessionToken()
+	assert.NoError(t, err)
+	assert.Equal(t, expectedSessionToken, sessionToken)
+}
+
 func TestAuthStore(t *testing.T) {
 	// These tests can be LONG because they have to wait for OAuth polling and refreshing,
 	// consider setting a timeout greater than 30s
@@ -83,8 +114,8 @@ func TestAuthStore(t *testing.T) {
 	}
 	httpmock.ActivateNonDefault(httpClient)
 
-	t.Run("Full happy path (Kratos disabled)", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(false)
+	t.Run("Full happy path", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
 
 		// No DB values, all endpoints succeed
 		registerOAuthSuccess(config, time.Second*7)
@@ -94,12 +125,7 @@ func TestAuthStore(t *testing.T) {
 		// Expect both tokens to be returned
 		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
 		assert.NoError(t, err)
-		authToken, err := authStore.GetOAuthToken()
-		assert.NoError(t, err)
-		assert.NotEmpty(t, authToken)
-		sessionToken, err := authStore.GetGameSessionToken()
-		assert.NoError(t, err)
-		assert.NotEmpty(t, sessionToken)
+		assertTokens(t, "test-access-token", "test-session-token", authStore)
 		_, exists := authStore.GetKratosClient()
 		assert.False(t, exists)
 
@@ -109,18 +135,11 @@ func TestAuthStore(t *testing.T) {
 		time.Sleep(time.Second * 3)
 
 		// Expect both tokens to be updated
-		authToken2, err := authStore.GetOAuthToken()
-		assert.NoError(t, err)
-		assert.NotEmpty(t, authToken)
-		assert.NotEqual(t, authToken, authToken2)
-		sessionToken2, err := authStore.GetGameSessionToken()
-		assert.NoError(t, err)
-		assert.NotEmpty(t, sessionToken)
-		assert.NotEqual(t, sessionToken, sessionToken2)
+		assertTokens(t, "test-access-token-refreshed", "test-session-token-refreshed", authStore)
 	}))
 
-	t.Run("OAuth fail (Kratos disabled)", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(false)
+	t.Run("OAuth fail", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
 
 		registerOAuthFailure(config)
 
@@ -128,8 +147,8 @@ func TestAuthStore(t *testing.T) {
 		assert.Error(t, err)
 	}))
 
-	t.Run("Profile fail (Kratos disabled)", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(false)
+	t.Run("Profile fail", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
 
 		registerOAuthSuccess(config, time.Second*7)
 		registerProfilesFailure(config)
@@ -138,8 +157,8 @@ func TestAuthStore(t *testing.T) {
 		assert.Error(t, err)
 	}))
 
-	t.Run("Game session fail (Kratos disabled)", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(false)
+	t.Run("Game session fail", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
 
 		registerOAuthSuccess(config, time.Second*7)
 		registerProfilesSuccess(config)
@@ -148,4 +167,161 @@ func TestAuthStore(t *testing.T) {
 		_, err := NewAuthStore(config, authStoreDB, httpClient)
 		assert.Error(t, err)
 	}))
+
+	t.Run("Restore all values from DB", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
+
+		storeOAuthToken(time.Hour)
+		storeProfile()
+		storeGameSession(time.Hour)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+		assertTokens(t, "test-access-token-stored", "test-session-token-stored", authStore)
+	}))
+
+	t.Run("OAuth refreshes if DB loads near-expired token", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
+
+		storeOAuthToken(time.Second)
+		registerOAuthRefreshSuccess(t, config, time.Hour)
+		storeProfile()
+		storeGameSession(time.Hour)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+		assertTokens(t, "test-access-token-refreshed", "test-session-token-stored", authStore)
+	}))
+
+	t.Run("OAuth gets new token if DB loads expired token", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
+
+		storeOAuthToken(-time.Second)
+		registerOAuthSuccess(config, time.Hour)
+		storeProfile()
+		storeGameSession(time.Hour)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+		assertTokens(t, "test-access-token", "test-session-token-stored", authStore)
+	}))
+
+	t.Run("Game session refreshes if DB loads near-expired token", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
+
+		storeOAuthToken(time.Hour)
+		storeProfile()
+		storeGameSession(time.Second)
+		registerGameSessionRefreshSuccess(t, config, time.Hour)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+		assertTokens(t, "test-access-token-stored", "test-session-token-refreshed", authStore)
+	}))
+
+	t.Run("Game session gets new token if DB loads expired token", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
+
+		storeOAuthToken(time.Hour)
+		storeProfile()
+		storeGameSession(-time.Second)
+		registerGameSessionSuccess(config, time.Hour)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+		assertTokens(t, "test-access-token-stored", "test-session-token", authStore)
+	}))
+
+	t.Run("Creates a new game session if no profile stored", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
+
+		storeOAuthToken(time.Hour)
+		// do not store profile
+		registerProfilesSuccess(config)
+		storeGameSession(time.Hour)
+		registerGameSessionSuccess(config, time.Hour)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+		assertTokens(t, "test-access-token-stored", "test-session-token", authStore)
+	}))
+
+	t.Run("unexpired OAuth token is OK even after refresh fail", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
+
+		storeOAuthToken(time.Second * 7)
+		storeProfile()
+		storeGameSession(time.Hour)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+
+		// Wait for refresh (7s-3s = 4s, less than the 5s needed for renewal)
+		registerOAuthRefreshFailure(config)
+		time.Sleep(time.Second * 3)
+
+		authToken, err := authStore.GetOAuthToken()
+		assert.NoError(t, err)
+		assert.Equal(t, "test-access-token-stored", authToken)
+	}))
+
+	t.Run("game session refresh fail falls back to oauth then creates a new session", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, false)
+
+		storeOAuthToken(time.Hour)
+		storeProfile()
+		storeGameSession(time.Second * 7)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+
+		// Wait for refresh (7s-3s = 4s, less than the 5s needed for renewal)
+		registerGameSessionRefreshFailure(config)
+		registerGameSessionSuccess(config, time.Hour)
+		time.Sleep(time.Second * 3)
+
+		sessionToken, err := authStore.GetGameSessionToken()
+		assert.NoError(t, err)
+		assert.Equal(t, "test-session-token", sessionToken)
+	}))
+
+	t.Run("expired OAuth token returns error", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(1, false)
+
+		storeOAuthToken(time.Second * 2)
+		storeProfile()
+		storeGameSession(time.Hour)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+		assert.NotNil(t, authStore)
+
+		// Wait for refresh and expiry (2s-3s = -1s)
+		registerOAuthRefreshFailure(config)
+		time.Sleep(time.Second * 3)
+
+		_, err = authStore.GetOAuthToken()
+		assert.Error(t, err)
+	}))
+
+	t.Run("expired game session token returns error", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(1, false)
+
+		storeOAuthToken(time.Hour)
+		storeProfile()
+		storeGameSession(time.Second * 2)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+
+		// Wait for refresh and expiry (2s-3s = -1s)
+		registerGameSessionRefreshFailure(config)
+		registerGameSessionFailure(config)
+		time.Sleep(time.Second * 3)
+
+		_, err = authStore.GetGameSessionToken()
+		assert.Error(t, err)
+	}))
+
+	// Kratos not tested on purpose, it is currently unsupported
 }
