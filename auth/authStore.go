@@ -97,7 +97,7 @@ func (a *authStore) initialize() error {
 func (a *authStore) initSessions() error {
 	oauthToken, err := a.initializeFreshOAuth()
 	if err != nil {
-		if errors.Is(err, expiredGameSessionError) {
+		if errors.Is(err, expiredOAuthError) {
 			log.Println("OAuth token expired, starting new flow...")
 		} else {
 			log.Printf("Failed to initialize OAuth: %v", err)
