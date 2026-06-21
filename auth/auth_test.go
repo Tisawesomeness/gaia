@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -45,16 +46,35 @@ var (
 	testUuid = "99c08079-3875-4aec-b329-34c4c88edc5a"
 )
 
-func registerOAuthSuccess(config *config.Config) {
+// Causes the mock OAuth login endpoints to return a token that expires in the given duration (with second resolution)
+func registerOAuthSuccess(config *config.Config, expires time.Duration) {
 	httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(200, sampleDeviceAuthResponse))
+
+	expiresSeconds := int((expires / time.Second))
+	sampleTokenResponse = fmt.Sprintf(`{
+		"access_token": "test-access-token",
+		"refresh_token": "test-refresh-token",
+		"id_token": "test-id-token",
+		"expires_in": %d
+	}`, expiresSeconds)
 	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(200, sampleTokenResponse))
 }
 func registerOAuthFailure(config *config.Config) {
 	httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(500, ""))
 }
 
-func registerOAuthRefreshSuccess(config *config.Config) {
-	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(200, sampleTokenResponse))
+// Causes the mock OAuth refresh endpoint to return a different token from the login token,
+// that expires in the given duration (with second resolution), and fails on subsequent refreshes.
+func registerOAuthRefreshSuccess(t *testing.T, config *config.Config, expires time.Duration) {
+	expiresSeconds := int((expires / time.Second))
+	sampleTokenResponse = fmt.Sprintf(`{
+		"access_token": "test-access-token-2",
+		"refresh_token": "test-refresh-token-2",
+		"id_token": "test-id-token",
+		"expires_in": %d
+	}`, expiresSeconds)
+
+	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(200, sampleTokenResponse).Once(t.Log))
 }
 func registerTokenFailure(config *config.Config) {
 	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
@@ -67,15 +87,32 @@ func registerProfilesFailure(config *config.Config) {
 	httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
 }
 
-func registerGameSessionSuccess(config *config.Config) {
+// Causes the mock game session endpoint to return a token that expires in the given duration
+func registerGameSessionSuccess(config *config.Config, expires time.Duration) {
+	expiresAtString := time.Now().Add(expires).Format(time.RFC3339Nano)
+
+	sampleGameSessionResponse = fmt.Sprintf(`{
+		"sessionToken": "test-session-token",
+		"identityToken": "test-identity-token",
+		"expiresAt": "%s"
+	}`, expiresAtString)
 	httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(200, sampleGameSessionResponse))
 }
 func registerGameSessionFailure(config *config.Config) {
 	httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(500, ""))
 }
 
-func registerGameSessionRefreshSuccess(config *config.Config) {
-	httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(200, sampleGameSessionResponse))
+// Causes the mock game session endpoint to return a token that expires in the given duration
+// and fails on subsequent refreshes.
+func registerGameSessionRefreshSuccess(t *testing.T, config *config.Config, expires time.Duration) {
+	expiresAtString := time.Now().Add(expires).Format(time.RFC3339Nano)
+
+	sampleGameSessionResponse = fmt.Sprintf(`{
+		"sessionToken": "test-session-token-2",
+		"identityToken": "test-identity-token-2",
+		"expiresAt": "%s"
+	}`, expiresAtString)
+	httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(200, sampleGameSessionResponse).Once(t.Log))
 }
 func registerGameSessionRefreshFailure(config *config.Config) {
 	httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(500, ""))
@@ -104,7 +141,7 @@ func TestAuth(t *testing.T) {
 	}
 
 	t.Run("OAuthDeviceFlow_Success", func(t *testing.T) {
-		registerOAuthSuccess(config)
+		registerOAuthSuccess(config, time.Hour)
 
 		token, err := OAuthDeviceFlow(config, httpClient)
 		if err != nil {
@@ -185,15 +222,15 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("OAuthRefresh_Success", func(t *testing.T) {
-		registerOAuthRefreshSuccess(config)
+		registerOAuthRefreshSuccess(t, config, time.Hour)
 
 		token, err := OAuthRefresh("test-refresh-token", config, httpClient)
 		if err != nil {
 			t.Fatalf("OAuthRefresh failed: %v", err)
 		}
 
-		if token.AccessToken != "test-access-token" {
-			t.Errorf("expected AccessToken=test-access-token, got %s", token.AccessToken)
+		if token.AccessToken != "test-access-token-2" {
+			t.Errorf("expected AccessToken=test-access-token-2, got %s", token.AccessToken)
 		}
 	})
 
@@ -254,7 +291,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("CreateGameSession_Success", func(t *testing.T) {
-		registerGameSessionSuccess(config)
+		registerGameSessionSuccess(config, time.Hour)
 
 		session, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
 		if err != nil {
@@ -285,15 +322,15 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("RefreshGameSession_Success", func(t *testing.T) {
-		registerGameSessionRefreshSuccess(config)
+		registerGameSessionRefreshSuccess(t, config, time.Hour)
 
 		session, err := RefreshGameSession("Bearer test-session-token", testUuid, config, httpClient)
 		if err != nil {
 			t.Fatalf("RefreshGameSession failed: %v", err)
 		}
 
-		if session.SessionToken != "test-session-token" {
-			t.Errorf("expected SessionToken=test-session-token, got %s", session.SessionToken)
+		if session.SessionToken != "test-session-token-2" {
+			t.Errorf("expected SessionToken=test-session-token-2, got %s", session.SessionToken)
 		}
 	})
 
