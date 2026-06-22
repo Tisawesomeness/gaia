@@ -101,4 +101,7 @@ var (
 	SampleProfileResponseExtra string
 	//go:embed sample/profile_no_skin.json
 	SampleProfileResponseNoSkin string
+
+	//go:embed sample/get-launcher-data.json
+	SampleLauncherData string
 )

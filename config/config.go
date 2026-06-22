@@ -82,6 +82,7 @@ type FeedsConfig struct {
 	PollOnStartup      bool   `json:"poll_on_startup"`
 	NotifyOnStartup    bool   `json:"notify_on_startup"`
 	Interval           int    `json:"interval"`
+	LauncherData       string `json:"launcher_data"`
 	GameVersion        string `json:"game_version"`
 	LauncherRelease    string `json:"launcher_release"`
 	LauncherArticles   string `json:"launcher_articles"`

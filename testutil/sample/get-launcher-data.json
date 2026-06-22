@@ -1,0 +1,24 @@
+{
+    "patchlines": {
+        "pre-release": {
+            "buildVersion": "2026.01.17-a4cc0e7dd",
+            "expiresAt": 0,
+            "newest": 8
+        },
+        "release": {
+            "buildVersion": "2026.01.17-4b0f30090",
+            "expiresAt": 0,
+            "newest": 4
+        }
+    },
+    "profiles": [
+        {
+            "createdAt": "2025-12-13T22:01:18.169026Z",
+            "entitlements": [
+                "game.base"
+            ],
+            "username": "tis",
+            "uuid": "d798091b-f494-4208-a1ba-e24da5880786"
+        }
+    ]
+}
