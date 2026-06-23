@@ -104,4 +104,9 @@ var (
 
 	//go:embed sample/get-launcher-data.json
 	SampleLauncherData string
+
+	//go:embed sample/server.json
+	SampleServerResponse string
+	//go:embed sample/server_unknown.json
+	SampleServerResponseUnknown string
 )

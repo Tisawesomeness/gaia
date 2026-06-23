@@ -99,6 +99,9 @@
     "hyvatar": "https://hyvatar.io/render/",
     "profile_website": "https://hytags.com/username/"
   },
+  "servers": {
+    "discovery": "https://server-discovery.hytale.com/servers/listings"
+  },
   "feeds": {
     "poll_on_startup": false,
     "notify_on_startup": true,

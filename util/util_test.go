@@ -147,3 +147,72 @@ func TestWrapDegrees(t *testing.T) {
 		})
 	}
 }
+
+func TestCoerce(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    int
+		min      int
+		max      int
+		orElse   int
+		expected int
+	}{
+		{
+			name:     "Value within range",
+			value:    50,
+			min:      0,
+			max:      100,
+			orElse:   -1,
+			expected: 50,
+		},
+		{
+			name:     "Value below minimum",
+			value:    49,
+			min:      50,
+			max:      100,
+			orElse:   0,
+			expected: 0,
+		},
+		{
+			name:     "Value above maximum",
+			value:    101,
+			min:      0,
+			max:      100,
+			orElse:   -999,
+			expected: -999,
+		},
+		{
+			name:     "Value below min with different orElse",
+			value:    5,
+			min:      10,
+			max:      20,
+			orElse:   0,
+			expected: 0,
+		},
+		{
+			name:     "Empty range (min > max)",
+			value:    5,
+			min:      20,
+			max:      10,
+			orElse:   -1,
+			expected: -1,
+		},
+		{
+			name:     "Single value range",
+			value:    42,
+			min:      42,
+			max:      42,
+			orElse:   -999,
+			expected: 42,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Coerce(tt.value, tt.min, tt.max, tt.orElse)
+			if result != tt.expected {
+				t.Errorf("Coerce(%d, %d, %d, %d) = %d; want %d", tt.value, tt.min, tt.max, tt.orElse, result, tt.expected)
+			}
+		})
+	}
+}

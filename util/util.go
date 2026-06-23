@@ -12,6 +12,7 @@ import (
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/sony/gobreaker"
+	"golang.org/x/exp/constraints"
 )
 
 type webhookMessage struct {
@@ -125,4 +126,16 @@ func WrapDegrees(degrees int) int {
 		return degrees % 360
 	}
 	return (degrees%360 + 360) % 360
+}
+
+type Number interface {
+	constraints.Integer | constraints.Float
+}
+
+// Returns the value if it is within the provided range (inclusive). Otherwise, returns orElse.
+func Coerce[T Number](value, min, max, orElse T) T {
+	if min <= value && value <= max {
+		return value
+	}
+	return orElse
 }

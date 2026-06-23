@@ -12,6 +12,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/jsonc v0.3.3
 	github.com/valkey-io/valkey-go v1.0.70
+	golang.org/x/exp v0.0.0-20260611194520-c48552f49976
 )
 
 require (

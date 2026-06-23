@@ -1,0 +1,24 @@
+[
+  {
+    "audience": 0,
+    "createdAt": "2026-05-04T19:05:26.609484087Z",
+    "description": "FULL LOOT PVP\n\nMASSIVE DUNGEONS",
+    "favorites": 80,
+    "host": "play.darktale.org",
+    "isFavorited": false,
+    "isLiked": false,
+    "likes": 61,
+    "name": "Darktale",
+    "ownerProfileId": "f46a5cee-1e0e-45a1-a7dc-83a10b0df2fc",
+    "port": 5520,
+    "regions": [
+      0,
+      1,
+      3,
+      4,
+      5
+    ],
+    "serverType": 3,
+    "uuid": "625ade47-aab1-4e83-a628-1fcb5ed62285"
+  }
+]

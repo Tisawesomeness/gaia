@@ -78,6 +78,10 @@ type ProfileConfig struct {
 	ProfileWebsite string `json:"profile_website"`
 }
 
+type ServersConfig struct {
+	Discovery string `json:"discovery"`
+}
+
 type FeedsConfig struct {
 	PollOnStartup      bool   `json:"poll_on_startup"`
 	NotifyOnStartup    bool   `json:"notify_on_startup"`
@@ -110,6 +114,7 @@ type Config struct {
 	Kratos                  KratosConfig      `json:"kratos"`
 	Auth                    AuthConfig        `json:"auth"`
 	Profile                 ProfileConfig     `json:"profile"`
+	Servers                 ServersConfig     `json:"servers"`
 	Feeds                   FeedsConfig       `json:"feeds"`
 	HTTP                    HTTPConfig        `json:"http"`
 }
