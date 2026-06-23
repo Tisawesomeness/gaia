@@ -32,6 +32,9 @@ func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
 	c.Valkey.Port = 9999
 	c.Valkey.DatabaseIndex = 2
 
+	c.Discord.InteractionCleanupInterval = 1_000_000
+	c.Discord.InteractionExpiryTime = 1_000_000
+
 	c.Feeds.LauncherRelease = "https://launcher.example.com/version/release/launcher.json"
 	c.Feeds.LauncherArticles = "https://launcher.example.com/launcher-feed/release/feed.json"
 	c.Feeds.GameVersion = "https://account-data.example.com/game-assets/version/"
