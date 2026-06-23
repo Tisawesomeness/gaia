@@ -48,7 +48,6 @@ func main() {
 		util.DiscordLogf(&config, httpClient, "Could not create auth store: %v", err)
 		os.Exit(1)
 	}
-	defer closeAuthStore(authStore)
 
 	feeds, err := hytale.NewHytaleFeeds(&config, database, httpClient, authStore)
 	if err != nil {
@@ -121,12 +120,5 @@ func pollFeeds(s *discordgo.Session, config config.Config, feeds hytale.HytaleFe
 	for range ticker.C {
 		feeds.Poll()
 		feeds.NotifyFeeds(s)
-	}
-}
-
-func closeAuthStore(authStore auth.AuthStore) {
-	err := authStore.SaveKratosClient()
-	if err != nil {
-		log.Printf("Error saving Kratos client: %v", err)
 	}
 }

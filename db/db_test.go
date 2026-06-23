@@ -340,31 +340,6 @@ func TestDB(t *testing.T) {
 		}
 	}))
 
-	t.Run("get kratos cookies when set", testCase(func(t *testing.T) {
-		cookies := "csrf_token=123456"
-		err := testDB.SetKratosCookies(cookies)
-		if err != nil {
-			t.Fatal(err)
-		}
-		result, err := testDB.GetKratosCookies()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if result != cookies {
-			t.Errorf("Got %q, want %s", result, cookies)
-		}
-	}))
-
-	t.Run("get kratos cookies returns empty when not set", testCase(func(t *testing.T) {
-		result, err := testDB.GetKratosCookies()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if result != "" {
-			t.Errorf("Got %q, want empty", result)
-		}
-	}))
-
 	t.Run("overwrite oauth token replaces all fields", testCase(func(t *testing.T) {
 		oldToken := OAuthToken{
 			AccessToken:  "old_access",

@@ -44,11 +44,9 @@ func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
 
 	c.Profile.ByUUID = "https://account-data.example.com/profile/uuid/"
 	c.Profile.ByUsername = "https://account-data.example.com/profile/username/"
-	c.Profile.Availability = "https://accounts.example.com/api/account/username-reservations/availability"
 	c.Profile.Hyvatar = "https://hyvatar.example.com/"
 
 	c.Auth.Breaker.Enabled = false
-	c.Kratos.Breaker.Enabled = false
 
 	db, err := db.NewDB(c.Valkey)
 	if err != nil {

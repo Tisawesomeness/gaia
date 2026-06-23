@@ -3,19 +3,7 @@
     // Discord bot token used to authenticate with the Discord API.
     // Create a Discord bot and copy the token at https://discord.com/developers/applications
     // Overridden by GAIA_DISCORD_TOKEN env var.
-    "token": "YOUR_DISCORD_BOT_TOKEN",
-    // The email address you use to log in to your Hytale account.
-    // Required for username reservation.
-    // Overridden by GAIA_HYTALE_EMAIL env var.
-    "hytale_email": "YOUR_HYTALE_EMAIL",
-    // The password you use to log in to your Hytale account.
-    // Required for username reservation.
-    // Overridden by GAIA_HYTALE_PASSWORD env var.
-    "hytale_password": "YOUR_HYTALE_PASSWORD",
-    // The 2FA secret for your Hytale account. Your account must have 2FA enabed.
-    // Required for username reservation.
-    // Overridden by GAIA_HYTALE_2FA_SECRET env var.
-    "hytale_2fa_secret": "YOUR_HYTALE_2FA_SECRET"
+    "token": "YOUR_DISCORD_BOT_TOKEN"
   },
   "valkey": {
     // Valkey/Redis address to connect to.
@@ -63,17 +51,6 @@
     "interaction_expiry_time": 900,
     "interaction_cleanup_interval": 180
   },
-  "kratos": {
-    "renewal_buffer_seconds": 86400,
-    "breaker": {
-      "enabled": true,
-      "max_half_open_requests": 3,
-      "reset_interval": 300,
-      "timeout": 30,
-      "failure_ratio": 0.6
-    },
-    "accounts_backend": "https://backend.accounts.hytale.com"
-  },
   "auth": {
     "oauth_refresh_buffer": 300,
     "game_session_refresh_buffer": 300,
@@ -95,7 +72,6 @@
   "profile": {
     "by_uuid": "https://account-data.hytale.com/profile/uuid/",
     "by_username": "https://account-data.hytale.com/profile/username/",
-    "availability": "https://accounts.hytale.com/api/account/username-reservations/availability",
     "hyvatar": "https://hyvatar.io/render/",
     "profile_website": "https://hytags.com/username/"
   },

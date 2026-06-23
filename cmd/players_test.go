@@ -3,7 +3,6 @@ package cmd
 import (
 	"testing"
 
-	"github.com/Tisawesomeness/gaia/hytale"
 	"github.com/Tisawesomeness/gaia/itestutil"
 	"github.com/Tisawesomeness/gaia/testutil"
 	"github.com/jarcoal/httpmock"
@@ -50,33 +49,13 @@ func registerUUID(uuid string, response string) {
 
 // Registers a player that will be returned from the mock Hytale API when requested by username.
 //
-// Response cannot be blank. To register a username that doesn't exist, see registerUsernameUnused()
+// If response blank, that player will not exist.
 func registerUsername(username string, response string) {
-	if response == "" {
-		panic("response cannot be blank, use registerUsernameUnused() instead")
-	}
 	profileEndpoint := playersCE.Config.Profile.ByUsername + username
-	httpmock.RegisterResponder("GET", profileEndpoint, httpmock.NewStringResponder(200, response))
-
-	availabilityEndpoint := playersCE.Config.Profile.Availability
-	httpmock.RegisterResponder("GET", availabilityEndpoint, httpmock.NewStringResponder(200, *hytale.InUse.ExpectedResponse()))
-}
-
-// Registers a username that will be returned from the mock Hytale API and that username's availability status.
-func registerUsernameUnused(username string, availability hytale.Availability) {
-	profileEndpoint := playersCE.Config.Profile.ByUsername + username
-	httpmock.RegisterResponder("GET", profileEndpoint, httpmock.NewStringResponder(404, ""))
-
-	availabilityEndpoint := playersCE.Config.Profile.Availability
-	switch availability {
-	case hytale.InUse:
-		panic("availability cannot be hytale.InUse, use registerUsername() instead")
-	case hytale.Unknown:
-		httpmock.RegisterResponder("GET", availabilityEndpoint, httpmock.NewStringResponder(200, "unknown response nobody has seen before"))
-	case hytale.Reserved:
-		httpmock.RegisterResponder("GET", availabilityEndpoint, httpmock.NewStringResponder(400, *availability.ExpectedResponse()))
-	default:
-		httpmock.RegisterResponder("GET", availabilityEndpoint, httpmock.NewStringResponder(200, *availability.ExpectedResponse()))
+	if response != "" {
+		httpmock.RegisterResponder("GET", profileEndpoint, httpmock.NewStringResponder(200, response))
+	} else {
+		httpmock.RegisterResponder("GET", profileEndpoint, httpmock.NewStringResponder(404, ""))
 	}
 }
 
@@ -156,71 +135,16 @@ func TestProfile(t *testing.T) {
 		assert.Contains(t, reply.Content, "There is no player with the UUID")
 	}))
 
-	t.Run("/profile Username available", playersTestCase(func(t *testing.T) {
-		registerUsernameUnused("nonexistent", hytale.Available)
+	t.Run("/profile Username not found", playersTestCase(func(t *testing.T) {
+		registerUsername("nonexistent", "")
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "nonexistent")
 		ctx.RunCommand("profile")
 
 		assert.Equal(t, 1, len(ctx.replies))
 		reply := ctx.replies[0]
-		assert.Equal(t, 1, len(reply.Embeds))
-		embed := reply.Embeds[0]
-		itestutil.AssertEmbedTitle(t, "Profile for nonexistent", embed)
-		assert.Equal(t, "Username available", embed.Description)
-	}))
-
-	t.Run("/profile Username reserved", playersTestCase(func(t *testing.T) {
-		registerUsernameUnused("reservedUser", hytale.Reserved)
-
-		ctx := NewMockContext(playersCE).WithOptionString("player", "reservedUser")
-		ctx.RunCommand("profile")
-
-		assert.Equal(t, 1, len(ctx.replies))
-		reply := ctx.replies[0]
-		assert.Equal(t, 1, len(reply.Embeds))
-		embed := reply.Embeds[0]
-		itestutil.AssertEmbedTitle(t, "Profile for reservedUser", embed)
-		assert.Equal(t, "Username reserved", embed.Description)
-	}))
-
-	t.Run("/profile Username prohibited", playersTestCase(func(t *testing.T) {
-		registerUsernameUnused("badword", hytale.Prohibited)
-
-		ctx := NewMockContext(playersCE).WithOptionString("player", "badword")
-		ctx.RunCommand("profile")
-
-		assert.Equal(t, 1, len(ctx.replies))
-		reply := ctx.replies[0]
-		assert.Equal(t, 1, len(reply.Embeds))
-		embed := reply.Embeds[0]
-		itestutil.AssertEmbedTitle(t, "Profile for badword", embed)
-		assert.Equal(t, "Username contains a prohibited word", embed.Description)
-	}))
-
-	t.Run("/profile Kratos not configured", playersTestCase(func(t *testing.T) {
-		registerUsernameUnused("unknownStatus", hytale.Unknown)
-
-		ctx := NewMockContext(playersCE).WithOptionString("player", "unknownStatus")
-		ctx.RunCommand("profile")
-
-		assert.Equal(t, 1, len(ctx.replies))
-		reply := ctx.replies[0]
-		assert.Equal(t, 1, len(reply.Embeds))
-		embed := reply.Embeds[0]
-		itestutil.AssertEmbedTitle(t, "Profile for unknownStatus", embed)
-		assert.Equal(t, "Username not in use (unknown status)", embed.Description)
-	}))
-
-	t.Run("/profile Availability check error", playersTestCase(func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Profile.Availability, httpmock.NewStringResponder(500, ""))
-
-		ctx := NewMockContext(playersCE).WithOptionString("player", "error")
-		ctx.RunCommand("profile")
-
-		assert.Equal(t, 1, len(ctx.replies))
-		reply := ctx.replies[0]
-		assert.Equal(t, ":x: An error occurred while contacting Hytale servers.", reply.Content)
+		assert.Empty(t, reply.Embeds)
+		assert.Contains(t, reply.Content, "There is no player with the username")
 	}))
 }
 
@@ -350,7 +274,7 @@ func TestSkin(t *testing.T) {
 	}))
 
 	t.Run("/skin Username not found", playersTestCase(func(t *testing.T) {
-		registerUsernameUnused("doesnotexist", hytale.Available)
+		registerUsername("doesnotexist", "")
 
 		ctx := NewMockContext(playersCE).WithOptionString("player", "doesnotexist")
 		ctx.RunCommand("skin")

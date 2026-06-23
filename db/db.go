@@ -297,31 +297,6 @@ func (db DB) SetGameSession(sessionToken GameSessionToken) error {
 	return db.v.Do(context.Background(), command).Error()
 }
 
-// May return empty!
-func (db DB) GetKratosCookies() (string, error) {
-	// get kratos_cookies
-	command := db.v.B().Get().Key("kratos_cookies").Build()
-	resp := db.v.Do(context.Background(), command)
-	err := resp.Error()
-	if err != nil {
-		if valkey.IsValkeyNil(err) {
-			return "", nil
-		}
-		return "", err
-	}
-	raw, err := resp.AsBytes()
-	if err != nil {
-		return "", err
-	}
-	return string(raw), nil
-}
-
-func (db DB) SetKratosCookies(cookies string) error {
-	// set kratos_cookies <cookies>
-	command := db.v.B().Set().Key("kratos_cookies").Value(cookies).Build()
-	return db.v.Do(context.Background(), command).Error()
-}
-
 func (db DB) Clear() {
 	command := db.v.B().Flushdb().Sync().Build()
 	db.v.Do(context.Background(), command)

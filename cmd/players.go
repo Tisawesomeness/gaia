@@ -270,7 +270,7 @@ func profileCommand(ctx CommandContext) {
 			ctx.Reply(fmt.Sprintf("There is no player with the UUID `%s`.", identifier))
 			return
 		} else {
-			checkAvailability(identifier, ctx)
+			ctx.Reply(fmt.Sprintf("There is no player with the username `%s`.", identifier))
 			return
 		}
 	}
@@ -289,73 +289,6 @@ func profileCommand(ctx CommandContext) {
 			profile.UUID),
 		Color: 0x00FF00,
 	})
-}
-
-func checkAvailability(username string, ctx CommandContext) {
-	kratosClient, ok := ctx.AuthStore().GetKratosClient()
-	if !ok {
-		ctx.ReplyEmbed(&discordgo.MessageEmbed{
-			Title:       "Profile for " + username,
-			Description: "Username not in use (unknown status)",
-			Color:       0x000000,
-		})
-	}
-
-	_, err := ctx.Breakers().KratosSession.Execute(func() (any, error) {
-		availability, err := hytale.CheckAvailability(username, ctx.Config(), kratosClient)
-		if err != nil {
-			return nil, err
-		}
-
-		switch availability {
-		case hytale.Available:
-			ctx.ReplyEmbed(&discordgo.MessageEmbed{
-				Title:       "Profile for " + username,
-				Description: "Username available",
-				Color:       0xFFFFFF,
-			})
-		case hytale.Reserved:
-			ctx.ReplyEmbed(&discordgo.MessageEmbed{
-				Title:       "Profile for " + username,
-				Description: "Username reserved",
-				Color:       0xFFFF00,
-			})
-		case hytale.HytaleReserved:
-			ctx.ReplyEmbed(&discordgo.MessageEmbed{
-				Title:       "Profile for " + username,
-				Description: "Username reserved by the Hytale Team",
-				Color:       0x00FFFF,
-			})
-		case hytale.Prohibited:
-			ctx.ReplyEmbed(&discordgo.MessageEmbed{
-				Title:       "Profile for " + username,
-				Description: "Username contains a prohibited word",
-				Color:       0x00FFFF,
-			})
-		case hytale.InUse:
-			// If profile returns 404 but username is in use,
-			// either Hytale is lying, or we got unlucky with timing
-			log.Printf("Username %s in use, but profile returned 404!", username)
-			ctx.ReplyExternalError("An error occurred while contacting Hytale servers.")
-		case hytale.Unknown:
-			ctx.ReplyEmbed(&discordgo.MessageEmbed{
-				Title:       "Profile for " + username,
-				Description: "Username not in use (unknown status)",
-				Color:       0x000000,
-			})
-		}
-
-		return nil, nil
-	})
-
-	if err != nil {
-		log.Printf("Error checking availability (circuit breaker): %v", err)
-		ctx.ReplyEmbed(&discordgo.MessageEmbed{
-			Title:       "Profile for " + username,
-			Description: "Username not in use (unknown status)",
-			Color:       0x000000,
-		})
-	}
 }
 
 func skinCommand(ctx CommandContext) {

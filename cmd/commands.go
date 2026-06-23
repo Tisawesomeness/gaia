@@ -36,7 +36,6 @@ type CommandExecutor struct {
 // ex: if Hytale session goes down, circuit breaker will gradually retry
 type Breakers struct {
 	HytaleSession *gobreaker.CircuitBreaker
-	KratosSession *gobreaker.CircuitBreaker
 }
 
 func NewCommandExecutor(
@@ -65,7 +64,6 @@ func NewCommandExecutor(
 func makeBreakers(config *config.Config) *Breakers {
 	return &Breakers{
 		HytaleSession: makeBreaker("HytaleSession", config.Auth.Breaker),
-		KratosSession: makeBreaker("KratosSession", config.Kratos.Breaker),
 	}
 }
 

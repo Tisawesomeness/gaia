@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"strings"
 
 	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
@@ -105,90 +103,4 @@ func parseSkin(skinJson *string) (map[string]*string, error) {
 		}
 	}
 	return skin, nil
-}
-
-type Availability int
-
-const (
-	// Available to claim right now
-	Available Availability = iota
-	// Reserved by another account
-	Reserved
-	// Reserved by the Hytale team
-	HytaleReserved
-	// Contains a https://xkcd.com/1963/
-	Prohibited
-	// Actively in-use
-	InUse
-	// Unknown response (have to black-box test the API)
-	Unknown
-)
-
-func (a Availability) ExpectedResponse() *string {
-	if a == Unknown {
-		return nil
-	} else {
-		s := a.expectedResponse()
-		return &s
-	}
-}
-
-func (a Availability) expectedResponse() string {
-	switch a {
-	case InUse:
-		return "Username is already in use"
-	case Reserved:
-		return "Username is already reserved"
-	case HytaleReserved:
-		return "reserved by the Hytale Team"
-	case Prohibited:
-		return "prohibited word"
-	case Available:
-		return ""
-	default:
-		panic("unknown availability")
-	}
-}
-
-// Checks a username's availability. Requires that the provided http client is signed in to Kratos.
-func CheckAvailability(username string, config *config.Config, kratosClient *http.Client) (Availability, error) {
-	req, err := http.NewRequest("GET", config.Profile.Availability, nil)
-	if err != nil {
-		return 0, err
-	}
-	q := req.URL.Query()
-	q.Add("username", username)
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := kratosClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	// Hytale returns 400 if username reserved, even though the request is fine
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusBadRequest {
-		return 0, util.NewBadResponseError("Check availability", resp)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, err
-	}
-
-	responseBody := string(body)
-	if strings.Contains(responseBody, "Username is already in use") {
-		return InUse, nil
-	} else if strings.Contains(responseBody, "Username is already reserved") {
-		return Reserved, nil
-	} else if strings.Contains(responseBody, "reserved by the Hytale Team") {
-		return HytaleReserved, nil
-	} else if strings.Contains(responseBody, "prohibited word") {
-		return Prohibited, nil
-	} else if strings.TrimSpace(responseBody) == "" {
-		return Available, nil
-	} else {
-		log.Println("Unknown username availability response: " + responseBody[:min(50, len(responseBody))])
-		return Unknown, nil
-	}
 }

@@ -19,10 +19,7 @@ type BreakerConfig struct {
 }
 
 type CredentialsConfig struct {
-	DiscordToken    string `json:"discord_token"`
-	HytaleEmail     string `json:"hytale_email"`
-	HytalePassword  string `json:"hytale_password"`
-	Hytale2FASecret string `json:"hytale_2fa_secret"`
+	DiscordToken string `json:"discord_token"`
 }
 
 type ValkeyConfig struct {
@@ -51,12 +48,6 @@ type DiscordConfig struct {
 	InteractionCleanupInterval int `json:"interaction_cleanup_interval"`
 }
 
-type KratosConfig struct {
-	RenewalBufferSeconds int           `json:"renewal_buffer_seconds"`
-	Breaker              BreakerConfig `json:"breaker"`
-	AccountsBackend      string        `json:"accounts_backend"`
-}
-
 type AuthConfig struct {
 	OAuthRefreshBuffer       int           `json:"oauth_refresh_buffer"`
 	GameSessionRefreshBuffer int           `json:"game_session_refresh_buffer"`
@@ -73,7 +64,6 @@ type AuthConfig struct {
 type ProfileConfig struct {
 	ByUUID         string `json:"by_uuid"`
 	ByUsername     string `json:"by_username"`
-	Availability   string `json:"availability"`
 	Hyvatar        string `json:"hyvatar"`
 	ProfileWebsite string `json:"profile_website"`
 }
@@ -111,7 +101,6 @@ type Config struct {
 	Playing                 string            `json:"playing"`
 	Branding                BrandingConfig    `json:"branding"`
 	Discord                 DiscordConfig     `json:"discord"`
-	Kratos                  KratosConfig      `json:"kratos"`
 	Auth                    AuthConfig        `json:"auth"`
 	Profile                 ProfileConfig     `json:"profile"`
 	Servers                 ServersConfig     `json:"servers"`
@@ -138,18 +127,6 @@ func LoadConfig() (Config, error) {
 		log.Println("Overridden discord token from env vars")
 		config.Credentials.DiscordToken = envToken
 	}
-	if envToken, exists := os.LookupEnv("GAIA_HYTALE_EMAIL"); exists {
-		log.Println("Overridden Hytale email from env vars")
-		config.Credentials.HytaleEmail = envToken
-	}
-	if envToken, exists := os.LookupEnv("GAIA_HYTALE_PASSWORD"); exists {
-		log.Println("Overridden Hytale password from env vars")
-		config.Credentials.HytalePassword = envToken
-	}
-	if envToken, exists := os.LookupEnv("GAIA_HYTALE_2FA_SECRET"); exists {
-		log.Println("Overridden Hytale 2FA secret from env vars")
-		config.Credentials.Hytale2FASecret = envToken
-	}
 	if envToken, exists := os.LookupEnv("GAIA_VALKEY_PASS"); exists {
 		log.Println("Overridden valkey password from env vars")
 		config.Valkey.Password = envToken
@@ -161,14 +138,6 @@ func LoadConfig() (Config, error) {
 
 	if config.Credentials.DiscordToken == "YOUR_DISCORD_TOKEN" || config.Credentials.DiscordToken == "" {
 		return Config{}, errors.New("Must provide Discord token")
-	}
-	if config.Credentials.HytaleEmail == "YOUR_HYTALE_EMAIL" || config.Credentials.HytaleEmail == "" ||
-		config.Credentials.HytalePassword == "YOUR_HYTALE_PASSWORD" || config.Credentials.HytalePassword == "" ||
-		config.Credentials.Hytale2FASecret == "YOUR_HYTALE_2FA_SECRET" || config.Credentials.Hytale2FASecret == "" {
-		log.Println("Either Hytale username, password, or 2FA secret were left unset, username availability will not work")
-		config.Credentials.HytaleEmail = ""
-		config.Credentials.HytalePassword = ""
-		config.Credentials.Hytale2FASecret = ""
 	}
 
 	return config, nil

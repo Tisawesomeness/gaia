@@ -62,17 +62,12 @@ func TestProfiles(t *testing.T) {
 
 	config := &config.Config{
 		Profile: config.ProfileConfig{
-			ByUUID:       "https://account-data.example.com/profile/uuid/",
-			ByUsername:   "https://account-data.example.com/profile/username/",
-			Availability: "https://accounts.example.com/api/account/username-reservations/availability",
+			ByUUID:     "https://account-data.example.com/profile/uuid/",
+			ByUsername: "https://account-data.example.com/profile/username/",
 		},
 	}
 
 	authStore := testutil.NewTestAuthStore(http)
-	kratosClient, ok := authStore.GetKratosClient()
-	if !ok {
-		t.Fatalf("Could not get kratos client")
-	}
 
 	t.Run("fetch profile by username", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+sampleUsername, httpmock.NewStringResponder(200, testutil.SampleProfileResponse))
@@ -108,32 +103,5 @@ func TestProfiles(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 		td.Cmp(t, profile, td.Nil())
-	})
-
-	t.Run("username availability", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Profile.Availability, httpmock.NewStringResponder(200, ""))
-		availability, err := CheckAvailability(sampleUsername, config, kratosClient)
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		td.Cmp(t, availability, Available)
-	})
-
-	t.Run("username availability reserved", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Profile.Availability, httpmock.NewStringResponder(200, "reserved by the Hytale Team"))
-		availability, err := CheckAvailability(sampleUsername, config, kratosClient)
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		td.Cmp(t, availability, HytaleReserved)
-	})
-
-	t.Run("username availability 400", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Profile.Availability, httpmock.NewStringResponder(400, "Username is already reserved"))
-		availability, err := CheckAvailability(sampleUsername, config, kratosClient)
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		td.Cmp(t, availability, Reserved)
 	})
 }
