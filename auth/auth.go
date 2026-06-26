@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -66,19 +65,17 @@ type GameSessionResponse struct {
 	ExpiresAt string `json:"expiresAt"`
 }
 
-// Starts the OAuth device flow, printing a log message asking the user to visit the verification link
-// and enter a code. This will block until authentication is finished.
-func OAuthDeviceFlow(config *config.Config, httpClient *http.Client) (TokenResponse, error) {
+// Starts the OAuth device flow. This will block until authentication is finished.
+// onAuthRequired is called with the verification URL and code to be shown to the user.
+func OAuthDeviceFlow(config *config.Config, httpClient *http.Client, onAuthRequired func(DeviceAuthResponse)) (TokenResponse, error) {
 	deviceAuthResponse, err := startDeviceAuth(config, httpClient)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to start device auth: %v", err)
 	}
 
-	log.Println("===================================")
-	log.Println("===== Authentication Required =====")
-	log.Printf("Visit: %s\n", deviceAuthResponse.VerificationURI)
-	log.Printf("Enter code: %s\n", deviceAuthResponse.UserCode)
-	log.Println("===================================")
+	if onAuthRequired != nil {
+		onAuthRequired(deviceAuthResponse)
+	}
 
 	tokenResponse, err := pollForToken(deviceAuthResponse, config, httpClient)
 	if err != nil {

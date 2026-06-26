@@ -143,7 +143,7 @@ func TestAuth(t *testing.T) {
 	t.Run("OAuthDeviceFlow_Success", func(t *testing.T) {
 		registerOAuthSuccess(config, time.Hour)
 
-		token, err := OAuthDeviceFlow(config, httpClient)
+		token, err := OAuthDeviceFlow(config, httpClient, nil)
 		if err != nil {
 			t.Fatalf("OAuthDeviceFlow failed: %v", err)
 		}
@@ -156,7 +156,7 @@ func TestAuth(t *testing.T) {
 	t.Run("OAuthDeviceFlow_BadResponse", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(400, ""))
 
-		_, err := OAuthDeviceFlow(config, httpClient)
+		_, err := OAuthDeviceFlow(config, httpClient, nil)
 		if err == nil {
 			t.Fatalf("expected error for bad response")
 		}
@@ -165,7 +165,7 @@ func TestAuth(t *testing.T) {
 	t.Run("OAuthDeviceFlow_ServerError", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(500, ""))
 
-		_, err := OAuthDeviceFlow(config, httpClient)
+		_, err := OAuthDeviceFlow(config, httpClient, nil)
 		if err == nil {
 			t.Fatalf("expected error for server error")
 		}
@@ -191,7 +191,7 @@ func TestAuth(t *testing.T) {
 			}`), nil
 		})
 
-		_, err := OAuthDeviceFlow(config, httpClient)
+		_, err := OAuthDeviceFlow(config, httpClient, nil)
 		if err == nil {
 			t.Fatalf("expected error")
 		}
@@ -201,7 +201,7 @@ func TestAuth(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(200, sampleDeviceAuthResponse))
 		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
 
-		_, err := OAuthDeviceFlow(config, httpClient)
+		_, err := OAuthDeviceFlow(config, httpClient, nil)
 		if err == nil {
 			t.Fatalf("expected error for server error")
 		}
@@ -215,7 +215,7 @@ func TestAuth(t *testing.T) {
 			"error_description": "Please wait before polling"
 		}`))
 
-		_, err := OAuthDeviceFlow(config, httpClient)
+		_, err := OAuthDeviceFlow(config, httpClient, nil)
 		if err == nil {
 			t.Fatalf("expected timeout error")
 		}

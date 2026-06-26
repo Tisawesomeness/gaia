@@ -179,9 +179,17 @@ func (a *authStore) initializeProfile(oAuthToken db.OAuthToken) (string, error) 
 	}
 }
 
-func (a authStore) performOAuthAndStore() (db.OAuthToken, error) {
+func (a authStore) onAuthRequired(deviceAuthResponse DeviceAuthResponse) {
 	util.DiscordLog(a.config, a.httpClient, "Authentication required!")
-	tokenResponse, err := OAuthDeviceFlow(a.config, a.httpClient)
+	log.Println("===================================")
+	log.Println("===== Authentication Required =====")
+	log.Printf("Visit: %s\n", deviceAuthResponse.VerificationURI)
+	log.Printf("Enter code: %s\n", deviceAuthResponse.UserCode)
+	log.Println("===================================")
+}
+
+func (a authStore) performOAuthAndStore() (db.OAuthToken, error) {
+	tokenResponse, err := OAuthDeviceFlow(a.config, a.httpClient, a.onAuthRequired)
 	if err != nil {
 		return db.OAuthToken{}, err
 	}
