@@ -315,7 +315,7 @@ func (a authStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToken
 // Refreshes the token if expired, otherwise returns the original token
 func (a authStore) refreshOAuthAndStore(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
 	log.Println("Refreshing OAuth token...")
-	tokenResponse, err := OAuthRefresh(oAuthToken.RefreshToken, a.authType, a.config, a.httpClient)
+	tokenResponse, err := OAuthRefresh(a.config, a.httpClient, oAuthToken.RefreshToken, a.authType)
 	if err != nil {
 		return db.OAuthToken{}, err
 	}

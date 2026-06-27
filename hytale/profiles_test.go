@@ -72,7 +72,7 @@ func TestProfiles(t *testing.T) {
 
 	t.Run("fetch profile by username", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+sampleUsername, httpmock.NewStringResponder(200, testutil.SampleProfileResponse))
-		profile, err := FetchProfileFromUsername(sampleUsername, config, http, authStore)
+		profile, err := FetchProfileFromUsername(config, http, authStore, sampleUsername)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -81,7 +81,7 @@ func TestProfiles(t *testing.T) {
 
 	t.Run("fetch profile by username 404", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+sampleUsername, httpmock.NewStringResponder(404, ""))
-		profile, err := FetchProfileFromUsername(sampleUsername, config, http, authStore)
+		profile, err := FetchProfileFromUsername(config, http, authStore, sampleUsername)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -90,7 +90,7 @@ func TestProfiles(t *testing.T) {
 
 	t.Run("fetch profile by uuid", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUUID+sampleUUID, httpmock.NewStringResponder(200, testutil.SampleProfileResponse))
-		profile, err := FetchProfileFromUUID(sampleUUID, config, http, authStore)
+		profile, err := FetchProfileFromUUID(config, http, authStore, sampleUUID)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -99,7 +99,7 @@ func TestProfiles(t *testing.T) {
 
 	t.Run("fetch profile by uuid 404", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUUID+sampleUUID, httpmock.NewStringResponder(404, ""))
-		profile, err := FetchProfileFromUUID(sampleUUID, config, http, authStore)
+		profile, err := FetchProfileFromUUID(config, http, authStore, sampleUUID)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}

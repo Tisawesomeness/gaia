@@ -25,15 +25,15 @@ type PublicGameProfile struct {
 	Username string
 }
 
-func FetchProfileFromUUID(uuid string, config *config.Config, httpClient *http.Client, authStore auth.AuthStore) (*PublicGameProfile, error) {
-	return fetchProfile(config.Profile.ByUUID+uuid, authStore, httpClient)
+func FetchProfileFromUUID(config *config.Config, httpClient *http.Client, authStore auth.AuthStore, uuid string) (*PublicGameProfile, error) {
+	return fetchProfile(config.Profile.ByUUID+uuid, httpClient, authStore)
 }
 
-func FetchProfileFromUsername(username string, config *config.Config, httpClient *http.Client, authStore auth.AuthStore) (*PublicGameProfile, error) {
-	return fetchProfile(config.Profile.ByUsername+username, authStore, httpClient)
+func FetchProfileFromUsername(config *config.Config, httpClient *http.Client, authStore auth.AuthStore, username string) (*PublicGameProfile, error) {
+	return fetchProfile(config.Profile.ByUsername+username, httpClient, authStore)
 }
 
-func fetchProfile(url string, authStore auth.AuthStore, httpClient *http.Client) (*PublicGameProfile, error) {
+func fetchProfile(url string, httpClient *http.Client, authStore auth.AuthStore) (*PublicGameProfile, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err

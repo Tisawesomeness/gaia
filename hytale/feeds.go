@@ -97,13 +97,13 @@ func (ft FeedType) Display() string {
 func (ft FeedType) getStored(db *db.DB) (Feed, error) {
 	switch ft {
 	case GameReleaseFeedType:
-		return getStoredGameRelease(Release, db)
+		return getStoredGameRelease(db, Release)
 	case GamePreReleaseFeedType:
-		return getStoredGameRelease(PreRelease, db)
+		return getStoredGameRelease(db, PreRelease)
 	case MavenReleaseFeedType:
-		return getStoredMavenRelease(Release, db)
+		return getStoredMavenRelease(db, Release)
 	case MavenPreReleaseFeedType:
-		return getStoredMavenRelease(PreRelease, db)
+		return getStoredMavenRelease(db, PreRelease)
 	case LauncherReleaseFeedType:
 		return getStoredLauncherRelease(db)
 	case LauncherPostFeedType:
@@ -116,13 +116,13 @@ func (ft FeedType) getStored(db *db.DB) (Feed, error) {
 func (ft FeedType) fetch(feeds *HytaleFeeds) (Feed, error) {
 	switch ft {
 	case GameReleaseFeedType:
-		return fetchGameRelease(Release, feeds)
+		return fetchGameRelease(feeds, Release)
 	case GamePreReleaseFeedType:
-		return fetchGameRelease(PreRelease, feeds)
+		return fetchGameRelease(feeds, PreRelease)
 	case MavenReleaseFeedType:
-		return fetchMavenRelease(Release, feeds)
+		return fetchMavenRelease(feeds, Release)
 	case MavenPreReleaseFeedType:
-		return fetchMavenRelease(PreRelease, feeds)
+		return fetchMavenRelease(feeds, PreRelease)
 	case LauncherReleaseFeedType:
 		return fetchLauncherRelease(feeds)
 	case LauncherPostFeedType:

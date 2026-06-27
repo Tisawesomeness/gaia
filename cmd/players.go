@@ -233,13 +233,13 @@ type cosmeticGroup struct {
 
 func tryFetchProfileFromUUID(uuid string, ctx CommandContext) (*hytale.PublicGameProfile, error) {
 	return util.Execute(ctx.Breakers().HytaleSession, func() (*hytale.PublicGameProfile, error) {
-		return hytale.FetchProfileFromUUID(uuid, ctx.Config(), ctx.HTTP(), ctx.AuthStore())
+		return hytale.FetchProfileFromUUID(ctx.Config(), ctx.HTTP(), ctx.AuthStore(), uuid)
 	})
 }
 
 func tryFetchProfileFromUsername(username string, ctx CommandContext) (*hytale.PublicGameProfile, error) {
 	return util.Execute(ctx.Breakers().HytaleSession, func() (*hytale.PublicGameProfile, error) {
-		return hytale.FetchProfileFromUsername(username, ctx.Config(), ctx.HTTP(), ctx.AuthStore())
+		return hytale.FetchProfileFromUsername(ctx.Config(), ctx.HTTP(), ctx.AuthStore(), username)
 	})
 }
 

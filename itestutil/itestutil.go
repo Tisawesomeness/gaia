@@ -31,7 +31,7 @@ func RegisterFeedResponders(config *config.Config) error {
 	for _, tt := range patchlines {
 		httpmock.RegisterResponder("GET", config.Feeds.GameVersion+tt.patchline.ID()+".json", httpmock.NewStringResponder(200, tt.sampleReleaseURL))
 		httpmock.RegisterResponder("GET", tt.releaseURL, httpmock.NewStringResponder(200, tt.sampleRelease))
-		httpmock.RegisterResponder("GET", hytale.MavenMetadataUrl(tt.patchline, config.Feeds), httpmock.NewStringResponder(200, tt.sampleMaven))
+		httpmock.RegisterResponder("GET", hytale.MavenMetadataUrl(config.Feeds, tt.patchline), httpmock.NewStringResponder(200, tt.sampleMaven))
 	}
 	return nil
 }

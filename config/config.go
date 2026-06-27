@@ -59,6 +59,7 @@ type AuthConfig struct {
 	RedirectURI              string        `json:"redirect_uri"`
 	Token                    string        `json:"token"`
 	Profiles                 string        `json:"profiles"`
+	LauncherData             string        `json:"launcher_data"`
 	CreateGameSession        string        `json:"create_game_session"`
 	RefreshGameSession       string        `json:"refresh_game_session"`
 }
@@ -78,7 +79,6 @@ type FeedsConfig struct {
 	PollOnStartup      bool   `json:"poll_on_startup"`
 	NotifyOnStartup    bool   `json:"notify_on_startup"`
 	Interval           int    `json:"interval"`
-	LauncherData       string `json:"launcher_data"`
 	GameVersion        string `json:"game_version"`
 	LauncherRelease    string `json:"launcher_release"`
 	LauncherArticles   string `json:"launcher_articles"`

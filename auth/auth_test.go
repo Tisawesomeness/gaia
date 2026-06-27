@@ -168,7 +168,7 @@ func TestDeviceAuth(t *testing.T) {
 	t.Run("OAuthRefresh_SuccessServer", func(t *testing.T) {
 		registerOAuthRefreshSuccess(t, config, time.Hour)
 
-		token, err := OAuthRefresh("test-refresh-token", Server, config, httpClient)
+		token, err := OAuthRefresh(config, httpClient, "test-refresh-token", Server)
 		if err != nil {
 			t.Fatalf("OAuthRefresh failed: %v", err)
 		}
@@ -181,7 +181,7 @@ func TestDeviceAuth(t *testing.T) {
 	t.Run("OAuthRefresh_SuccessLauncher", func(t *testing.T) {
 		registerOAuthRefreshSuccess(t, config, time.Hour)
 
-		token, err := OAuthRefresh("test-refresh-token", Launcher, config, httpClient)
+		token, err := OAuthRefresh(config, httpClient, "test-refresh-token", Launcher)
 		if err != nil {
 			t.Fatalf("OAuthRefresh failed: %v", err)
 		}
@@ -198,7 +198,7 @@ func TestDeviceAuth(t *testing.T) {
 			"error_description": "Refresh token was revoked"
 		}`))
 
-		_, err := OAuthRefresh("invalid-refresh-token", Server, config, httpClient)
+		_, err := OAuthRefresh(config, httpClient, "invalid-refresh-token", Server)
 		if err == nil {
 			t.Fatalf("expected error for 400 response")
 		}
@@ -207,7 +207,7 @@ func TestDeviceAuth(t *testing.T) {
 	t.Run("OAuthRefresh_500", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
 
-		_, err := OAuthRefresh("test-refresh-token", Server, config, httpClient)
+		_, err := OAuthRefresh(config, httpClient, "test-refresh-token", Server)
 		if err == nil {
 			t.Fatalf("expected error for server error")
 		}

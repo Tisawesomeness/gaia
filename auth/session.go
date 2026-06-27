@@ -92,7 +92,7 @@ func GetLauncherData(config *config.Config, httpClient *http.Client, oauthAccess
 		return nil, errors.New("Oauth access token is required")
 	}
 
-	req, err := http.NewRequest("GET", config.Feeds.LauncherData, nil)
+	req, err := http.NewRequest("GET", config.Auth.LauncherData, nil)
 	if err != nil {
 		return nil, err
 	}

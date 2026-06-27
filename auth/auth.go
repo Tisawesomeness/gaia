@@ -81,7 +81,7 @@ func OAuthDeviceFlow(config *config.Config, httpClient *http.Client, onAuthRequi
 		onAuthRequired(deviceAuthResponse)
 	}
 
-	tokenResponse, err := pollForToken(deviceAuthResponse, config, httpClient)
+	tokenResponse, err := pollForToken(config, httpClient, deviceAuthResponse)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to poll for token: %v", err)
 	}
@@ -118,7 +118,7 @@ func startDeviceAuth(config *config.Config, httpClient *http.Client) (DeviceAuth
 	return deviceAuthResponse, nil
 }
 
-func pollForToken(deviceAuthResponse DeviceAuthResponse, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
+func pollForToken(config *config.Config, httpClient *http.Client, deviceAuthResponse DeviceAuthResponse) (TokenResponse, error) {
 	params := url.Values{}
 	params.Add("client_id", "hytale-server")
 	params.Add("device_code", deviceAuthResponse.DeviceCode)
@@ -304,7 +304,7 @@ func exchangeCodeForToken(config *config.Config, httpClient *http.Client, code s
 	return tokenResp, nil
 }
 
-func OAuthRefresh(oauthRefreshToken string, authType AuthType, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
+func OAuthRefresh(config *config.Config, httpClient *http.Client, oauthRefreshToken string, authType AuthType) (TokenResponse, error) {
 	params := url.Values{}
 	params.Add("client_id", authType.ClientID())
 	params.Add("refresh_token", oauthRefreshToken)

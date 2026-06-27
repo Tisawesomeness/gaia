@@ -132,7 +132,7 @@ func (f GameReleaseFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func getStoredGameRelease(patchline Patchline, db *db.DB) (Feed, error) {
+func getStoredGameRelease(db *db.DB, patchline Patchline) (Feed, error) {
 	raw, err := db.GetLatestPost(GetFeedType(patchline, Client).ID())
 	if err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ func getStoredGameRelease(patchline Patchline, db *db.DB) (Feed, error) {
 	}, err
 }
 
-func fetchGameReleaseUrl(patchline Patchline, feeds *HytaleFeeds) (string, error) {
+func fetchGameReleaseUrl(feeds *HytaleFeeds, patchline Patchline) (string, error) {
 	token, err := feeds.authStore.GetOAuthToken()
 	if err != nil {
 		return "", err
@@ -181,8 +181,8 @@ func fetchGameReleaseUrl(patchline Patchline, feeds *HytaleFeeds) (string, error
 	return response.Url, nil
 }
 
-func fetchGameRelease(patchline Patchline, feeds *HytaleFeeds) (Feed, error) {
-	url, err := fetchGameReleaseUrl(patchline, feeds)
+func fetchGameRelease(feeds *HytaleFeeds, patchline Patchline) (Feed, error) {
+	url, err := fetchGameReleaseUrl(feeds, patchline)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +304,7 @@ func (f MavenFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func getStoredMavenRelease(patchline Patchline, db *db.DB) (Feed, error) {
+func getStoredMavenRelease(db *db.DB, patchline Patchline) (Feed, error) {
 	raw, err := db.GetLatestPost(GetFeedType(patchline, Server).ID())
 	if err != nil {
 		return nil, err
@@ -321,7 +321,7 @@ func getStoredMavenRelease(patchline Patchline, db *db.DB) (Feed, error) {
 	}, err
 }
 
-func MavenMetadataUrl(patchline Patchline, config config.FeedsConfig) string {
+func MavenMetadataUrl(config config.FeedsConfig, patchline Patchline) string {
 	return fmt.Sprintf("%s/%s/%s/%s/maven-metadata.xml",
 		config.MavenRepo,
 		patchline.ID(),
@@ -330,8 +330,8 @@ func MavenMetadataUrl(patchline Patchline, config config.FeedsConfig) string {
 	)
 }
 
-func fetchMavenRelease(patchline Patchline, feeds *HytaleFeeds) (Feed, error) {
-	metadataUrl := MavenMetadataUrl(patchline, feeds.config.Feeds)
+func fetchMavenRelease(feeds *HytaleFeeds, patchline Patchline) (Feed, error) {
+	metadataUrl := MavenMetadataUrl(feeds.config.Feeds, patchline)
 
 	resp, err := feeds.http.Get(metadataUrl)
 	if err != nil {

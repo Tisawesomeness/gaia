@@ -56,7 +56,7 @@ func registerProfilesSuccess(config *config.Config, authType AuthType) {
 	case Server:
 		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(200, sampleAccountDataResponse))
 	case Launcher:
-		httpmock.RegisterResponder("GET", config.Feeds.LauncherData, httpmock.NewStringResponder(200, testutil.SampleLauncherData))
+		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(200, testutil.SampleLauncherData))
 	default:
 		panic("unknown auth type")
 	}
@@ -66,7 +66,7 @@ func registerProfilesFailure(config *config.Config, authType AuthType) {
 	case Server:
 		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
 	case Launcher:
-		httpmock.RegisterResponder("GET", config.Feeds.LauncherData, httpmock.NewStringResponder(500, ""))
+		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(500, ""))
 	default:
 		panic("unknown auth type")
 	}
@@ -116,11 +116,9 @@ func TestSession(t *testing.T) {
 	config := &config.Config{
 		Auth: config.AuthConfig{
 			Profiles:           "https://example.com/profiles",
+			LauncherData:       "https://account-data.example.com/my-account/get-launcher-data?arch=amd64&os=windows",
 			CreateGameSession:  "https://example.com/api/sessions",
 			RefreshGameSession: "https://example.com/api/sessions/refresh",
-		},
-		Feeds: config.FeedsConfig{
-			LauncherData: "https://account-data.example.com/my-account/get-launcher-data?arch=amd64&os=windows",
 		},
 	}
 
@@ -188,7 +186,7 @@ func TestSession(t *testing.T) {
 	})
 
 	t.Run("network failure (401 unauthorized)", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Feeds.LauncherData, httpmock.NewStringResponder(http.StatusUnauthorized, ""))
+		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(http.StatusUnauthorized, ""))
 
 		_, err := GetLauncherData(config, httpClient, "sample-token")
 
@@ -198,7 +196,7 @@ func TestSession(t *testing.T) {
 	})
 
 	t.Run("empty response body schema validation (200 OK)", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Feeds.LauncherData, httpmock.NewStringResponder(200, `{"patchlines": {}, "profiles": []}`))
+		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(200, `{"patchlines": {}, "profiles": []}`))
 
 		data, err := GetLauncherData(config, httpClient, "sample-token")
 

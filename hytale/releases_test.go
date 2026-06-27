@@ -100,19 +100,19 @@ func TestReleases(t *testing.T) {
 	for _, tt := range patchlines {
 		t.Run(fmt.Sprintf("game %s", tt.patchline.Display()), func(t *testing.T) {
 			httpmock.RegisterResponder("GET", config.Feeds.GameVersion+tt.patchline.ID()+".json", httpmock.NewStringResponder(200, tt.sampleReleaseURL))
-			url, err := fetchGameReleaseUrl(tt.patchline, feeds)
+			url, err := fetchGameReleaseUrl(feeds, tt.patchline)
 			assert.NoError(t, err)
 			assert.Equal(t, url, tt.expectedUrl)
 
 			httpmock.RegisterResponder("GET", url, httpmock.NewStringResponder(200, tt.sampleRelease))
-			feed, err := fetchGameRelease(tt.patchline, feeds)
+			feed, err := fetchGameRelease(feeds, tt.patchline)
 			assert.NoError(t, err)
 			td.Cmp(t, feed, tt.expectedFeed)
 		})
 
 		t.Run(fmt.Sprintf("maven %s", tt.patchline.Display()), func(t *testing.T) {
-			httpmock.RegisterResponder("GET", MavenMetadataUrl(tt.patchline, config.Feeds), httpmock.NewStringResponder(200, tt.sampleMaven))
-			feed, err := fetchMavenRelease(tt.patchline, feeds)
+			httpmock.RegisterResponder("GET", MavenMetadataUrl(config.Feeds, tt.patchline), httpmock.NewStringResponder(200, tt.sampleMaven))
+			feed, err := fetchMavenRelease(feeds, tt.patchline)
 			assert.NoError(t, err)
 			td.Cmp(t, feed, expectedMavenFeed(tt.patchline))
 		})
