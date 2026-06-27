@@ -79,8 +79,6 @@ func TestDeviceAuth(t *testing.T) {
 
 	config := &config.Config{
 		Auth: config.AuthConfig{
-			ClientID:   "test-client-id",
-			Scope:      "openid profile",
 			DeviceAuth: "https://example.com/oauth/device",
 			Token:      "https://example.com/oauth/token",
 		},
@@ -167,10 +165,23 @@ func TestDeviceAuth(t *testing.T) {
 		}
 	})
 
-	t.Run("OAuthRefresh_Success", func(t *testing.T) {
+	t.Run("OAuthRefresh_SuccessServer", func(t *testing.T) {
 		registerOAuthRefreshSuccess(t, config, time.Hour)
 
-		token, err := OAuthRefresh("test-refresh-token", config, httpClient)
+		token, err := OAuthRefresh("test-refresh-token", Server, config, httpClient)
+		if err != nil {
+			t.Fatalf("OAuthRefresh failed: %v", err)
+		}
+
+		if token.AccessToken != "test-access-token-refreshed" {
+			t.Errorf("expected AccessToken=test-access-token-refreshed, got %s", token.AccessToken)
+		}
+	})
+
+	t.Run("OAuthRefresh_SuccessLauncher", func(t *testing.T) {
+		registerOAuthRefreshSuccess(t, config, time.Hour)
+
+		token, err := OAuthRefresh("test-refresh-token", Launcher, config, httpClient)
 		if err != nil {
 			t.Fatalf("OAuthRefresh failed: %v", err)
 		}
@@ -187,7 +198,7 @@ func TestDeviceAuth(t *testing.T) {
 			"error_description": "Refresh token was revoked"
 		}`))
 
-		_, err := OAuthRefresh("invalid-refresh-token", config, httpClient)
+		_, err := OAuthRefresh("invalid-refresh-token", Server, config, httpClient)
 		if err == nil {
 			t.Fatalf("expected error for 400 response")
 		}
@@ -196,7 +207,7 @@ func TestDeviceAuth(t *testing.T) {
 	t.Run("OAuthRefresh_500", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
 
-		_, err := OAuthRefresh("test-refresh-token", config, httpClient)
+		_, err := OAuthRefresh("test-refresh-token", Server, config, httpClient)
 		if err == nil {
 			t.Fatalf("expected error for server error")
 		}
@@ -211,8 +222,6 @@ func TestBrowserAuth(t *testing.T) {
 
 	config := &config.Config{
 		Auth: config.AuthConfig{
-			ClientID:           "test-id",
-			Scope:              "openid",
 			BrowserAuth:        "https://oauth.example.com/auth",
 			BrowserAuthTimeout: 1,
 			RedirectURI:        "https://example.com/redirect",

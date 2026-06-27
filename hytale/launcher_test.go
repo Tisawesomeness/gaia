@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/testutil"
 	"github.com/jarcoal/httpmock"
@@ -70,7 +71,7 @@ func TestLauncher(t *testing.T) {
 			LauncherArticles: "https://launcher.example.com/launcher-feed/release/feed.json",
 		},
 	}
-	authStore := testutil.NewTestAuthStore(http)
+	authStore := auth.NewSimpleAuthStore(auth.Server)
 	feeds := &HytaleFeeds{
 		config:    config,
 		http:      http,

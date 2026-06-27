@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/testutil"
 	"github.com/jarcoal/httpmock"
@@ -67,7 +68,7 @@ func TestProfiles(t *testing.T) {
 		},
 	}
 
-	authStore := testutil.NewTestAuthStore(http)
+	authStore := auth.NewSimpleAuthStore(auth.Server)
 
 	t.Run("fetch profile by username", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+sampleUsername, httpmock.NewStringResponder(200, testutil.SampleProfileResponse))

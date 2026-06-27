@@ -67,8 +67,6 @@ func sampleConfig(secondsBeforeRefresh int, uuid string) *config.Config {
 		Auth: config.AuthConfig{
 			OAuthRefreshBuffer:       secondsBeforeRefresh,
 			GameSessionRefreshBuffer: secondsBeforeRefresh,
-			ClientID:                 "test-client-id",
-			Scope:                    "openid profile",
 			DeviceAuth:               "https://example.com/oauth/device",
 			Token:                    "https://example.com/oauth/token",
 			Profiles:                 "https://example.com/profiles",
@@ -91,7 +89,7 @@ func assertTokens(t *testing.T, expectedAuthToken string, expectedSessionToken s
 	assert.Equal(t, expectedSessionToken, sessionToken)
 }
 
-func TestAuthStore(t *testing.T) {
+func AuthStoreTests(t *testing.T) {
 	// These tests can be LONG because they have to wait for OAuth polling and refreshing,
 	// consider setting a timeout greater than 30s
 	if testing.Short() {
@@ -109,7 +107,7 @@ func TestAuthStore(t *testing.T) {
 
 		// No DB values, all endpoints succeed
 		registerOAuthSuccess(config, time.Second*7)
-		registerProfilesSuccess(config)
+		registerProfilesSuccess(config, Server)
 		registerGameSessionSuccess(config, time.Second*7)
 
 		// Expect both tokens to be returned
@@ -160,7 +158,7 @@ func TestAuthStore(t *testing.T) {
 		config := sampleConfig(5, "")
 
 		registerOAuthSuccess(config, time.Second*7)
-		registerProfilesFailure(config)
+		registerProfilesFailure(config, Server)
 
 		_, err := NewAuthStore(config, authStoreDB, httpClient)
 		assert.Error(t, err)
@@ -170,7 +168,7 @@ func TestAuthStore(t *testing.T) {
 		config := sampleConfig(5, "")
 
 		registerOAuthSuccess(config, time.Second*7)
-		registerProfilesSuccess(config)
+		registerProfilesSuccess(config, Server)
 		registerGameSessionFailure(config)
 
 		_, err := NewAuthStore(config, authStoreDB, httpClient)
@@ -246,7 +244,7 @@ func TestAuthStore(t *testing.T) {
 
 		storeOAuthToken(time.Hour)
 		// do not store profile
-		registerProfilesSuccess(config)
+		registerProfilesSuccess(config, Server)
 		storeGameSession(time.Hour)
 		registerGameSessionSuccess(config, time.Hour)
 

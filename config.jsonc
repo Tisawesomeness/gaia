@@ -66,8 +66,6 @@
       "timeout": 30,
       "failure_ratio": 0.6
     },
-    "client_id": "hytale-server",
-    "scope": "openid offline auth:server",
     "device_auth": "https://oauth.accounts.hytale.com/oauth2/device/auth",
     "browser_auth": "https://oauth.accounts.hytale.com/oauth2/auth",
     "browser_auth_timeout": 300,

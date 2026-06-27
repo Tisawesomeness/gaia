@@ -2,6 +2,7 @@ package hytale
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -69,17 +70,21 @@ type ServerListing struct {
 	ServerUUID     string     `json:"uuid"`
 }
 
+// Launcher auth only!
 func GetServers(config *config.Config, httpClient *http.Client, authStore auth.AuthStore) ([]*ServerListing, error) {
 	sessionToken, err := authStore.GetGameSessionToken()
 	if err != nil {
 		return nil, err
+	}
+	if sessionToken.AuthType != auth.Launcher {
+		return nil, errors.New("GetServers requires auth:launcher")
 	}
 
 	req, err := http.NewRequest("GET", config.Servers.Discovery, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+sessionToken)
+	req.Header.Set("Authorization", "Bearer "+sessionToken.Token)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {

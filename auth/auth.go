@@ -17,6 +17,26 @@ import (
 	"github.com/Tisawesomeness/gaia/util"
 )
 
+type AuthType int
+
+const (
+	// Authenticated with `hytale-launcher` client ID and `auth:launcher` scope
+	Launcher AuthType = iota
+	// Authenticated with `hytale-server` client ID and `auth:server` scope
+	Server
+)
+
+func (at AuthType) ClientID() string {
+	switch at {
+	case Launcher:
+		return "hytale-launcher"
+	case Server:
+		return "hytale-server"
+	default:
+		panic("Unknown auth type")
+	}
+}
+
 type TokenResponse struct {
 	AccessToken      string `json:"access_token"`
 	RefreshToken     string `json:"refresh_token"`
@@ -49,27 +69,7 @@ func defaultDeviceAuthResponse() DeviceAuthResponse {
 	}
 }
 
-type LauncherDataResponse struct {
-	Owner    string        `json:"owner"`
-	Profiles []GameProfile `json:"profiles"`
-}
-
-type GameProfile struct {
-	UUID     string `json:"uuid"`
-	Username string `json:"username"`
-}
-
-type GameSessionRequest struct {
-	UUID string `json:"uuid"`
-}
-type GameSessionResponse struct {
-	SessionToken  string `json:"sessionToken"`
-	IdentityToken string `json:"identityToken"`
-	// In RFC3339Nano format
-	ExpiresAt string `json:"expiresAt"`
-}
-
-// Starts the OAuth device flow. This will block until authentication is finished.
+// Starts the OAuth device flow, used for Server auth. This will block until authentication is finished.
 // onAuthRequired is called with the verification URL and code to be shown to the user.
 func OAuthDeviceFlow(config *config.Config, httpClient *http.Client, onAuthRequired func(DeviceAuthResponse)) (TokenResponse, error) {
 	deviceAuthResponse, err := startDeviceAuth(config, httpClient)
@@ -91,8 +91,8 @@ func OAuthDeviceFlow(config *config.Config, httpClient *http.Client, onAuthRequi
 
 func startDeviceAuth(config *config.Config, httpClient *http.Client) (DeviceAuthResponse, error) {
 	params := url.Values{}
-	params.Add("client_id", config.Auth.ClientID)
-	params.Add("scope", config.Auth.Scope)
+	params.Add("client_id", "hytale-server")
+	params.Add("scope", "openid offline auth:server")
 
 	resp, err := httpClient.PostForm(config.Auth.DeviceAuth, params)
 	if err != nil {
@@ -120,7 +120,7 @@ func startDeviceAuth(config *config.Config, httpClient *http.Client) (DeviceAuth
 
 func pollForToken(deviceAuthResponse DeviceAuthResponse, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
 	params := url.Values{}
-	params.Add("client_id", config.Auth.ClientID)
+	params.Add("client_id", "hytale-server")
 	params.Add("device_code", deviceAuthResponse.DeviceCode)
 	params.Add("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
 
@@ -176,7 +176,7 @@ type c struct {
 	err    error
 }
 
-// Starts the OAuth browser flow. This will block until authentication is finished.
+// Starts the OAuth browser flow, used for Launcher auth. This will block until authentication is finished.
 //
 // getRedirectFromUser is called with the auth URL to be shown to the user, and must return the code/state parameters extracted from a browser redirect.
 // You can either start a local web server and intercept the redirect, or ask the user to paste the redirect URL.
@@ -259,26 +259,24 @@ func calculateCodeChallenge(codeVerifier string) string {
 }
 
 func buildAuthStateURL(config *config.Config, state string, codeChallenge string) string {
-	params := url.Values{
-		"response_type":         []string{"code"},
-		"client_id":             []string{config.Auth.ClientID},
-		"redirect_uri":          []string{config.Auth.RedirectURI},
-		"scope":                 []string{config.Auth.Scope},
-		"state":                 []string{state},
-		"code_challenge":        []string{codeChallenge},
-		"code_challenge_method": []string{"S256"},
-	}
+	params := url.Values{}
+	params.Add("response_type", "code")
+	params.Add("client_id", "hytale-launcher")
+	params.Add("redirect_uri", config.Auth.RedirectURI)
+	params.Add("scope", "openid offline auth:launcher")
+	params.Add("state", state)
+	params.Add("code_challenge", codeChallenge)
+	params.Add("code_challenge_method", "S256")
 	return fmt.Sprintf("%s?%s", config.Auth.BrowserAuth, params.Encode())
 }
 
 func exchangeCodeForToken(config *config.Config, httpClient *http.Client, code string, verifier string) (TokenResponse, error) {
-	form := url.Values{
-		"grant_type":    []string{"authorization_code"},
-		"client_id":     []string{config.Auth.ClientID},
-		"code":          []string{code},
-		"redirect_uri":  []string{config.Auth.RedirectURI},
-		"code_verifier": []string{verifier},
-	}
+	form := url.Values{}
+	form.Add("grant_type", "authorization_code")
+	form.Add("client_id", "hytale-launcher")
+	form.Add("code", code)
+	form.Add("redirect_uri", config.Auth.RedirectURI)
+	form.Add("code_verifier", verifier)
 
 	req, err := http.NewRequest("POST", config.Auth.Token, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -306,9 +304,9 @@ func exchangeCodeForToken(config *config.Config, httpClient *http.Client, code s
 	return tokenResp, nil
 }
 
-func OAuthRefresh(oauthRefreshToken string, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
+func OAuthRefresh(oauthRefreshToken string, authType AuthType, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
 	params := url.Values{}
-	params.Add("client_id", config.Auth.ClientID)
+	params.Add("client_id", authType.ClientID())
 	params.Add("refresh_token", oauthRefreshToken)
 	params.Add("grant_type", "refresh_token")
 

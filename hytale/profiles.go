@@ -43,7 +43,7 @@ func fetchProfile(url string, authStore auth.AuthStore, httpClient *http.Client)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("Authorization", "Bearer "+sessionToken)
+	req.Header.Add("Authorization", "Bearer "+sessionToken.Token)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {

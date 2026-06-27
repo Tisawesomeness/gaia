@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
+	"github.com/Tisawesomeness/gaia/testutil"
 	"github.com/jarcoal/httpmock"
+	"github.com/maxatome/go-testdeep/td"
 )
 
 var (
-	sampleLauncherResponse = `{
+	sampleAccountDataResponse = `{
 		"owner": "owner",
 		"profiles": [
 			{
@@ -28,13 +30,46 @@ var (
 	}`
 
 	testUuid = "99c08079-3875-4aec-b329-34c4c88edc5a"
+
+	expectedLauncherData = &LauncherData{
+		PatchLines: map[string]BuildDetails{
+			"pre-release": {
+				BuildVersion: "2026.01.17-a4cc0e7dd",
+				ExpiresAt:    0,
+			},
+			"release": {
+				BuildVersion: "2026.01.17-4b0f30090",
+				ExpiresAt:    0,
+			},
+		},
+		Profiles: []GameProfile{
+			{
+				Username: "tis",
+				UUID:     "d798091b-f494-4208-a1ba-e24da5880786",
+			},
+		},
+	}
 )
 
-func registerProfilesSuccess(config *config.Config) {
-	httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(200, sampleLauncherResponse))
+func registerProfilesSuccess(config *config.Config, authType AuthType) {
+	switch authType {
+	case Server:
+		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(200, sampleAccountDataResponse))
+	case Launcher:
+		httpmock.RegisterResponder("GET", config.Feeds.LauncherData, httpmock.NewStringResponder(200, testutil.SampleLauncherData))
+	default:
+		panic("unknown auth type")
+	}
 }
-func registerProfilesFailure(config *config.Config) {
-	httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
+func registerProfilesFailure(config *config.Config, authType AuthType) {
+	switch authType {
+	case Server:
+		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
+	case Launcher:
+		httpmock.RegisterResponder("GET", config.Feeds.LauncherData, httpmock.NewStringResponder(500, ""))
+	default:
+		panic("unknown auth type")
+	}
 }
 
 // Causes the mock game session endpoint to return a token that expires in the given duration
@@ -84,28 +119,43 @@ func TestSession(t *testing.T) {
 			CreateGameSession:  "https://example.com/api/sessions",
 			RefreshGameSession: "https://example.com/api/sessions/refresh",
 		},
+		Feeds: config.FeedsConfig{
+			LauncherData: "https://account-data.example.com/my-account/get-launcher-data?arch=amd64&os=windows",
+		},
 	}
 
-	t.Run("GetAccountProfiles_Success", func(t *testing.T) {
-		registerProfilesSuccess(config)
+	// Account profiles
 
-		result, err := GetAccountProfiles("Bearer test-access-token", config, httpClient)
+	t.Run("GetAccountProfiles_Success", func(t *testing.T) {
+		registerProfilesSuccess(config, Server)
+
+		profiles, err := GetAccountProfiles("Bearer test-access-token", Server, config, httpClient)
 		if err != nil {
 			t.Fatalf("GetAccountProfiles failed: %v", err)
 		}
 
-		if result.Owner != "owner" {
-			t.Errorf("expected Owner=owner, got %s", result.Owner)
+		if len(profiles) != 1 {
+			t.Errorf("expected 1 profile, got %d", len(profiles))
 		}
-		if len(result.Profiles) != 1 {
-			t.Errorf("expected 1 profile, got %d", len(result.Profiles))
+	})
+
+	t.Run("GetAccountProfiles_SuccessLauncher", func(t *testing.T) {
+		registerProfilesSuccess(config, Launcher)
+
+		profiles, err := GetAccountProfiles("Bearer test-access-token", Launcher, config, httpClient)
+		if err != nil {
+			t.Fatalf("GetAccountProfiles failed: %v", err)
+		}
+
+		if len(profiles) != 1 {
+			t.Errorf("expected 1 profile, got %d", len(profiles))
 		}
 	})
 
 	t.Run("GetAccountProfiles_401", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(401, ""))
 
-		_, err := GetAccountProfiles("Bearer test-access-token", config, httpClient)
+		_, err := GetAccountProfiles("Bearer test-access-token", Server, config, httpClient)
 		if err == nil {
 			t.Fatalf("expected 401 error")
 		}
@@ -114,11 +164,56 @@ func TestSession(t *testing.T) {
 	t.Run("GetAccountProfiles_500", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
 
-		_, err := GetAccountProfiles("Bearer test-access-token", config, httpClient)
+		_, err := GetAccountProfiles("Bearer test-access-token", Server, config, httpClient)
 		if err == nil {
 			t.Fatalf("expected error for server error")
 		}
 	})
+
+	// Launcher data
+
+	t.Run("success case (200 OK)", func(t *testing.T) {
+		registerProfilesSuccess(config, Launcher)
+
+		data, err := GetLauncherData(config, httpClient, "sample-token")
+
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+		if data == nil {
+			t.Fatal("Expected launcher data, got nil")
+		}
+
+		td.Cmp(t, data, expectedLauncherData)
+	})
+
+	t.Run("network failure (401 unauthorized)", func(t *testing.T) {
+		httpmock.RegisterResponder("GET", config.Feeds.LauncherData, httpmock.NewStringResponder(http.StatusUnauthorized, ""))
+
+		_, err := GetLauncherData(config, httpClient, "sample-token")
+
+		if err == nil {
+			t.Fatal("Expected an error on 401 unauthorized, got nil")
+		}
+	})
+
+	t.Run("empty response body schema validation (200 OK)", func(t *testing.T) {
+		httpmock.RegisterResponder("GET", config.Feeds.LauncherData, httpmock.NewStringResponder(200, `{"patchlines": {}, "profiles": []}`))
+
+		data, err := GetLauncherData(config, httpClient, "sample-token")
+
+		if err != nil {
+			t.Fatalf("Expected no error for empty data, got %v", err)
+		}
+
+		expectedLauncherData := &LauncherData{
+			PatchLines: make(map[string]BuildDetails),
+			Profiles:   []GameProfile{},
+		}
+		td.Cmp(t, data, expectedLauncherData)
+	})
+
+	// Create game session
 
 	t.Run("CreateGameSession_Success", func(t *testing.T) {
 		registerGameSessionSuccess(config, time.Hour)
@@ -150,6 +245,8 @@ func TestSession(t *testing.T) {
 			t.Fatalf("expected error for server error")
 		}
 	})
+
+	// Refresh game session
 
 	t.Run("RefreshGameSession_Success", func(t *testing.T) {
 		registerGameSessionRefreshSuccess(t, config, time.Hour)

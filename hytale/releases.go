@@ -160,7 +160,7 @@ func fetchGameReleaseUrl(patchline Patchline, feeds *HytaleFeeds) (string, error
 		return "", err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.Token))
 
 	resp, err := feeds.http.Do(req)
 	if err != nil {

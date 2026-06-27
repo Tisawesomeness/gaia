@@ -38,29 +38,6 @@ func WithRequest(r httpmock.Responder) httpmock.Responder {
 	}
 }
 
-type TestAuthStore struct {
-	OAuthToken       string
-	GameSessionToken string
-	HTTPClient       *http.Client
-}
-
-// GetGameSessionToken implements [AuthStore].
-func (t TestAuthStore) GetGameSessionToken() (string, error) {
-	return t.OAuthToken, nil
-}
-
-// GetOAuthToken implements [AuthStore].
-func (t TestAuthStore) GetOAuthToken() (string, error) {
-	return t.GameSessionToken, nil
-}
-
-func NewTestAuthStore(http *http.Client) TestAuthStore {
-	return TestAuthStore{
-		OAuthToken:       "sample",
-		GameSessionToken: "sample",
-	}
-}
-
 var (
 	//go:embed sample/launcher.json
 	SampleLauncherRelease string

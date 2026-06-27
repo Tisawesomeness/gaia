@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/testutil"
 	"github.com/jarcoal/httpmock"
@@ -77,7 +78,7 @@ func TestReleases(t *testing.T) {
 			MavenArtifact: "Server",
 		},
 	}
-	authStore := testutil.NewTestAuthStore(http)
+	authStore := auth.NewSimpleAuthStore(auth.Server)
 	feeds := &HytaleFeeds{
 		config:    config,
 		http:      http,

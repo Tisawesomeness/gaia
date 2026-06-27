@@ -53,8 +53,6 @@ type AuthConfig struct {
 	OAuthRefreshBuffer       int           `json:"oauth_refresh_buffer"`
 	GameSessionRefreshBuffer int           `json:"game_session_refresh_buffer"`
 	Breaker                  BreakerConfig `json:"breaker"`
-	ClientID                 string        `json:"client_id"`
-	Scope                    string        `json:"scope"`
 	DeviceAuth               string        `json:"device_auth"`
 	BrowserAuth              string        `json:"browser_auth"`
 	BrowserAuthTimeout       int           `json:"browser_auth_timeout"`
