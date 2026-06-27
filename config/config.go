@@ -55,6 +55,9 @@ type AuthConfig struct {
 	ClientID                 string        `json:"client_id"`
 	Scope                    string        `json:"scope"`
 	DeviceAuth               string        `json:"device_auth"`
+	BrowserAuth              string        `json:"browser_auth"`
+	BrowserAuthTimeout       int           `json:"browser_auth_timeout"`
+	RedirectURI              string        `json:"redirect_uri"`
 	Token                    string        `json:"token"`
 	Profiles                 string        `json:"profiles"`
 	CreateGameSession        string        `json:"create_game_session"`

@@ -1,8 +1,13 @@
 package auth
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,24 +31,6 @@ var (
 		"id_token": "test-id-token",
 		"expires_in": 20
 	}`
-
-	sampleLauncherResponse = `{
-		"owner": "owner",
-		"profiles": [
-			{
-				"uuid": "99c08079-3875-4aec-b329-34c4c88edc5a",
-				"username": "test-user"
-			}
-		]
-	}`
-
-	sampleGameSessionResponse = `{
-		"sessionToken": "test-session-token",
-		"identityToken": "test-identity-token",
-		"expiresAt": "` + time.Now().Add(time.Hour).Format(time.RFC3339Nano) + `"
-	}`
-
-	testUuid = "99c08079-3875-4aec-b329-34c4c88edc5a"
 )
 
 // Causes the mock OAuth login endpoints to return a token that expires in the given duration (with second resolution)
@@ -80,45 +67,7 @@ func registerOAuthRefreshFailure(config *config.Config) {
 	httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
 }
 
-func registerProfilesSuccess(config *config.Config) {
-	httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(200, sampleLauncherResponse))
-}
-func registerProfilesFailure(config *config.Config) {
-	httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
-}
-
-// Causes the mock game session endpoint to return a token that expires in the given duration
-func registerGameSessionSuccess(config *config.Config, expires time.Duration) {
-	expiresAtString := time.Now().Add(expires).Format(time.RFC3339Nano)
-
-	sampleGameSessionResponse = fmt.Sprintf(`{
-		"sessionToken": "test-session-token",
-		"identityToken": "test-identity-token",
-		"expiresAt": "%s"
-	}`, expiresAtString)
-	httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(200, sampleGameSessionResponse))
-}
-func registerGameSessionFailure(config *config.Config) {
-	httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(500, ""))
-}
-
-// Causes the mock game session endpoint to return a token that expires in the given duration
-// and fails on subsequent refreshes.
-func registerGameSessionRefreshSuccess(t *testing.T, config *config.Config, expires time.Duration) {
-	expiresAtString := time.Now().Add(expires).Format(time.RFC3339Nano)
-
-	sampleGameSessionResponse = fmt.Sprintf(`{
-		"sessionToken": "test-session-token-refreshed",
-		"identityToken": "test-identity-token-2",
-		"expiresAt": "%s"
-	}`, expiresAtString)
-	httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(200, sampleGameSessionResponse).Once(t.Log))
-}
-func registerGameSessionRefreshFailure(config *config.Config) {
-	httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(500, ""))
-}
-
-func TestAuth(t *testing.T) {
+func TestDeviceAuth(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping long tests")
 	}
@@ -130,13 +79,10 @@ func TestAuth(t *testing.T) {
 
 	config := &config.Config{
 		Auth: config.AuthConfig{
-			ClientID:           "test-client-id",
-			Scope:              "openid profile",
-			DeviceAuth:         "https://example.com/oauth/device",
-			Token:              "https://example.com/oauth/token",
-			Profiles:           "https://example.com/profiles",
-			CreateGameSession:  "https://example.com/api/sessions",
-			RefreshGameSession: "https://example.com/api/sessions/refresh",
+			ClientID:   "test-client-id",
+			Scope:      "openid profile",
+			DeviceAuth: "https://example.com/oauth/device",
+			Token:      "https://example.com/oauth/token",
 		},
 	}
 
@@ -255,91 +201,141 @@ func TestAuth(t *testing.T) {
 			t.Fatalf("expected error for server error")
 		}
 	})
+}
 
-	t.Run("GetAccountProfiles_Success", func(t *testing.T) {
-		registerProfilesSuccess(config)
+func TestBrowserAuth(t *testing.T) {
+	httpClient := &http.Client{
+		Timeout: time.Duration(10) * time.Second,
+	}
+	httpmock.ActivateNonDefault(httpClient)
 
-		result, err := GetAccountProfiles("Bearer test-access-token", config, httpClient)
+	config := &config.Config{
+		Auth: config.AuthConfig{
+			ClientID:           "test-id",
+			Scope:              "openid",
+			BrowserAuth:        "https://oauth.example.com/auth",
+			BrowserAuthTimeout: 1,
+			RedirectURI:        "https://example.com/redirect",
+			Token:              "https://oauth.example.com/token",
+		},
+	}
+
+	t.Run("OAuthBrowserFlow_Success", func(t *testing.T) {
+		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+			parsed, err := url.Parse(authUrl)
+			if err != nil {
+				return RedirectParams{}, err
+			}
+			encodedState := parsed.Query().Get("state")
+			if encodedState == "" {
+				return RedirectParams{}, errors.New("state missing")
+			}
+
+			decodedState, err := base64.RawURLEncoding.DecodeString(encodedState)
+			if err != nil {
+				return RedirectParams{}, fmt.Errorf("decode error: %w", err)
+			}
+
+			var statePort stateWithPort
+			if err := json.Unmarshal(decodedState, &statePort); err != nil {
+				return RedirectParams{}, fmt.Errorf("unmarshal error: %w", err)
+			}
+
+			return RedirectParams{
+				Code:  "test-code",
+				State: statePort.State,
+			}, nil
+		}
+
+		registerOAuthSuccess(config, time.Minute)
+
+		token, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
 		if err != nil {
-			t.Fatalf("GetAccountProfiles failed: %v", err)
+			t.Fatalf("OAuthBrowserFlow failed: %v", err)
 		}
 
-		if result.Owner != "owner" {
-			t.Errorf("expected Owner=owner, got %s", result.Owner)
-		}
-		if len(result.Profiles) != 1 {
-			t.Errorf("expected 1 profile, got %d", len(result.Profiles))
+		if !token.isSuccess() {
+			t.Errorf("Expected successful token, got error: %v", token.Error)
 		}
 	})
 
-	t.Run("GetAccountProfiles_401", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(401, ""))
+	t.Run("OAuthBrowserFlow_GetRedirectError", func(t *testing.T) {
+		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+			return RedirectParams{}, errors.New("malformed url")
+		}
 
-		_, err := GetAccountProfiles("Bearer test-access-token", config, httpClient)
+		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
 		if err == nil {
-			t.Fatalf("expected 401 error")
+			t.Fatalf("expected error thrown in getRedirectFromUser")
 		}
 	})
 
-	t.Run("GetAccountProfiles_500", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
+	t.Run("OAuthBrowserFlow_StateMismatch", func(t *testing.T) {
+		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+			return RedirectParams{
+				Code:  "test-code",
+				State: "wrong-state",
+			}, nil
+		}
 
-		_, err := GetAccountProfiles("Bearer test-access-token", config, httpClient)
+		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
 		if err == nil {
-			t.Fatalf("expected error for server error")
+			t.Fatalf("expected error for state mismatch")
 		}
 	})
 
-	t.Run("CreateGameSession_Success", func(t *testing.T) {
-		registerGameSessionSuccess(config, time.Hour)
-
-		session, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
-		if err != nil {
-			t.Fatalf("CreateGameSession failed: %v", err)
+	t.Run("OAuthBrowserFlow_EmptyCode", func(t *testing.T) {
+		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+			parsed, _ := url.Parse(authUrl)
+			encodedState := parsed.Query().Get("state")
+			decodedState, _ := base64.RawURLEncoding.DecodeString(encodedState)
+			var statePort stateWithPort
+			json.Unmarshal(decodedState, &statePort)
+			return RedirectParams{Code: "", State: statePort.State}, nil
 		}
 
-		if session.SessionToken != "test-session-token" {
-			t.Errorf("expected SessionToken=test-session-token, got %s", session.SessionToken)
-		}
-	})
-
-	t.Run("CreateGameSession_401", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(401, ""))
-
-		_, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
+		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
 		if err == nil {
-			t.Fatalf("expected 401 error")
+			t.Fatalf("expected error for empty code")
 		}
 	})
 
-	t.Run("CreateGameSession_ServerError", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(500, ""))
+	t.Run("OAuthBrowserFlow_TokenEndpointFailure", func(t *testing.T) {
+		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+			parsed, _ := url.Parse(authUrl)
+			encodedState := parsed.Query().Get("state")
+			decodedState, _ := base64.RawURLEncoding.DecodeString(encodedState)
+			var statePort stateWithPort
+			json.Unmarshal(decodedState, &statePort)
+			return RedirectParams{Code: "test-code", State: statePort.State}, nil
+		}
 
-		_, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
+		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(401, `{"error": "access_denied"}`))
+
+		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
 		if err == nil {
-			t.Fatalf("expected error for server error")
+			t.Fatalf("expected error for token endpoint failure")
 		}
 	})
 
-	t.Run("RefreshGameSession_Success", func(t *testing.T) {
-		registerGameSessionRefreshSuccess(t, config, time.Hour)
-
-		session, err := RefreshGameSession("Bearer test-session-token", testUuid, config, httpClient)
-		if err != nil {
-			t.Fatalf("RefreshGameSession failed: %v", err)
+	t.Run("OAuthBrowserFlow_Timeout", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("skipping long tests")
 		}
 
-		if session.SessionToken != "test-session-token-refreshed" {
-			t.Errorf("expected SessionToken=test-session-token-refreshed, got %s", session.SessionToken)
+		// Mock function that delays for 2 seconds (longer than 1s timeout)
+		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+			time.Sleep(2 * time.Second)
+			return RedirectParams{}, errors.New("timeout not triggered")
 		}
-	})
 
-	t.Run("RefreshGameSession_401", func(t *testing.T) {
-		httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(401, ""))
-
-		_, err := RefreshGameSession("Bearer test-session-token", testUuid, config, httpClient)
+		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
 		if err == nil {
-			t.Fatalf("expected 401 error")
+			t.Fatalf("expected timeout error")
+		}
+
+		if !strings.Contains(err.Error(), "timeout waiting for browser auth") {
+			t.Fatalf("expected timeout error, got: %v", err)
 		}
 	})
 }

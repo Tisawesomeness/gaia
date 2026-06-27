@@ -1,12 +1,16 @@
 package auth
 
 import (
-	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
@@ -162,6 +166,146 @@ func pollForToken(deviceAuthResponse DeviceAuthResponse, config *config.Config, 
 	}
 }
 
+type RedirectParams struct {
+	Code  string
+	State string
+}
+
+type c struct {
+	params RedirectParams
+	err    error
+}
+
+// Starts the OAuth browser flow. This will block until authentication is finished.
+//
+// getRedirectFromUser is called with the auth URL to be shown to the user, and must return the code/state parameters extracted from a browser redirect.
+// You can either start a local web server and intercept the redirect, or ask the user to paste the redirect URL.
+//
+// port is the port the user will be redirected to. If using a local web server, this is the port of the web server.
+// If not using a local web server, port should be an arbitrary unused port.
+func OAuthBrowserFlow(config *config.Config, httpClient *http.Client, port uint16, getRedirectFromUser func(string) (RedirectParams, error)) (TokenResponse, error) {
+	state, err := generateRandomString(32)
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("failed to generate state: %w", err)
+	}
+	encodedState := encodeStateWithPort(state, port)
+
+	codeVerifier, err := generateRandomString(64)
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("failed to generate code verifier: %w", err)
+	}
+	codeChallenge := calculateCodeChallenge(codeVerifier)
+
+	authUrl := buildAuthStateURL(config, encodedState, codeChallenge)
+
+	resultChan := make(chan c, 1)
+	go func() {
+		params, err := getRedirectFromUser(authUrl)
+		resultChan <- c{params, err}
+	}()
+
+	timeout := time.After(time.Duration(config.Auth.BrowserAuthTimeout) * time.Second)
+	select {
+	case result := <-resultChan:
+		if result.err != nil {
+			return TokenResponse{}, fmt.Errorf("getQueryFromRedirect failed: %w", result.err)
+		}
+		clientRedirectQuery := result.params
+
+		if clientRedirectQuery.State != state {
+			return TokenResponse{}, fmt.Errorf("invalid OAuth state parameter in redirect")
+		}
+		code := clientRedirectQuery.Code
+		if code == "" {
+			return TokenResponse{}, errors.New("authorization code missing in redirect query parameters")
+		}
+
+		tokenResp, err := exchangeCodeForToken(config, httpClient, code, codeVerifier)
+		if err != nil {
+			return TokenResponse{}, fmt.Errorf("token exchange failed: %w", err)
+		}
+		return tokenResp, nil
+	case <-timeout:
+		return TokenResponse{}, fmt.Errorf("timeout waiting for browser auth after %d seconds", config.Auth.BrowserAuthTimeout)
+	}
+}
+
+func generateRandomString(len int) (string, error) {
+	bytes := make([]byte, len)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to read random bytes: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+type stateWithPort struct {
+	State string `json:"state"`
+	Port  uint16 `json:"port"`
+}
+
+func encodeStateWithPort(state string, port uint16) string {
+	s := stateWithPort{
+		State: state,
+		Port:  port,
+	}
+	bytes, _ := json.Marshal(s)
+	return base64.RawURLEncoding.EncodeToString(bytes)
+}
+
+func calculateCodeChallenge(codeVerifier string) string {
+	hash := sha256.Sum256([]byte(codeVerifier))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
+}
+
+func buildAuthStateURL(config *config.Config, state string, codeChallenge string) string {
+	params := url.Values{
+		"response_type":         []string{"code"},
+		"client_id":             []string{config.Auth.ClientID},
+		"redirect_uri":          []string{config.Auth.RedirectURI},
+		"scope":                 []string{config.Auth.Scope},
+		"state":                 []string{state},
+		"code_challenge":        []string{codeChallenge},
+		"code_challenge_method": []string{"S256"},
+	}
+	return fmt.Sprintf("%s?%s", config.Auth.BrowserAuth, params.Encode())
+}
+
+func exchangeCodeForToken(config *config.Config, httpClient *http.Client, code string, verifier string) (TokenResponse, error) {
+	form := url.Values{
+		"grant_type":    []string{"authorization_code"},
+		"client_id":     []string{config.Auth.ClientID},
+		"code":          []string{code},
+		"redirect_uri":  []string{config.Auth.RedirectURI},
+		"code_verifier": []string{verifier},
+	}
+
+	req, err := http.NewRequest("POST", config.Auth.Token, strings.NewReader(form.Encode()))
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("failed to create token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("failed to execute token request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	body := string(bodyBytes)
+
+	if resp.StatusCode != http.StatusOK {
+		return TokenResponse{}, fmt.Errorf("token exchange failed with HTTP status %d: %s", resp.StatusCode, body)
+	}
+
+	var tokenResp TokenResponse
+	if err := json.Unmarshal([]byte(body), &tokenResp); err != nil {
+		return TokenResponse{}, fmt.Errorf("failed to parse token response JSON: %w", err)
+	}
+	return tokenResp, nil
+}
+
 func OAuthRefresh(oauthRefreshToken string, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
 	params := url.Values{}
 	params.Add("client_id", config.Auth.ClientID)
@@ -194,106 +338,4 @@ func OAuthRefresh(oauthRefreshToken string, config *config.Config, httpClient *h
 	}
 
 	return tokenResponse, nil
-}
-
-func GetAccountProfiles(oauthAccessToken string, config *config.Config, httpClient *http.Client) (LauncherDataResponse, error) {
-	req, err := http.NewRequest("GET", config.Auth.Profiles, nil)
-	if err != nil {
-		return LauncherDataResponse{}, err
-	}
-
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", oauthAccessToken))
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return LauncherDataResponse{}, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return LauncherDataResponse{}, util.NewBadResponseError("Get account profiles", resp)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return LauncherDataResponse{}, err
-	}
-
-	var launcherDataResponse LauncherDataResponse
-	err = json.Unmarshal(body, &launcherDataResponse)
-	if err != nil {
-		return LauncherDataResponse{}, err
-	}
-
-	return launcherDataResponse, nil
-}
-
-func CreateGameSession(oauthAccessToken string, uuid string, config *config.Config, httpClient *http.Client) (GameSessionResponse, error) {
-	requestBody, err := json.Marshal(GameSessionRequest{UUID: uuid})
-	if err != nil {
-		return GameSessionResponse{}, err
-	}
-
-	req, err := http.NewRequest("POST", config.Auth.CreateGameSession, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return GameSessionResponse{}, err
-	}
-
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", oauthAccessToken))
-	req.Header.Add("Content-Type", "application/json")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return GameSessionResponse{}, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return GameSessionResponse{}, util.NewBadResponseError("Create game session", resp)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return GameSessionResponse{}, err
-	}
-
-	var gameSessionResponse GameSessionResponse
-	err = json.Unmarshal(body, &gameSessionResponse)
-	if err != nil {
-		return GameSessionResponse{}, err
-	}
-
-	return gameSessionResponse, nil
-}
-
-func RefreshGameSession(gameSessionToken string, uuid string, config *config.Config, httpClient *http.Client) (GameSessionResponse, error) {
-	req, err := http.NewRequest("POST", config.Auth.RefreshGameSession, nil)
-	if err != nil {
-		return GameSessionResponse{}, err
-	}
-
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", gameSessionToken))
-	req.Header.Add("Content-Type", "application/json")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return GameSessionResponse{}, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return GameSessionResponse{}, util.NewBadResponseError("Refresh game session", resp)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return GameSessionResponse{}, err
-	}
-
-	var gameSessionResponse GameSessionResponse
-	err = json.Unmarshal(body, &gameSessionResponse)
-	if err != nil {
-		return GameSessionResponse{}, err
-	}
-
-	return gameSessionResponse, nil
 }
