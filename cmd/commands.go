@@ -190,7 +190,7 @@ func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *disco
 		}()
 
 		ctx := ce.newCommandContext(s, i)
-		handleCommand(ctx, i.ApplicationCommandData().ID)
+		handleCommand(ctx, i.ApplicationCommandData().Name)
 
 	case discordgo.InteractionMessageComponent:
 		defer func() {
