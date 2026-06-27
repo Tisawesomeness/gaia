@@ -27,34 +27,6 @@ type AuthStore interface {
 	GetGameSessionToken() (Token, error)
 }
 
-type SimpleAuthStore struct {
-	AuthType         AuthType
-	OAuthToken       string
-	GameSessionToken string
-}
-
-func (a SimpleAuthStore) GetOAuthToken() (Token, error) {
-	return Token{
-		Token:    a.GameSessionToken,
-		AuthType: a.AuthType,
-	}, nil
-}
-
-func (a SimpleAuthStore) GetGameSessionToken() (Token, error) {
-	return Token{
-		Token:    a.OAuthToken,
-		AuthType: a.AuthType,
-	}, nil
-}
-
-func NewSimpleAuthStore(authType AuthType) SimpleAuthStore {
-	return SimpleAuthStore{
-		AuthType:         authType,
-		OAuthToken:       "sample",
-		GameSessionToken: "sample",
-	}
-}
-
 type authStore struct {
 	config     *config.Config
 	db         *db.DB

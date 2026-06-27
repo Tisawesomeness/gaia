@@ -7,7 +7,8 @@ import (
 
 	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
-	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/Tisawesomeness/gaia/testutil/atestutil"
+	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/jarcoal/httpmock"
 	"github.com/maxatome/go-testdeep/td"
 )
@@ -68,7 +69,7 @@ func TestProfiles(t *testing.T) {
 		},
 	}
 
-	authStore := auth.NewSimpleAuthStore(auth.Server)
+	authStore := atestutil.NewTestAuthStore(auth.Server)
 
 	t.Run("fetch profile by username", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+sampleUsername, httpmock.NewStringResponder(200, testutil.SampleProfileResponse))

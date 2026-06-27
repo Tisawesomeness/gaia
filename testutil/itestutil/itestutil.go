@@ -8,7 +8,7 @@ import (
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/hytale"
-	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/jarcoal/httpmock"
 )

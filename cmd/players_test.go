@@ -3,8 +3,8 @@ package cmd
 import (
 	"testing"
 
-	"github.com/Tisawesomeness/gaia/itestutil"
-	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/Tisawesomeness/gaia/testutil/itestutil"
+	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/assert"
 )

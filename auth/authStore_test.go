@@ -7,7 +7,7 @@ import (
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
-	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/assert"
 )

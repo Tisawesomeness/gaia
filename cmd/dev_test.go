@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Tisawesomeness/gaia/itestutil"
-	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/Tisawesomeness/gaia/testutil/itestutil"
+	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
 )

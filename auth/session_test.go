@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
-	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/jarcoal/httpmock"
 	"github.com/maxatome/go-testdeep/td"
 )

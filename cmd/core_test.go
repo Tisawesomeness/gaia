@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/stretchr/testify/assert"
 )
 

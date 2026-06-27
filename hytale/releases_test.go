@@ -10,7 +10,8 @@ import (
 
 	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
-	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/Tisawesomeness/gaia/testutil/atestutil"
+	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/jarcoal/httpmock"
 	"github.com/maxatome/go-testdeep/td"
 	"github.com/stretchr/testify/assert"
@@ -78,7 +79,7 @@ func TestReleases(t *testing.T) {
 			MavenArtifact: "Server",
 		},
 	}
-	authStore := auth.NewSimpleAuthStore(auth.Server)
+	authStore := atestutil.NewTestAuthStore(auth.Server)
 	feeds := &HytaleFeeds{
 		config:    config,
 		http:      http,

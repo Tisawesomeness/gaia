@@ -7,7 +7,8 @@ import (
 
 	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
-	"github.com/Tisawesomeness/gaia/testutil"
+	"github.com/Tisawesomeness/gaia/testutil/atestutil"
+	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/jarcoal/httpmock"
 	"github.com/maxatome/go-testdeep/td"
 	"github.com/stretchr/testify/assert"
@@ -68,7 +69,7 @@ func TestServerDiscovery(t *testing.T) {
 		},
 	}
 
-	authStore := auth.NewSimpleAuthStore(auth.Launcher)
+	authStore := atestutil.NewTestAuthStore(auth.Launcher)
 
 	t.Run("success case (200 OK)", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Servers.Discovery, httpmock.NewStringResponder(200, testutil.SampleServerResponse))
@@ -112,7 +113,7 @@ func TestServerDiscovery(t *testing.T) {
 	t.Run("Errors if no auth:launcher scope", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Servers.Discovery, httpmock.NewStringResponder(200, testutil.SampleServerResponse))
 
-		serverAuthStore := auth.NewSimpleAuthStore(auth.Server)
+		serverAuthStore := atestutil.NewTestAuthStore(auth.Server)
 		servers, err := GetServers(config, httpClient, serverAuthStore)
 
 		assert.Error(t, err)

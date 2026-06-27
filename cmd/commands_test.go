@@ -10,7 +10,8 @@ import (
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/hytale"
-	"github.com/Tisawesomeness/gaia/itestutil"
+	"github.com/Tisawesomeness/gaia/testutil/atestutil"
+	"github.com/Tisawesomeness/gaia/testutil/itestutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/jarcoal/httpmock"
 )
@@ -60,7 +61,7 @@ func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
 	httpmock.ActivateNonDefault(http)
 	itestutil.RegisterFeedResponders(c)
 
-	authStore := auth.NewSimpleAuthStore(auth.Launcher)
+	authStore := atestutil.NewTestAuthStore(auth.Launcher)
 	feeds, err := hytale.NewHytaleFeeds(c, db, http, authStore)
 	if err != nil {
 		return nil, err
