@@ -20,6 +20,7 @@ type BreakerConfig struct {
 
 type CredentialsConfig struct {
 	DiscordToken string `json:"discord_token"`
+	ProfileUUID  string `json:"profile_uuid"`
 }
 
 type ValkeyConfig struct {
@@ -129,6 +130,10 @@ func LoadConfig() (Config, error) {
 	if envToken, exists := os.LookupEnv("GAIA_DISCORD_TOKEN"); exists {
 		log.Println("Overridden discord token from env vars")
 		config.Credentials.DiscordToken = envToken
+	}
+	if envToken, exists := os.LookupEnv("GAIA_PROFILE_UUID"); exists {
+		log.Println("Overridden profile UUID from env vars")
+		config.Credentials.ProfileUUID = envToken
 	}
 	if envToken, exists := os.LookupEnv("GAIA_VALKEY_PASS"); exists {
 		log.Println("Overridden valkey password from env vars")

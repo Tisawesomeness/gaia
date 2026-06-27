@@ -3,7 +3,12 @@
     // Discord bot token used to authenticate with the Discord API.
     // Create a Discord bot and copy the token at https://discord.com/developers/applications
     // Overridden by GAIA_DISCORD_TOKEN env var.
-    "token": "YOUR_DISCORD_BOT_TOKEN"
+    "token": "YOUR_DISCORD_BOT_TOKEN",
+    // The UUID of your Hytale player profile (the UUID you use to join servers).
+    // If set, that profile will be used to perform API lookups.
+    // If blank, the bot will look up your owned profiles after authentication and pick the first one.
+    // Overridden by GAIA_PROFILE_UUID env var.
+    "profile_uuid": ""
   },
   "valkey": {
     // Valkey/Redis address to connect to.

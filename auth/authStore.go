@@ -144,25 +144,36 @@ func (a *authStore) initializeFreshGameSession() (db.GameSessionToken, string, e
 	}
 	log.Println("Found stored game session token")
 
-	storedProfileUUID, err := a.db.GetProfileUUID()
-	if err != nil || storedProfileUUID == "" {
-		return db.GameSessionToken{}, "", errors.New("No stored profile UUID found")
+	var profileUUID string
+	if a.config.Credentials.ProfileUUID != "" {
+		profileUUID = a.config.Credentials.ProfileUUID
+	} else {
+		storedProfileUUID, err := a.db.GetProfileUUID()
+		if err != nil || storedProfileUUID == "" {
+			return db.GameSessionToken{}, "", errors.New("No stored profile UUID found")
+		}
+		profileUUID = storedProfileUUID
 	}
 
 	if time.Now().After((*storedGameSession).ExpiresAt) {
 		return db.GameSessionToken{}, "", expiredGameSessionError
 	}
-	refreshedSession, err := a.ensureGameSessionRefreshed(*storedGameSession, storedProfileUUID)
+	refreshedSession, err := a.ensureGameSessionRefreshed(*storedGameSession, profileUUID)
 	if err != nil {
 		return db.GameSessionToken{}, "", err
 	}
 
-	return refreshedSession, storedProfileUUID, nil
+	return refreshedSession, profileUUID, nil
 }
 
 // Tries to initialize the profile UUID from database first,
 // then tries requesting it with the OAuth token
+// If config.Credentials.ProfileUUID is set, use that directly
 func (a *authStore) initializeProfile(oAuthToken db.OAuthToken) (string, error) {
+	if a.config.Credentials.ProfileUUID != "" {
+		return a.config.Credentials.ProfileUUID, nil
+	}
+
 	storedUUID, err := a.db.GetProfileUUID()
 	if err != nil || storedUUID == "" {
 		if err != nil {

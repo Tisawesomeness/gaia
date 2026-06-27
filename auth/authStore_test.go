@@ -59,8 +59,11 @@ func storeGameSession(expires time.Duration) {
 	})
 }
 
-func sampleConfig(secondsBeforeRefresh int) *config.Config {
+func sampleConfig(secondsBeforeRefresh int, uuid string) *config.Config {
 	return &config.Config{
+		Credentials: config.CredentialsConfig{
+			ProfileUUID: uuid,
+		},
 		Auth: config.AuthConfig{
 			OAuthRefreshBuffer:       secondsBeforeRefresh,
 			GameSessionRefreshBuffer: secondsBeforeRefresh,
@@ -102,7 +105,7 @@ func TestAuthStore(t *testing.T) {
 	httpmock.ActivateNonDefault(httpClient)
 
 	t.Run("Full happy path", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		// No DB values, all endpoints succeed
 		registerOAuthSuccess(config, time.Second*7)
@@ -123,8 +126,29 @@ func TestAuthStore(t *testing.T) {
 		assertTokens(t, "test-access-token-refreshed", "test-session-token-refreshed", authStore)
 	}))
 
+	t.Run("If config set profile UUID, profile lookup is skipped", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, "c97da2da-f703-48cd-a1fa-e22a8e7e8588")
+
+		// No DB values, all endpoints succeed
+		registerOAuthSuccess(config, time.Second*7)
+		registerGameSessionSuccess(config, time.Second*7)
+
+		// Expect both tokens to be returned
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+		assertTokens(t, "test-access-token", "test-session-token", authStore)
+
+		// Wait for refresh (7s-3s = 4s, less than the 5s needed for renewal)
+		registerOAuthRefreshSuccess(t, config, time.Hour)
+		registerGameSessionRefreshSuccess(t, config, time.Hour)
+		time.Sleep(time.Second * 3)
+
+		// Expect both tokens to be updated
+		assertTokens(t, "test-access-token-refreshed", "test-session-token-refreshed", authStore)
+	}))
+
 	t.Run("OAuth fail", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		registerOAuthFailure(config)
 
@@ -133,7 +157,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("Profile fail", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		registerOAuthSuccess(config, time.Second*7)
 		registerProfilesFailure(config)
@@ -143,7 +167,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("Game session fail", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		registerOAuthSuccess(config, time.Second*7)
 		registerProfilesSuccess(config)
@@ -154,7 +178,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("Restore all values from DB", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		storeOAuthToken(time.Hour)
 		storeProfile()
@@ -166,7 +190,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("OAuth refreshes if DB loads near-expired token", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		storeOAuthToken(time.Second)
 		registerOAuthRefreshSuccess(t, config, time.Hour)
@@ -179,7 +203,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("OAuth gets new token if DB loads expired token", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		storeOAuthToken(-time.Second)
 		registerOAuthSuccess(config, time.Hour)
@@ -192,7 +216,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("Game session refreshes if DB loads near-expired token", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		storeOAuthToken(time.Hour)
 		storeProfile()
@@ -205,7 +229,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("Game session gets new token if DB loads expired token", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		storeOAuthToken(time.Hour)
 		storeProfile()
@@ -218,7 +242,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("Creates a new game session if no profile stored", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		storeOAuthToken(time.Hour)
 		// do not store profile
@@ -232,7 +256,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("unexpired OAuth token is OK even after refresh fail", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		storeOAuthToken(time.Second * 7)
 		storeProfile()
@@ -251,7 +275,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("game session refresh fail falls back to oauth then creates a new session", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(5)
+		config := sampleConfig(5, "")
 
 		storeOAuthToken(time.Hour)
 		storeProfile()
@@ -271,7 +295,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("expired OAuth token returns error", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(1)
+		config := sampleConfig(1, "")
 
 		storeOAuthToken(time.Second * 2)
 		storeProfile()
@@ -290,7 +314,7 @@ func TestAuthStore(t *testing.T) {
 	}))
 
 	t.Run("expired game session token returns error", authStoreTestCase(func(t *testing.T) {
-		config := sampleConfig(1)
+		config := sampleConfig(1, "")
 
 		storeOAuthToken(time.Hour)
 		storeProfile()
