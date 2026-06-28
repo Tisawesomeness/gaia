@@ -10,6 +10,7 @@ import (
 	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/jarcoal/httpmock"
 	"github.com/maxatome/go-testdeep/td"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -104,10 +105,6 @@ func registerGameSessionRefreshFailure(config *config.Config) {
 }
 
 func TestSession(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping long tests")
-	}
-
 	httpClient := &http.Client{
 		Timeout: time.Duration(10) * time.Second,
 	}
@@ -128,44 +125,30 @@ func TestSession(t *testing.T) {
 		registerProfilesSuccess(config, Server)
 
 		profiles, err := GetAccountProfiles("Bearer test-access-token", Server, config, httpClient)
-		if err != nil {
-			t.Fatalf("GetAccountProfiles failed: %v", err)
-		}
-
-		if len(profiles) != 1 {
-			t.Errorf("expected 1 profile, got %d", len(profiles))
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(profiles))
 	})
 
 	t.Run("GetAccountProfiles_SuccessLauncher", func(t *testing.T) {
 		registerProfilesSuccess(config, Launcher)
 
 		profiles, err := GetAccountProfiles("Bearer test-access-token", Launcher, config, httpClient)
-		if err != nil {
-			t.Fatalf("GetAccountProfiles failed: %v", err)
-		}
-
-		if len(profiles) != 1 {
-			t.Errorf("expected 1 profile, got %d", len(profiles))
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(profiles))
 	})
 
 	t.Run("GetAccountProfiles_401", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(401, ""))
 
 		_, err := GetAccountProfiles("Bearer test-access-token", Server, config, httpClient)
-		if err == nil {
-			t.Fatalf("expected 401 error")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("GetAccountProfiles_500", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(500, ""))
 
 		_, err := GetAccountProfiles("Bearer test-access-token", Server, config, httpClient)
-		if err == nil {
-			t.Fatalf("expected error for server error")
-		}
+		assert.Error(t, err)
 	})
 
 	// Launcher data
@@ -174,14 +157,8 @@ func TestSession(t *testing.T) {
 		registerProfilesSuccess(config, Launcher)
 
 		data, err := GetLauncherData(config, httpClient, "sample-token")
-
-		if err != nil {
-			t.Fatalf("Expected no error, got %v", err)
-		}
-		if data == nil {
-			t.Fatal("Expected launcher data, got nil")
-		}
-
+		assert.NoError(t, err)
+		assert.NotNil(t, data)
 		td.Cmp(t, data, expectedLauncherData)
 	})
 
@@ -189,20 +166,14 @@ func TestSession(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(http.StatusUnauthorized, ""))
 
 		_, err := GetLauncherData(config, httpClient, "sample-token")
-
-		if err == nil {
-			t.Fatal("Expected an error on 401 unauthorized, got nil")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("empty response body schema validation (200 OK)", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(200, `{"patchlines": {}, "profiles": []}`))
 
 		data, err := GetLauncherData(config, httpClient, "sample-token")
-
-		if err != nil {
-			t.Fatalf("Expected no error for empty data, got %v", err)
-		}
+		assert.NoError(t, err)
 
 		expectedLauncherData := &LauncherData{
 			PatchLines: make(map[string]BuildDetails),
@@ -217,31 +188,22 @@ func TestSession(t *testing.T) {
 		registerGameSessionSuccess(config, time.Hour)
 
 		session, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
-		if err != nil {
-			t.Fatalf("CreateGameSession failed: %v", err)
-		}
-
-		if session.SessionToken != "test-session-token" {
-			t.Errorf("expected SessionToken=test-session-token, got %s", session.SessionToken)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, "test-session-token", session.SessionToken)
 	})
 
 	t.Run("CreateGameSession_401", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(401, ""))
 
 		_, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
-		if err == nil {
-			t.Fatalf("expected 401 error")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("CreateGameSession_ServerError", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.CreateGameSession, httpmock.NewStringResponder(500, ""))
 
 		_, err := CreateGameSession("Bearer test-access-token", testUuid, config, httpClient)
-		if err == nil {
-			t.Fatalf("expected error for server error")
-		}
+		assert.Error(t, err)
 	})
 
 	// Refresh game session
@@ -250,21 +212,14 @@ func TestSession(t *testing.T) {
 		registerGameSessionRefreshSuccess(t, config, time.Hour)
 
 		session, err := RefreshGameSession("Bearer test-session-token", testUuid, config, httpClient)
-		if err != nil {
-			t.Fatalf("RefreshGameSession failed: %v", err)
-		}
-
-		if session.SessionToken != "test-session-token-refreshed" {
-			t.Errorf("expected SessionToken=test-session-token-refreshed, got %s", session.SessionToken)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, "test-session-token-refreshed", session.SessionToken)
 	})
 
 	t.Run("RefreshGameSession_401", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.RefreshGameSession, httpmock.NewStringResponder(401, ""))
 
 		_, err := RefreshGameSession("Bearer test-session-token", testUuid, config, httpClient)
-		if err == nil {
-			t.Fatalf("expected 401 error")
-		}
+		assert.Error(t, err)
 	})
 }

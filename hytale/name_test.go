@@ -2,6 +2,8 @@ package hytale
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestValidateAndFormatUUID(t *testing.T) {
@@ -46,13 +48,8 @@ func TestValidateAndFormatUUID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			uuid, valid := ValidateUUID(tt.input)
-			if valid != tt.expectedValid {
-				t.Errorf("validateAndFormatUUID(%q) valid = %v, want %v", tt.input, valid, tt.expectedValid)
-				return
-			}
-			if uuid != tt.expectedUUID {
-				t.Errorf("validateAndFormatUUID(%q) = %q, want %q", tt.input, uuid, tt.expectedUUID)
-			}
+			assert.Equal(t, tt.expectedValid, valid)
+			assert.Equal(t, tt.expectedUUID, uuid)
 		})
 	}
 }
@@ -103,9 +100,7 @@ func TestValidateUsername(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			valid := ValidateUsername(tt.input)
-			if valid != tt.expectedValid {
-				t.Errorf("validateUsername(%q) = %v, want %v", tt.input, valid, tt.expectedValid)
-			}
+			assert.Equal(t, tt.expectedValid, valid)
 		})
 	}
 }

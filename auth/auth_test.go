@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/jarcoal/httpmock"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -88,31 +88,22 @@ func TestDeviceAuth(t *testing.T) {
 		registerOAuthSuccess(config, time.Hour)
 
 		token, err := OAuthDeviceFlow(config, httpClient, nil)
-		if err != nil {
-			t.Fatalf("OAuthDeviceFlow failed: %v", err)
-		}
-
-		if token.AccessToken != "test-access-token" {
-			t.Errorf("expected AccessToken=test-access-token, got %s", token.AccessToken)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, "test-access-token", token.AccessToken)
 	})
 
 	t.Run("OAuthDeviceFlow_BadResponse", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(400, ""))
 
 		_, err := OAuthDeviceFlow(config, httpClient, nil)
-		if err == nil {
-			t.Fatalf("expected error for bad response")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthDeviceFlow_ServerError", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(500, ""))
 
 		_, err := OAuthDeviceFlow(config, httpClient, nil)
-		if err == nil {
-			t.Fatalf("expected error for server error")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthDeviceFlow_400Then401", func(t *testing.T) {
@@ -136,9 +127,7 @@ func TestDeviceAuth(t *testing.T) {
 		})
 
 		_, err := OAuthDeviceFlow(config, httpClient, nil)
-		if err == nil {
-			t.Fatalf("expected error")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthDeviceFlow_500ServerError", func(t *testing.T) {
@@ -146,9 +135,7 @@ func TestDeviceAuth(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
 
 		_, err := OAuthDeviceFlow(config, httpClient, nil)
-		if err == nil {
-			t.Fatalf("expected error for server error")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthDeviceFlow_Timeout", func(t *testing.T) {
@@ -160,35 +147,23 @@ func TestDeviceAuth(t *testing.T) {
 		}`))
 
 		_, err := OAuthDeviceFlow(config, httpClient, nil)
-		if err == nil {
-			t.Fatalf("expected timeout error")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthRefresh_SuccessServer", func(t *testing.T) {
 		registerOAuthRefreshSuccess(t, config, time.Hour)
 
 		token, err := OAuthRefresh(config, httpClient, "test-refresh-token", Server)
-		if err != nil {
-			t.Fatalf("OAuthRefresh failed: %v", err)
-		}
-
-		if token.AccessToken != "test-access-token-refreshed" {
-			t.Errorf("expected AccessToken=test-access-token-refreshed, got %s", token.AccessToken)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, "test-access-token-refreshed", token.AccessToken)
 	})
 
 	t.Run("OAuthRefresh_SuccessLauncher", func(t *testing.T) {
 		registerOAuthRefreshSuccess(t, config, time.Hour)
 
 		token, err := OAuthRefresh(config, httpClient, "test-refresh-token", Launcher)
-		if err != nil {
-			t.Fatalf("OAuthRefresh failed: %v", err)
-		}
-
-		if token.AccessToken != "test-access-token-refreshed" {
-			t.Errorf("expected AccessToken=test-access-token-refreshed, got %s", token.AccessToken)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, "test-access-token-refreshed", token.AccessToken)
 	})
 
 	t.Run("OAuthRefresh_400Error", func(t *testing.T) {
@@ -199,18 +174,14 @@ func TestDeviceAuth(t *testing.T) {
 		}`))
 
 		_, err := OAuthRefresh(config, httpClient, "invalid-refresh-token", Server)
-		if err == nil {
-			t.Fatalf("expected error for 400 response")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthRefresh_500", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
 
 		_, err := OAuthRefresh(config, httpClient, "test-refresh-token", Server)
-		if err == nil {
-			t.Fatalf("expected error for server error")
-		}
+		assert.Error(t, err)
 	})
 }
 
@@ -259,13 +230,8 @@ func TestBrowserAuth(t *testing.T) {
 		registerOAuthSuccess(config, time.Minute)
 
 		token, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
-		if err != nil {
-			t.Fatalf("OAuthBrowserFlow failed: %v", err)
-		}
-
-		if !token.isSuccess() {
-			t.Errorf("Expected successful token, got error: %v", token.Error)
-		}
+		assert.NoError(t, err)
+		assert.True(t, token.isSuccess())
 	})
 
 	t.Run("OAuthBrowserFlow_GetRedirectError", func(t *testing.T) {
@@ -274,9 +240,7 @@ func TestBrowserAuth(t *testing.T) {
 		}
 
 		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
-		if err == nil {
-			t.Fatalf("expected error thrown in getRedirectFromUser")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthBrowserFlow_StateMismatch", func(t *testing.T) {
@@ -288,9 +252,7 @@ func TestBrowserAuth(t *testing.T) {
 		}
 
 		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
-		if err == nil {
-			t.Fatalf("expected error for state mismatch")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthBrowserFlow_EmptyCode", func(t *testing.T) {
@@ -304,9 +266,7 @@ func TestBrowserAuth(t *testing.T) {
 		}
 
 		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
-		if err == nil {
-			t.Fatalf("expected error for empty code")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthBrowserFlow_TokenEndpointFailure", func(t *testing.T) {
@@ -322,9 +282,7 @@ func TestBrowserAuth(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(401, `{"error": "access_denied"}`))
 
 		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
-		if err == nil {
-			t.Fatalf("expected error for token endpoint failure")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("OAuthBrowserFlow_Timeout", func(t *testing.T) {
@@ -339,12 +297,6 @@ func TestBrowserAuth(t *testing.T) {
 		}
 
 		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
-		if err == nil {
-			t.Fatalf("expected timeout error")
-		}
-
-		if !strings.Contains(err.Error(), "timeout waiting for browser auth") {
-			t.Fatalf("expected timeout error, got: %v", err)
-		}
+		assert.ErrorContains(t, err, "timeout waiting for browser auth")
 	})
 }
