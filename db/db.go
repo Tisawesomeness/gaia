@@ -199,6 +199,7 @@ type OAuthToken struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresAt    time.Time
+	AuthType     string
 }
 
 // May return nil!
@@ -218,10 +219,16 @@ func (db DB) GetOAuthToken() (*OAuthToken, error) {
 		return nil, err
 	}
 
+	authType, exists := result["auth_type"]
+	if !exists {
+		authType = "server"
+	}
+
 	return &OAuthToken{
 		AccessToken:  result["access_token"],
 		RefreshToken: result["refresh_token"],
 		ExpiresAt:    time.Unix(expiresAt, 0),
+		AuthType:     authType,
 	}, nil
 }
 
@@ -231,6 +238,7 @@ func (db DB) SetOAuthToken(oAuthToken OAuthToken) error {
 		FieldValue("access_token", oAuthToken.AccessToken).
 		FieldValue("refresh_token", oAuthToken.RefreshToken).
 		FieldValue("expires_at", strconv.FormatInt(oAuthToken.ExpiresAt.Unix(), 10)).
+		FieldValue("auth_type", oAuthToken.AuthType).
 		Build()
 	return db.v.Do(context.Background(), command).Error()
 }
@@ -263,6 +271,7 @@ func (db DB) SetProfileUUID(uuid string) error {
 type GameSessionToken struct {
 	SessionToken string
 	ExpiresAt    time.Time
+	AuthType     string
 }
 
 // May return nil!
@@ -282,9 +291,15 @@ func (db DB) GetGameSession() (*GameSessionToken, error) {
 		return nil, err
 	}
 
+	authType, exists := result["auth_type"]
+	if !exists {
+		authType = "server"
+	}
+
 	return &GameSessionToken{
 		SessionToken: result["session_token"],
 		ExpiresAt:    time.Unix(expiresAt, 0),
+		AuthType:     authType,
 	}, nil
 }
 
@@ -293,6 +308,7 @@ func (db DB) SetGameSession(sessionToken GameSessionToken) error {
 	command := db.v.B().Hset().Key("game_session").FieldValue().
 		FieldValue("session_token", sessionToken.SessionToken).
 		FieldValue("expires_at", strconv.FormatInt(sessionToken.ExpiresAt.Unix(), 10)).
+		FieldValue("auth_type", sessionToken.AuthType).
 		Build()
 	return db.v.Do(context.Background(), command).Error()
 }

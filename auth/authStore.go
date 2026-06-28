@@ -54,7 +54,7 @@ func NewAuthStore(config *config.Config, db *db.DB, httpClient *http.Client) (Au
 		config:     config,
 		db:         db,
 		httpClient: httpClient,
-		authType:   Server,
+		authType:   getAuthType(config),
 		tokenMutex: &sync.Mutex{},
 	}
 
@@ -64,6 +64,17 @@ func NewAuthStore(config *config.Config, db *db.DB, httpClient *http.Client) (Au
 	}
 
 	return store, nil
+}
+
+func getAuthType(config *config.Config) AuthType {
+	switch config.Credentials.AuthMethod {
+	case "launcher":
+		return Launcher
+	case "server":
+		return Server
+	default:
+		panic("unknown auth type")
+	}
 }
 
 func (a *authStore) initialize() error {
@@ -129,6 +140,9 @@ func (a *authStore) initializeFreshOAuth() (db.OAuthToken, error) {
 	if err != nil || storedOAuthToken == nil {
 		return db.OAuthToken{}, errors.New("No stored OAuth token")
 	}
+	if storedOAuthToken.AuthType != a.authType.String() {
+		return db.OAuthToken{}, errors.New("Stored OAuth token was authenticated with different method, re-auth needed")
+	}
 	log.Println("Found stored OAuth token")
 
 	if time.Now().After((*storedOAuthToken).ExpiresAt) {
@@ -148,6 +162,9 @@ func (a *authStore) initializeFreshGameSession() (db.GameSessionToken, string, e
 	storedGameSession, err := a.db.GetGameSession()
 	if err != nil || storedGameSession == nil {
 		return db.GameSessionToken{}, "", errors.New("No stored game session token found")
+	}
+	if storedGameSession.AuthType != a.authType.String() {
+		return db.GameSessionToken{}, "", errors.New("Stored game session was authenticated with different method,, re-auth needed")
 	}
 	log.Println("Found stored game session token")
 
@@ -217,6 +234,7 @@ func (a authStore) performOAuthAndStore() (db.OAuthToken, error) {
 		AccessToken:  tokenResponse.AccessToken,
 		RefreshToken: tokenResponse.RefreshToken,
 		ExpiresAt:    time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second),
+		AuthType:     a.authType.String(),
 	}
 
 	err = a.db.SetOAuthToken(token)
@@ -267,6 +285,7 @@ func (a authStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUU
 	session := db.GameSessionToken{
 		SessionToken: sessionResponse.SessionToken,
 		ExpiresAt:    expiresAt,
+		AuthType:     oAuthToken.AuthType,
 	}
 	err = a.db.SetGameSession(session)
 	if err != nil {
@@ -296,6 +315,7 @@ func (a authStore) refreshOAuthAndStore(oAuthToken db.OAuthToken) (db.OAuthToken
 		AccessToken:  tokenResponse.AccessToken,
 		RefreshToken: tokenResponse.RefreshToken,
 		ExpiresAt:    time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second),
+		AuthType:     oAuthToken.AuthType,
 	}
 
 	err = a.db.SetOAuthToken(token)
@@ -329,6 +349,7 @@ func (a authStore) refreshGameSessionAndStore(gameSession db.GameSessionToken, p
 	session := db.GameSessionToken{
 		SessionToken: sessionResponse.SessionToken,
 		ExpiresAt:    expiresAt,
+		AuthType:     gameSession.AuthType,
 	}
 
 	err = a.db.SetGameSession(session)

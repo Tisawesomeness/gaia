@@ -37,6 +37,17 @@ func (at AuthType) ClientID() string {
 	}
 }
 
+func (at AuthType) String() string {
+	switch at {
+	case Launcher:
+		return "launcher"
+	case Server:
+		return "server"
+	default:
+		panic("Unknown auth type")
+	}
+}
+
 type TokenResponse struct {
 	AccessToken      string `json:"access_token"`
 	RefreshToken     string `json:"refresh_token"`

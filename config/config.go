@@ -19,8 +19,10 @@ type BreakerConfig struct {
 }
 
 type CredentialsConfig struct {
-	DiscordToken string `json:"discord_token"`
-	ProfileUUID  string `json:"profile_uuid"`
+	DiscordToken          string `json:"discord_token"`
+	AuthMethod            string `json:"auth_method"`
+	StartRedirectListener bool   `json:"start_redirect_listener"`
+	ProfileUUID           string `json:"profile_uuid"`
 }
 
 type ValkeyConfig struct {
@@ -144,6 +146,9 @@ func LoadConfig() (Config, error) {
 
 	if config.Credentials.DiscordToken == "YOUR_DISCORD_TOKEN" || config.Credentials.DiscordToken == "" {
 		return Config{}, errors.New("Must provide Discord token")
+	}
+	if config.Credentials.AuthMethod != "launcher" && config.Credentials.AuthMethod != "server" {
+		return Config{}, fmt.Errorf("Auth method must be \"launcher\" or \"server\" but was \"%s\"", config.Credentials.AuthMethod)
 	}
 
 	return config, nil

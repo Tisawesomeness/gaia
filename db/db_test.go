@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -31,6 +32,11 @@ func teardown() {
 
 func beforeEach() {
 	testDB.Clear()
+}
+
+func removeAuthType(key string) error {
+	command := testDB.v.B().Hdel().Key(key).Field("auth_type").Build()
+	return testDB.v.Do(context.Background(), command).Error()
 }
 
 func TestDB(t *testing.T) {
@@ -238,6 +244,7 @@ func TestDB(t *testing.T) {
 			AccessToken:  "access123",
 			RefreshToken: "refresh456",
 			ExpiresAt:    time.Now().Add(time.Hour),
+			AuthType:     "launcher",
 		}
 		err := testDB.SetOAuthToken(token)
 		if err != nil {
@@ -252,6 +259,9 @@ func TestDB(t *testing.T) {
 		}
 		if result.RefreshToken != "refresh456" {
 			t.Errorf("Got %q, want refresh456", result.RefreshToken)
+		}
+		if result.AuthType != "launcher" {
+			t.Errorf("Got %q, want launcher", result.RefreshToken)
 		}
 	}))
 
@@ -270,6 +280,7 @@ func TestDB(t *testing.T) {
 			AccessToken:  "",
 			RefreshToken: "",
 			ExpiresAt:    time.Now().Add(time.Hour),
+			AuthType:     "launcher",
 		}
 		err := testDB.SetOAuthToken(token)
 		if err != nil {
@@ -284,6 +295,29 @@ func TestDB(t *testing.T) {
 		}
 		if result.RefreshToken != "" {
 			t.Errorf("Got %q, want empty", result.RefreshToken)
+		}
+	}))
+
+	t.Run("migrate oauth without auth type", testCase(func(t *testing.T) {
+		token := OAuthToken{
+			AccessToken:  "access123",
+			RefreshToken: "refresh456",
+			ExpiresAt:    time.Now().Add(time.Hour),
+		}
+		err := testDB.SetOAuthToken(token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = removeAuthType("oauth_token")
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := testDB.GetOAuthToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.AuthType != "server" {
+			t.Errorf("Got %q, want server", result.RefreshToken)
 		}
 	}))
 
@@ -316,6 +350,7 @@ func TestDB(t *testing.T) {
 		session := GameSessionToken{
 			SessionToken: "session789",
 			ExpiresAt:    time.Now().Add(2 * time.Hour),
+			AuthType:     "server",
 		}
 		err := testDB.SetGameSession(session)
 		if err != nil {
@@ -327,6 +362,9 @@ func TestDB(t *testing.T) {
 		}
 		if result.SessionToken != "session789" {
 			t.Errorf("Got %q, want session789", result.SessionToken)
+		}
+		if result.AuthType != "server" {
+			t.Errorf("Got %q, want server", result.AuthType)
 		}
 	}))
 
@@ -340,17 +378,41 @@ func TestDB(t *testing.T) {
 		}
 	}))
 
+	t.Run("migrate game session without auth type", testCase(func(t *testing.T) {
+		session := GameSessionToken{
+			SessionToken: "session789",
+			ExpiresAt:    time.Now().Add(2 * time.Hour),
+		}
+		err := testDB.SetGameSession(session)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = removeAuthType("game_session")
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := testDB.GetGameSession()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.AuthType != "server" {
+			t.Errorf("Got %q, want server", result.AuthType)
+		}
+	}))
+
 	t.Run("overwrite oauth token replaces all fields", testCase(func(t *testing.T) {
 		oldToken := OAuthToken{
 			AccessToken:  "old_access",
 			RefreshToken: "old_refresh",
 			ExpiresAt:    time.Now().Add(time.Hour),
+			AuthType:     "launcher",
 		}
 		testDB.SetOAuthToken(oldToken)
 
 		newToken := OAuthToken{
 			AccessToken: "new_access",
 			ExpiresAt:   time.Now().Add(2 * time.Hour),
+			AuthType:    "server",
 		}
 		testDB.SetOAuthToken(newToken)
 
@@ -363,6 +425,9 @@ func TestDB(t *testing.T) {
 		}
 		if result.ExpiresAt.Unix() != newToken.ExpiresAt.Unix() {
 			t.Errorf("Got unix %d, want %d", result.ExpiresAt.Unix(), newToken.ExpiresAt.Unix())
+		}
+		if result.AuthType != "server" {
+			t.Errorf("Got %q, want empty", result.AuthType)
 		}
 	}))
 }

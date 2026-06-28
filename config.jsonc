@@ -4,12 +4,27 @@
     // Create a Discord bot and copy the token at https://discord.com/developers/applications
     // Overridden by GAIA_DISCORD_TOKEN env var.
     "token": "YOUR_DISCORD_BOT_TOKEN",
+
+    // The method the bot will use to authenticate your Hytale account.
+    //
+    // "launcher": Authenticates as if you are starting the game from the Hytale Launcher.
+    // If the bot is running on a different machine from your browser, you will need to copy
+    // the URL you are redirected to and paste it into the command-line.
+    //
+    // "server": Authenticates as if you are starting a Hytale server.
+    // Does not support server discovery lookups.
+    "auth_method": "launcher",
+    // If "auth_method" is "launcher", whether to start a local web server to capture
+    // the redirect and automatically finish authentication, like the real Hytale Launcher.
+    "start_redirect_listener": true,
+
     // The UUID of your Hytale player profile (the UUID you use to join servers).
     // If set, that profile will be used to perform API lookups.
     // If blank, the bot will look up your owned profiles after authentication and pick the first one.
     // Overridden by GAIA_PROFILE_UUID env var.
     "profile_uuid": ""
   },
+
   "valkey": {
     // Valkey/Redis address to connect to.
     "address": "127.0.0.1",
