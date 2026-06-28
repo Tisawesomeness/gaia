@@ -1,9 +1,16 @@
 package auth
 
 import (
+	"bufio"
+	"context"
 	"errors"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -225,7 +232,13 @@ func (a authStore) onAuthRequired(deviceAuthResponse DeviceAuthResponse) {
 }
 
 func (a authStore) performOAuthAndStore() (db.OAuthToken, error) {
-	tokenResponse, err := OAuthDeviceFlow(a.config, a.httpClient, a.onAuthRequired)
+	var tokenResponse TokenResponse
+	var err error
+	if a.authType == Server {
+		tokenResponse, err = OAuthDeviceFlow(context.Background(), a.config, a.httpClient, a.onAuthRequired)
+	} else {
+		tokenResponse, err = a.performBrowserOauth()
+	}
 	if err != nil {
 		return db.OAuthToken{}, err
 	}
@@ -243,6 +256,141 @@ func (a authStore) performOAuthAndStore() (db.OAuthToken, error) {
 	}
 
 	return token, nil
+}
+
+type paramsAndErr struct {
+	Params RedirectParams
+	Err    error
+}
+
+func (a authStore) performBrowserOauth() (TokenResponse, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var once sync.Once
+
+	resultCh := make(chan paramsAndErr, 1)
+	var notifyCh chan string
+	port := uint16(9999) // Arbitrary default port
+
+	// Local web server (if enabled) captures redirect after authorization
+	// Fully automatic like Hytale Launcher, but requires running bot and browser
+	// on the same machine
+	if a.config.Credentials.StartRedirectListener {
+		listener, err := net.Listen("tcp", "")
+		if err != nil {
+			return TokenResponse{}, fmt.Errorf("failed to start listener: %v", err)
+		}
+		defer listener.Close()
+
+		notifyCh = make(chan string, 1)
+		port = uint16(listener.Addr().(*net.TCPAddr).Port)
+
+		server := &http.Server{
+			Handler: a.capturedRedirectHandler(&once, resultCh, notifyCh),
+		}
+		go func() {
+			defer server.Close()
+			if err := server.Serve(listener); err != nil && err != http.ErrServerClosed && !errors.Is(err, net.ErrClosed) {
+				send(&once, resultCh, RedirectParams{}, fmt.Errorf("error starting server: %v\n", err))
+			}
+		}()
+	}
+
+	// Buidls the auth URL, then passes to getRedirectFromUser() to show to user and extract the authorization code
+	// Once getRedirectFromUser() returns, OAuthBrowserFlow() exchanges the authorization code for a token
+	token, err := OAuthBrowserFlow(ctx, a.config, a.httpClient, port, a.getRedirectFromUserFunc(&once, resultCh))
+
+	// Update web page with auth status, if enabled
+	if notifyCh != nil {
+		select {
+		case notifyCh <- func() string {
+			if err == nil {
+				return "Authentication successful. You can close this window."
+			} else {
+				return err.Error()
+			}
+		}():
+		default: // No receiver, do nothing
+		}
+	}
+	return token, err
+}
+
+func (a authStore) capturedRedirectHandler(once *sync.Once, resultCh chan<- paramsAndErr, notifyCh <-chan string) http.HandlerFunc {
+	// Listens for any HTTP request, should be the user getting redirected after authorizing
+	// code/state or error is sent to resultCh so getRedirectFromUser() can proceed
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		code := query.Get("code")
+		state := query.Get("state")
+		if code == "" || state == "" {
+			send(once, resultCh, RedirectParams{}, errors.New("missing code or state parameters"))
+			http.Error(w, "Missing code or state parameters", http.StatusBadRequest)
+		} else {
+			send(once, resultCh, RedirectParams{Code: code, State: state}, nil)
+			fmt.Fprintln(w, "Exchanging authorization code for token...")
+		}
+		// When authentication completes/fails, notify user in their browser
+		select {
+		case notification := <-notifyCh:
+			fmt.Fprintln(w, notification)
+		case <-r.Context().Done():
+			// exit
+		}
+	}
+}
+
+func (a authStore) getRedirectFromUserFunc(once *sync.Once, resultCh chan paramsAndErr) RedirectCaptureFunc {
+	return func(ctx context.Context, authUrl string) (RedirectParams, error) {
+		log.Println("===================================")
+		log.Println("===== Authentication Required =====")
+		log.Printf("Visit: %s\n", authUrl)
+		log.Println("After logging in, you will be redirected automatically.")
+		log.Println("If you are redirected to a non-existent page, paste the URL below.")
+		log.Println("===================================")
+
+		// In case user can't reach local web server (or not enabled), also accept URL pasted in stdin
+		fmt.Print("> ")
+		stdinReader := bufio.NewReader(os.Stdin)
+		go func() {
+			// Known issue: ReadString() blocks forever if there is no input
+			// Not a big deal (causes a single goroutine leak), but needs to be
+			// fixed if future code also reads from stdin
+			input, err := stdinReader.ReadString('\n')
+			if err != nil {
+				send(once, resultCh, RedirectParams{}, fmt.Errorf("failed to read input: %v\n", err))
+				return
+			}
+			input = strings.TrimSpace(input)
+
+			u, err := url.Parse(input)
+			if err != nil {
+				send(once, resultCh, RedirectParams{}, fmt.Errorf("not a URL: %v\n", err))
+				return
+			}
+
+			query := u.Query()
+			params := RedirectParams{
+				Code:  query.Get("code"),
+				State: query.Get("state"),
+			}
+			send(once, resultCh, params, nil)
+		}()
+
+		// Wait for either web server or stdin
+		select {
+		case params := <-resultCh:
+			return params.Params, params.Err
+		case <-ctx.Done():
+			return RedirectParams{}, ctx.Err()
+		}
+	}
+}
+
+func send(once *sync.Once, c chan<- paramsAndErr, params RedirectParams, err error) {
+	once.Do(func() {
+		c <- paramsAndErr{Params: params, Err: err}
+	})
 }
 
 func (a authStore) fetchProfileUUIDAndStore(oAuthToken db.OAuthToken) (string, error) {

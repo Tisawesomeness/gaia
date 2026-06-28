@@ -82,8 +82,9 @@
       "failure_ratio": 0.6
     },
     "device_auth": "https://oauth.accounts.hytale.com/oauth2/device/auth",
+    "device_auth_timeout": 600,
     "browser_auth": "https://oauth.accounts.hytale.com/oauth2/auth",
-    "browser_auth_timeout": 300,
+    "browser_auth_timeout": 600,
     "redirect_uri": "https://accounts.hytale.com/consent/client",
     "token": "https://oauth.accounts.hytale.com/oauth2/token",
     "profiles": "https://account-data.hytale.com/my-account/get-profiles",

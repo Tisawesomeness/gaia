@@ -56,6 +56,7 @@ type AuthConfig struct {
 	GameSessionRefreshBuffer int           `json:"game_session_refresh_buffer"`
 	Breaker                  BreakerConfig `json:"breaker"`
 	DeviceAuth               string        `json:"device_auth"`
+	DeviceAuthTimeout        int           `json:"device_auth_timeout"`
 	BrowserAuth              string        `json:"browser_auth"`
 	BrowserAuthTimeout       int           `json:"browser_auth_timeout"`
 	RedirectURI              string        `json:"redirect_uri"`

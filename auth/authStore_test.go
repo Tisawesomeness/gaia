@@ -65,15 +65,19 @@ func sampleConfig(secondsBeforeRefresh int, authType AuthType, uuid string) *con
 	return &config.Config{
 		Credentials: config.CredentialsConfig{
 			AuthMethod:            authType.String(),
-			StartRedirectListener: true,
+			StartRedirectListener: false,
 			ProfileUUID:           uuid,
 		},
 		Auth: config.AuthConfig{
 			OAuthRefreshBuffer:       secondsBeforeRefresh,
 			GameSessionRefreshBuffer: secondsBeforeRefresh,
 			DeviceAuth:               "https://example.com/oauth/device",
+			BrowserAuth:              "https://example.com/oauth2/auth",
+			BrowserAuthTimeout:       1,
+			RedirectURI:              "https://example.com/redirect",
 			Token:                    "https://example.com/oauth/token",
 			Profiles:                 "https://example.com/profiles",
+			LauncherData:             "https://account-data.example.com/my-account/get-launcher-data?arch=amd64&os=windows",
 			CreateGameSession:        "https://example.com/api/sessions",
 			RefreshGameSession:       "https://example.com/api/sessions/refresh",
 		},
@@ -110,6 +114,9 @@ func TestAuthStore(t *testing.T) {
 		Timeout: time.Duration(5) * time.Second,
 	}
 	httpmock.ActivateNonDefault(httpClient)
+
+	// No tests that invoke the OAuth browser flow are included since
+	// it is highly dependent on manual user input
 
 	t.Run("Full happy path", authStoreTestCase(func(t *testing.T) {
 		config := sampleConfig(5, Server, "")
@@ -199,6 +206,19 @@ func TestAuthStore(t *testing.T) {
 		assert.NoError(t, err)
 		assertOAuth(t, authStore, "test-access-token-stored", Server)
 		assertSession(t, authStore, "test-session-token-stored", Server)
+	}))
+
+	t.Run("Restore all values from DB, launcher auth", authStoreTestCase(func(t *testing.T) {
+		config := sampleConfig(5, Launcher, "")
+
+		storeOAuthToken(time.Hour, Launcher)
+		storeProfile()
+		storeGameSession(time.Hour, Launcher)
+
+		authStore, err := NewAuthStore(config, authStoreDB, httpClient)
+		assert.NoError(t, err)
+		assertOAuth(t, authStore, "test-access-token-stored", Launcher)
+		assertSession(t, authStore, "test-session-token-stored", Launcher)
 	}))
 
 	t.Run("OAuth refreshes if DB loads near-expired token", authStoreTestCase(func(t *testing.T) {

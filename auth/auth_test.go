@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -87,7 +88,7 @@ func TestDeviceAuth(t *testing.T) {
 	t.Run("OAuthDeviceFlow_Success", func(t *testing.T) {
 		registerOAuthSuccess(config, time.Hour)
 
-		token, err := OAuthDeviceFlow(config, httpClient, nil)
+		token, err := OAuthDeviceFlow(context.Background(), config, httpClient, nil)
 		assert.NoError(t, err)
 		assert.Equal(t, "test-access-token", token.AccessToken)
 	})
@@ -95,14 +96,14 @@ func TestDeviceAuth(t *testing.T) {
 	t.Run("OAuthDeviceFlow_BadResponse", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(400, ""))
 
-		_, err := OAuthDeviceFlow(config, httpClient, nil)
+		_, err := OAuthDeviceFlow(context.Background(), config, httpClient, nil)
 		assert.Error(t, err)
 	})
 
 	t.Run("OAuthDeviceFlow_ServerError", func(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(500, ""))
 
-		_, err := OAuthDeviceFlow(config, httpClient, nil)
+		_, err := OAuthDeviceFlow(context.Background(), config, httpClient, nil)
 		assert.Error(t, err)
 	})
 
@@ -126,7 +127,7 @@ func TestDeviceAuth(t *testing.T) {
 			}`), nil
 		})
 
-		_, err := OAuthDeviceFlow(config, httpClient, nil)
+		_, err := OAuthDeviceFlow(context.Background(), config, httpClient, nil)
 		assert.Error(t, err)
 	})
 
@@ -134,7 +135,7 @@ func TestDeviceAuth(t *testing.T) {
 		httpmock.RegisterResponder("POST", config.Auth.DeviceAuth, httpmock.NewStringResponder(200, sampleDeviceAuthResponse))
 		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(500, ""))
 
-		_, err := OAuthDeviceFlow(config, httpClient, nil)
+		_, err := OAuthDeviceFlow(context.Background(), config, httpClient, nil)
 		assert.Error(t, err)
 	})
 
@@ -146,7 +147,7 @@ func TestDeviceAuth(t *testing.T) {
 			"error_description": "Please wait before polling"
 		}`))
 
-		_, err := OAuthDeviceFlow(config, httpClient, nil)
+		_, err := OAuthDeviceFlow(context.Background(), config, httpClient, nil)
 		assert.Error(t, err)
 	})
 
@@ -201,7 +202,7 @@ func TestBrowserAuth(t *testing.T) {
 	}
 
 	t.Run("OAuthBrowserFlow_Success", func(t *testing.T) {
-		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+		mockGetRedirect := func(ctx context.Context, authUrl string) (RedirectParams, error) {
 			parsed, err := url.Parse(authUrl)
 			if err != nil {
 				return RedirectParams{}, err
@@ -229,34 +230,34 @@ func TestBrowserAuth(t *testing.T) {
 
 		registerOAuthSuccess(config, time.Minute)
 
-		token, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
+		token, err := OAuthBrowserFlow(context.Background(), config, httpClient, 8080, mockGetRedirect)
 		assert.NoError(t, err)
 		assert.True(t, token.isSuccess())
 	})
 
 	t.Run("OAuthBrowserFlow_GetRedirectError", func(t *testing.T) {
-		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+		mockGetRedirect := func(ctx context.Context, authUrl string) (RedirectParams, error) {
 			return RedirectParams{}, errors.New("malformed url")
 		}
 
-		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
+		_, err := OAuthBrowserFlow(context.Background(), config, httpClient, 8080, mockGetRedirect)
 		assert.Error(t, err)
 	})
 
 	t.Run("OAuthBrowserFlow_StateMismatch", func(t *testing.T) {
-		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+		mockGetRedirect := func(ctx context.Context, authUrl string) (RedirectParams, error) {
 			return RedirectParams{
 				Code:  "test-code",
 				State: "wrong-state",
 			}, nil
 		}
 
-		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
+		_, err := OAuthBrowserFlow(context.Background(), config, httpClient, 8080, mockGetRedirect)
 		assert.Error(t, err)
 	})
 
 	t.Run("OAuthBrowserFlow_EmptyCode", func(t *testing.T) {
-		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+		mockGetRedirect := func(ctx context.Context, authUrl string) (RedirectParams, error) {
 			parsed, _ := url.Parse(authUrl)
 			encodedState := parsed.Query().Get("state")
 			decodedState, _ := base64.RawURLEncoding.DecodeString(encodedState)
@@ -265,12 +266,12 @@ func TestBrowserAuth(t *testing.T) {
 			return RedirectParams{Code: "", State: statePort.State}, nil
 		}
 
-		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
+		_, err := OAuthBrowserFlow(context.Background(), config, httpClient, 8080, mockGetRedirect)
 		assert.Error(t, err)
 	})
 
 	t.Run("OAuthBrowserFlow_TokenEndpointFailure", func(t *testing.T) {
-		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
+		mockGetRedirect := func(ctx context.Context, authUrl string) (RedirectParams, error) {
 			parsed, _ := url.Parse(authUrl)
 			encodedState := parsed.Query().Get("state")
 			decodedState, _ := base64.RawURLEncoding.DecodeString(encodedState)
@@ -281,7 +282,7 @@ func TestBrowserAuth(t *testing.T) {
 
 		httpmock.RegisterResponder("POST", config.Auth.Token, httpmock.NewStringResponder(401, `{"error": "access_denied"}`))
 
-		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
+		_, err := OAuthBrowserFlow(context.Background(), config, httpClient, 8080, mockGetRedirect)
 		assert.Error(t, err)
 	})
 
@@ -291,12 +292,16 @@ func TestBrowserAuth(t *testing.T) {
 		}
 
 		// Mock function that delays for 2 seconds (longer than 1s timeout)
-		mockGetRedirect := func(authUrl string) (RedirectParams, error) {
-			time.Sleep(2 * time.Second)
-			return RedirectParams{}, errors.New("timeout not triggered")
+		mockGetRedirect := func(ctx context.Context, authUrl string) (RedirectParams, error) {
+			select {
+			case <-time.After(2 * time.Second):
+				return RedirectParams{}, errors.New("timeout not triggered")
+			case <-ctx.Done():
+				return RedirectParams{}, errors.New("timeout waiting for browser auth")
+			}
 		}
 
-		_, err := OAuthBrowserFlow(config, httpClient, 8080, mockGetRedirect)
+		_, err := OAuthBrowserFlow(context.Background(), config, httpClient, 8080, mockGetRedirect)
 		assert.ErrorContains(t, err, "timeout waiting for browser auth")
 	})
 }

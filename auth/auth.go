@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -59,7 +60,7 @@ type TokenResponse struct {
 }
 
 func (t TokenResponse) isSuccess() bool {
-	return t.Error == "" && t.AccessToken != ""
+	return t.Error == "" && t.AccessToken != "" && t.RefreshToken != ""
 }
 
 type DeviceAuthResponse struct {
@@ -73,16 +74,16 @@ type DeviceAuthResponse struct {
 	Interval int `json:"interval"`
 }
 
-func defaultDeviceAuthResponse() DeviceAuthResponse {
+func defaultDeviceAuthResponse(config *config.Config) DeviceAuthResponse {
 	return DeviceAuthResponse{
-		ExpiresIn: 600,
+		ExpiresIn: config.Auth.DeviceAuthTimeout,
 		Interval:  5,
 	}
 }
 
 // Starts the OAuth device flow, used for Server auth. This will block until authentication is finished.
 // onAuthRequired is called with the verification URL and code to be shown to the user.
-func OAuthDeviceFlow(config *config.Config, httpClient *http.Client, onAuthRequired func(DeviceAuthResponse)) (TokenResponse, error) {
+func OAuthDeviceFlow(ctx context.Context, config *config.Config, httpClient *http.Client, onAuthRequired func(DeviceAuthResponse)) (TokenResponse, error) {
 	deviceAuthResponse, err := startDeviceAuth(config, httpClient)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to start device auth: %v", err)
@@ -92,7 +93,7 @@ func OAuthDeviceFlow(config *config.Config, httpClient *http.Client, onAuthRequi
 		onAuthRequired(deviceAuthResponse)
 	}
 
-	tokenResponse, err := pollForToken(config, httpClient, deviceAuthResponse)
+	tokenResponse, err := pollForToken(ctx, config, httpClient, deviceAuthResponse)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to poll for token: %v", err)
 	}
@@ -120,7 +121,7 @@ func startDeviceAuth(config *config.Config, httpClient *http.Client) (DeviceAuth
 		return DeviceAuthResponse{}, err
 	}
 
-	deviceAuthResponse := defaultDeviceAuthResponse()
+	deviceAuthResponse := defaultDeviceAuthResponse(config)
 	err = json.Unmarshal(body, &deviceAuthResponse)
 	if err != nil {
 		return DeviceAuthResponse{}, err
@@ -129,7 +130,7 @@ func startDeviceAuth(config *config.Config, httpClient *http.Client) (DeviceAuth
 	return deviceAuthResponse, nil
 }
 
-func pollForToken(config *config.Config, httpClient *http.Client, deviceAuthResponse DeviceAuthResponse) (TokenResponse, error) {
+func pollForToken(ctx context.Context, config *config.Config, httpClient *http.Client, deviceAuthResponse DeviceAuthResponse) (TokenResponse, error) {
 	params := url.Values{}
 	params.Add("client_id", "hytale-server")
 	params.Add("device_code", deviceAuthResponse.DeviceCode)
@@ -138,7 +139,8 @@ func pollForToken(config *config.Config, httpClient *http.Client, deviceAuthResp
 	ticker := time.NewTicker(time.Duration(deviceAuthResponse.Interval) * time.Second)
 	defer ticker.Stop()
 
-	timeout := time.After(time.Duration(deviceAuthResponse.ExpiresIn) * time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(min(deviceAuthResponse.ExpiresIn))*time.Second)
+	defer cancel()
 
 	for {
 		select {
@@ -171,8 +173,8 @@ func pollForToken(config *config.Config, httpClient *http.Client, deviceAuthResp
 				return TokenResponse{}, fmt.Errorf("error polling for token: `%s`: %s", tokenResponse.Error, tokenResponse.ErrorDescription)
 			}
 
-		case <-timeout:
-			return TokenResponse{}, fmt.Errorf("timeout waiting for token")
+		case <-ctx.Done():
+			return TokenResponse{}, ctx.Err()
 		}
 	}
 }
@@ -182,10 +184,7 @@ type RedirectParams struct {
 	State string
 }
 
-type c struct {
-	params RedirectParams
-	err    error
-}
+type RedirectCaptureFunc func(context.Context, string) (RedirectParams, error)
 
 // Starts the OAuth browser flow, used for Launcher auth. This will block until authentication is finished.
 //
@@ -194,7 +193,11 @@ type c struct {
 //
 // port is the port the user will be redirected to. If using a local web server, this is the port of the web server.
 // If not using a local web server, port should be an arbitrary unused port.
-func OAuthBrowserFlow(config *config.Config, httpClient *http.Client, port uint16, getRedirectFromUser func(string) (RedirectParams, error)) (TokenResponse, error) {
+func OAuthBrowserFlow(ctx context.Context, config *config.Config, httpClient *http.Client, port uint16, getRedirectFromUser RedirectCaptureFunc) (TokenResponse, error) {
+	if getRedirectFromUser == nil {
+		return TokenResponse{}, errors.New("getRedirectFromUser cannot be nil")
+	}
+
 	state, err := generateRandomString(32)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to generate state: %w", err)
@@ -209,36 +212,30 @@ func OAuthBrowserFlow(config *config.Config, httpClient *http.Client, port uint1
 
 	authUrl := buildAuthStateURL(config, encodedState, codeChallenge)
 
-	resultChan := make(chan c, 1)
-	go func() {
-		params, err := getRedirectFromUser(authUrl)
-		resultChan <- c{params, err}
+	params, err := func() (RedirectParams, error) {
+		ctx, cancel := context.WithTimeout(ctx, time.Duration(config.Auth.BrowserAuthTimeout)*time.Second)
+		defer cancel() // Scoped within this block
+		return getRedirectFromUser(ctx, authUrl)
 	}()
 
-	timeout := time.After(time.Duration(config.Auth.BrowserAuthTimeout) * time.Second)
-	select {
-	case result := <-resultChan:
-		if result.err != nil {
-			return TokenResponse{}, fmt.Errorf("getQueryFromRedirect failed: %w", result.err)
-		}
-		clientRedirectQuery := result.params
-
-		if clientRedirectQuery.State != state {
-			return TokenResponse{}, fmt.Errorf("invalid OAuth state parameter in redirect")
-		}
-		code := clientRedirectQuery.Code
-		if code == "" {
-			return TokenResponse{}, errors.New("authorization code missing in redirect query parameters")
-		}
-
-		tokenResp, err := exchangeCodeForToken(config, httpClient, code, codeVerifier)
-		if err != nil {
-			return TokenResponse{}, fmt.Errorf("token exchange failed: %w", err)
-		}
-		return tokenResp, nil
-	case <-timeout:
-		return TokenResponse{}, fmt.Errorf("timeout waiting for browser auth after %d seconds", config.Auth.BrowserAuthTimeout)
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("getQueryFromRedirect failed: %w", err)
 	}
+	clientRedirectQuery := params
+
+	if clientRedirectQuery.State != state {
+		return TokenResponse{}, fmt.Errorf("invalid OAuth state parameter in redirect")
+	}
+	code := clientRedirectQuery.Code
+	if code == "" {
+		return TokenResponse{}, errors.New("authorization code missing in redirect query parameters")
+	}
+
+	tokenResp, err := exchangeCodeForToken(config, httpClient, code, codeVerifier)
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("token exchange failed: %w", err)
+	}
+	return tokenResp, nil
 }
 
 func generateRandomString(len int) (string, error) {
