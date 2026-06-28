@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/util"
@@ -121,10 +122,9 @@ type gameSessionRequest struct {
 	UUID string `json:"uuid"`
 }
 type GameSessionResponse struct {
-	SessionToken  string `json:"sessionToken"`
-	IdentityToken string `json:"identityToken"`
-	// In RFC3339Nano format
-	ExpiresAt string `json:"expiresAt"`
+	SessionToken  string    `json:"sessionToken"`
+	IdentityToken string    `json:"identityToken"`
+	ExpiresAt     time.Time `json:"expiresAt"`
 }
 
 func CreateGameSession(oauthAccessToken string, uuid string, config *config.Config, httpClient *http.Client) (GameSessionResponse, error) {

@@ -426,13 +426,9 @@ func (a authStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUU
 		return db.GameSessionToken{}, err
 	}
 
-	expiresAt, err := time.Parse(time.RFC3339Nano, sessionResponse.ExpiresAt)
-	if err != nil {
-		return db.GameSessionToken{}, err
-	}
 	session := db.GameSessionToken{
 		SessionToken: sessionResponse.SessionToken,
-		ExpiresAt:    expiresAt,
+		ExpiresAt:    sessionResponse.ExpiresAt,
 		AuthType:     oAuthToken.AuthType,
 	}
 	err = a.db.SetGameSession(session)
@@ -490,13 +486,9 @@ func (a authStore) refreshGameSessionAndStore(gameSession db.GameSessionToken, p
 		return db.GameSessionToken{}, err
 	}
 
-	expiresAt, err := time.Parse(time.RFC3339Nano, sessionResponse.ExpiresAt)
-	if err != nil {
-		return db.GameSessionToken{}, err
-	}
 	session := db.GameSessionToken{
 		SessionToken: sessionResponse.SessionToken,
-		ExpiresAt:    expiresAt,
+		ExpiresAt:    sessionResponse.ExpiresAt,
 		AuthType:     gameSession.AuthType,
 	}
 
