@@ -9,6 +9,11 @@
             "buildVersion": "2026.01.17-4b0f30090",
             "expiresAt": 0,
             "newest": 4
+        },
+        "v0.4": {
+            "buildVersion": "2026.01.17-4b0f30090",
+            "expiresAt": 0,
+            "newest": 0
         }
     },
     "profiles": [

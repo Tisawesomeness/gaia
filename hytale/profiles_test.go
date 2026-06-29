@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	sampleUUID     = "d798091b-f494-4208-a1ba-e24da5880786"
-	sampleUsername = "tis"
-	expected       = &PublicGameProfile{
+	sampleUUID      = "d798091b-f494-4208-a1ba-e24da5880786"
+	sampleUsername  = "tis"
+	expectedProfile = &PublicGameProfile{
 		UUID:     sampleUUID,
 		Username: sampleUsername,
 		Skin: toStringRefMap(map[string]string{
@@ -76,7 +76,7 @@ func TestProfiles(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUsername+sampleUsername, httpmock.NewStringResponder(200, testutil.SampleProfileResponse))
 		profile, err := FetchProfileFromUsername(config, http, authStore, sampleUsername)
 		assert.NoError(t, err)
-		td.Cmp(t, profile, expected)
+		td.Cmp(t, profile, expectedProfile)
 	})
 
 	t.Run("fetch profile by username 404", func(t *testing.T) {
@@ -90,7 +90,7 @@ func TestProfiles(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Profile.ByUUID+sampleUUID, httpmock.NewStringResponder(200, testutil.SampleProfileResponse))
 		profile, err := FetchProfileFromUUID(config, http, authStore, sampleUUID)
 		assert.NoError(t, err)
-		td.Cmp(t, profile, expected)
+		td.Cmp(t, profile, expectedProfile)
 	})
 
 	t.Run("fetch profile by uuid 404", func(t *testing.T) {

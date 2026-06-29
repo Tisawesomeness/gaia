@@ -76,8 +76,7 @@ func getAccountProfiles(oauthAccessToken string, config *config.Config, httpClie
 
 type BuildDetails struct {
 	BuildVersion string `json:"buildVersion"`
-	// Unknown format, likely unix timestamp
-	ExpiresAt int `json:"expiresAt"`
+	ExpiresAt    int64  `json:"expiresAt"` // unix timestamp, 0 if no expiry
 }
 
 type LauncherData struct {

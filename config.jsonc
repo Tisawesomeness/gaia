@@ -105,6 +105,7 @@
     "poll_on_startup": false,
     "notify_on_startup": true,
     "interval": 600,
+    "patchlines": "https://account-data.hytale.com/my-account/get-patchlines",
     "game_version": "https://account-data.hytale.com/game-assets/version/",
     "launcher_release": "https://launcher.hytale.com/version/release/launcher.json",
     "launcher_articles": "https://launcher.hytale.com/launcher-feed/release/feed.json",

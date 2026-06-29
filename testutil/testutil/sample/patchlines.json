@@ -1,0 +1,16 @@
+{
+  "patchlines": [
+    {
+      "name": "release",
+      "expiresAt": 0
+    },
+    {
+      "name": "pre-release",
+      "expiresAt": 0
+    },
+    {
+      "name": "v0.4",
+      "expiresAt": 0
+    }
+  ]
+}

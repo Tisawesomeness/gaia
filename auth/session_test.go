@@ -42,6 +42,10 @@ var (
 				BuildVersion: "2026.01.17-4b0f30090",
 				ExpiresAt:    0,
 			},
+			"v0.4": {
+				BuildVersion: "2026.01.17-4b0f30090",
+				ExpiresAt:    0,
+			},
 		},
 		Profiles: []GameProfile{
 			{
