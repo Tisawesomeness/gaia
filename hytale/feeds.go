@@ -22,6 +22,7 @@ const (
 	MavenPreReleaseFeedType
 	LauncherReleaseFeedType
 	LauncherPostFeedType
+	PatchlinesFeedType
 )
 
 var (
@@ -32,6 +33,7 @@ var (
 		MavenPreReleaseFeedType,
 		LauncherReleaseFeedType,
 		LauncherPostFeedType,
+		PatchlinesFeedType,
 	}
 )
 
@@ -49,6 +51,8 @@ func ParseFeedType(feedType string) (FeedType, error) {
 		return LauncherReleaseFeedType, nil
 	case LauncherPostFeedType.ID():
 		return LauncherPostFeedType, nil
+	case PatchlinesFeedType.ID():
+		return PatchlinesFeedType, nil
 	default:
 		return 0, fmt.Errorf("unknown feedType: %s", feedType)
 	}
@@ -68,6 +72,8 @@ func (ft FeedType) ID() string {
 		return "launcher_release"
 	case LauncherPostFeedType:
 		return "launcher_post"
+	case PatchlinesFeedType:
+		return "patchlines"
 	default:
 		panic(fmt.Errorf("unknown state: %d", ft))
 	}
@@ -86,7 +92,9 @@ func (ft FeedType) Display() string {
 	case LauncherReleaseFeedType:
 		return "New Launcher Versions"
 	case LauncherPostFeedType:
-		return "Launcher Articles"
+		return "New Launcher Articles"
+	case PatchlinesFeedType:
+		return "Added/Removed Patchlines"
 	default:
 		panic(fmt.Errorf("unknown state: %d", ft))
 	}
@@ -108,6 +116,8 @@ func (ft FeedType) getStored(db *db.DB) (Feed, error) {
 		return getStoredLauncherRelease(db)
 	case LauncherPostFeedType:
 		return getStoredArticles(db)
+	case PatchlinesFeedType:
+		return getStoredPatchlines(db)
 	default:
 		panic(fmt.Errorf("unknown state: %d", ft))
 	}
@@ -127,6 +137,8 @@ func (ft FeedType) fetch(feeds *HytaleFeeds) (Feed, error) {
 		return fetchLauncherRelease(feeds)
 	case LauncherPostFeedType:
 		return fetchArticles(feeds)
+	case PatchlinesFeedType:
+		return fetchPatchlines(feeds)
 	default:
 		panic(fmt.Errorf("unknown state: %d", ft))
 	}

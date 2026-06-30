@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
+	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/util"
+	"github.com/bwmarrin/discordgo"
 )
 
 // Fetches all patchlines from the Hytale API, mapped to their expiration time (or nil if no expiry).
@@ -91,4 +94,103 @@ func getPatchlines(config *config.Config, httpClient *http.Client, oauthAccessTo
 	}
 
 	return data.Patchlines, nil
+}
+
+type PatchlinesFeed struct {
+	Patchlines map[string]*time.Time
+}
+
+func (f PatchlinesFeed) GetType() FeedType {
+	return PatchlinesFeedType
+}
+
+func (f PatchlinesFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
+	var description string
+	var fields []*discordgo.MessageEmbedField
+	if len(f.Patchlines) == 0 {
+		description = "(no patchlines found)"
+	} else if len(f.Patchlines) < 10 {
+		for id, expiry := range f.Patchlines {
+			if expiry != nil {
+				fields = append(fields, &discordgo.MessageEmbedField{
+					Name:   fmt.Sprintf("`%s`", id),
+					Value:  fmt.Sprintf("Expires <t:%d:R>", expiry.Unix()),
+					Inline: false,
+				})
+			} else {
+				fields = append(fields, &discordgo.MessageEmbedField{
+					Name:   fmt.Sprintf("`%s`", id),
+					Value:  "(no expiry)",
+					Inline: false,
+				})
+			}
+		}
+	} else {
+		var lines []string
+		for id, expiry := range f.Patchlines {
+			if expiry != nil {
+				lines = append(lines, fmt.Sprintf("`%s`: Expires <t:%d:R>", id, expiry.Unix()))
+			} else {
+				lines = append(lines, fmt.Sprintf("`%s`: (no expiry)", id))
+			}
+		}
+		description = strings.Join(lines, "\n")
+	}
+
+	return &FeedMessage{
+		Embeds: []*discordgo.MessageEmbed{
+			{
+				Title:       "Hytale Patchlines",
+				Description: description,
+				Color:       0x0000FF,
+				Fields:      fields,
+			},
+		},
+		Components: []discordgo.MessageComponent{},
+	}
+}
+
+func (f PatchlinesFeed) GetVersion() string {
+	var lines []string
+	for name, expiry := range f.Patchlines {
+		if expiry != nil {
+			lines = append(lines, fmt.Sprintf("%s:%d", name, expiry.Unix()))
+		} else {
+			lines = append(lines, fmt.Sprintf("%s:%d", name, expiry.Unix()))
+		}
+	}
+	return strings.Join(lines, ";")
+}
+
+func (f PatchlinesFeed) content() (string, error) {
+	contentBytes, err := json.Marshal(f.Patchlines)
+	if err != nil {
+		return "", err
+	}
+	return string(contentBytes), nil
+}
+
+func getStoredPatchlines(db *db.DB) (Feed, error) {
+	raw, err := db.GetLatestPost(PatchlinesFeedType.ID())
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+
+	var patchlines map[string]*time.Time
+	if err := json.Unmarshal(raw, &patchlines); err != nil {
+		return nil, err
+	}
+
+	return PatchlinesFeed{Patchlines: patchlines}, nil
+}
+
+func fetchPatchlines(feeds *HytaleFeeds) (Feed, error) {
+	patchlines, err := GetPatchlines(feeds.config, feeds.http, feeds.authStore)
+	if err != nil {
+		return nil, err
+	}
+	return PatchlinesFeed{Patchlines: patchlines}, nil
 }

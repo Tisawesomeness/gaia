@@ -37,6 +37,10 @@ var (
 			Name:  hytale.LauncherPostFeedType.Display(),
 			Value: hytale.LauncherPostFeedType.ID(),
 		},
+		{
+			Name:  hytale.PatchlinesFeedType.Display(),
+			Value: hytale.PatchlinesFeedType.ID(),
+		},
 	}
 	manageSubscriptionsPermissions = int64(discordgo.PermissionManageWebhooks)
 

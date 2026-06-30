@@ -36,6 +36,7 @@ func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
 	c.Discord.InteractionCleanupInterval = 1_000_000
 	c.Discord.InteractionExpiryTime = 1_000_000
 
+	c.Feeds.Patchlines = "https://account-data.example.com/my-account/get-patchlines"
 	c.Feeds.LauncherRelease = "https://launcher.example.com/version/release/launcher.json"
 	c.Feeds.LauncherArticles = "https://launcher.example.com/launcher-feed/release/feed.json"
 	c.Feeds.GameVersion = "https://account-data.example.com/game-assets/version/"
@@ -48,6 +49,7 @@ func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
 	c.Profile.Hyvatar = "https://hyvatar.example.com/"
 
 	c.Auth.Breaker.Enabled = false
+	c.Auth.LauncherData = "https://account-data.example.com/my-account/get-launcher-data?arch=amd64&os=windows"
 
 	db, err := db.NewDB(c.Valkey)
 	if err != nil {

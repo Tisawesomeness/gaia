@@ -16,6 +16,8 @@ import (
 func RegisterFeedResponders(config *config.Config) error {
 	httpmock.RegisterResponder("GET", config.Feeds.LauncherRelease, httpmock.NewStringResponder(200, testutil.SampleLauncherRelease))
 	httpmock.RegisterResponder("GET", config.Feeds.LauncherArticles, httpmock.NewStringResponder(200, testutil.SampleArticlesFeed))
+	httpmock.RegisterResponder("GET", config.Feeds.Patchlines, httpmock.NewStringResponder(200, testutil.SamplePatchlinesResponse))
+	httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(200, testutil.SampleLauncherData))
 
 	var patchlines = []struct {
 		patchline        hytale.Patchline
