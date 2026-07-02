@@ -180,6 +180,23 @@ func TestDB(t *testing.T) {
 		assert.Empty(t, string(result))
 	}))
 
+	t.Run("get previous post", testCase(func(t *testing.T) {
+		testDB.SetPreviousPost("prev_feed", "prev content")
+		result, _ := testDB.GetPreviousPost("prev_feed")
+		assert.Equal(t, "prev content", string(result))
+	}))
+
+	t.Run("get previous post for non-existent", testCase(func(t *testing.T) {
+		result, _ := testDB.GetPreviousPost("nonexistent_post")
+		assert.Empty(t, string(result))
+	}))
+
+	t.Run("set previous post", testCase(func(t *testing.T) {
+		testDB.SetPreviousPost("prev_feed", "prev content")
+		result, _ := testDB.GetPreviousPost("prev_feed")
+		assert.Equal(t, "prev content", string(result))
+	}))
+
 	t.Run("get oauth token when set", testCase(func(t *testing.T) {
 		token := OAuthToken{
 			AccessToken:  "access123",

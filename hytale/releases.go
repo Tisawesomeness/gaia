@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Tisawesomeness/gaia/config"
-	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/util"
 	"github.com/bwmarrin/discordgo"
 )
@@ -99,7 +98,14 @@ func (f GameReleaseFeed) GetType() FeedType {
 	return GetFeedType(f.Patchline, Client)
 }
 
-func (f GameReleaseFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
+func (f GameReleaseFeed) BuildMessage(config *config.Config) *FeedMessage {
+	return f.buildMessage(false)
+}
+func (f GameReleaseFeed) BuildSubscriberMessage(config *config.Config, previous Feed) *FeedMessage {
+	return f.buildMessage(true)
+}
+
+func (f GameReleaseFeed) buildMessage(isNews bool) *FeedMessage {
 	var adjective string
 	if isNews {
 		adjective = "New"
@@ -132,17 +138,9 @@ func (f GameReleaseFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func getStoredGameRelease(db *db.DB, patchline Patchline) (Feed, error) {
-	raw, err := db.GetLatestPost(GetFeedType(patchline, Client).ID())
-	if err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		return nil, nil
-	}
-
+func deserializeGameRelease(data []byte, patchline Patchline) (Feed, error) {
 	var release GameReleaseVersion
-	err = json.Unmarshal(raw, &release)
+	err := json.Unmarshal(data, &release)
 	return GameReleaseFeed{
 		Version:   &release,
 		Patchline: patchline,
@@ -242,7 +240,14 @@ func downloadUrl(config *config.Config, version string, patchline Patchline) str
 	)
 }
 
-func (f MavenFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
+func (f MavenFeed) BuildMessage(config *config.Config) *FeedMessage {
+	return f.buildMessage(config, false)
+}
+func (f MavenFeed) BuildSubscriberMessage(config *config.Config, previous Feed) *FeedMessage {
+	return f.buildMessage(config, true)
+}
+
+func (f MavenFeed) buildMessage(config *config.Config, isNews bool) *FeedMessage {
 	// If announcing a new release, only need to include the new release in the embed
 	if isNews {
 		url := downloadUrl(config, f.Version.Latest, f.Patchline)
@@ -304,17 +309,9 @@ func (f MavenFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func getStoredMavenRelease(db *db.DB, patchline Patchline) (Feed, error) {
-	raw, err := db.GetLatestPost(GetFeedType(patchline, Server).ID())
-	if err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		return nil, nil
-	}
-
+func deserializeMavenRelease(data []byte, patchline Patchline) (Feed, error) {
 	var versioning MavenVersioning
-	err = xml.Unmarshal(raw, &versioning)
+	err := xml.Unmarshal(data, &versioning)
 	return MavenFeed{
 		Version:   &versioning,
 		Patchline: patchline,

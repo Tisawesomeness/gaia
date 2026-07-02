@@ -85,7 +85,7 @@ func versionCommand(ctx CommandContext) {
 		return
 	}
 
-	message := feed.BuildMessage(ctx.Config(), false)
+	message := feed.BuildMessage(ctx.Config())
 	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Embeds:     message.Embeds,
 		Components: message.Components,
@@ -99,7 +99,7 @@ func launcherCommand(ctx CommandContext) {
 		return
 	}
 
-	message := feed.BuildMessage(ctx.Config(), false)
+	message := feed.BuildMessage(ctx.Config())
 	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Embeds:     message.Embeds,
 		Components: message.Components,

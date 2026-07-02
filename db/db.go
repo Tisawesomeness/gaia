@@ -189,9 +189,34 @@ func (db DB) GetLatestPost(feedID string) ([]byte, error) {
 	return raw, err
 }
 
+// May return nil!
+func (db DB) GetPreviousPost(feedID string) ([]byte, error) {
+	// get <feedID>:previous
+	command := db.v.B().Get().Key(sanitize(feedID) + ":previous").Build()
+	resp := db.v.Do(context.Background(), command)
+	err := resp.Error()
+	if err != nil {
+		if valkey.IsValkeyNil(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	raw, err := resp.AsBytes()
+	if err != nil {
+		return nil, err
+	}
+	return raw, err
+}
+
 func (db DB) SetLatestPost(feedID string, content string) error {
 	// set <feedID>:latest <content>
 	command := db.v.B().Set().Key(sanitize(feedID) + ":latest").Value(content).Build()
+	return db.v.Do(context.Background(), command).Error()
+}
+
+func (db DB) SetPreviousPost(feedID string, content string) error {
+	// set <feedID>:previous <content>
+	command := db.v.B().Set().Key(sanitize(feedID) + ":previous").Value(content).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 

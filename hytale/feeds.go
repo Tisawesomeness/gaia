@@ -102,22 +102,36 @@ func (ft FeedType) Display() string {
 
 // Gets the feed currently stored in the database
 // May return nil!
-func (ft FeedType) getStored(db *db.DB) (Feed, error) {
+func (ft FeedType) getStored(db *db.DB, previous bool) (Feed, error) {
+	var raw []byte
+	var err error
+	if previous {
+		raw, err = db.GetPreviousPost(ft.ID())
+	} else {
+		raw, err = db.GetLatestPost(ft.ID())
+	}
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+
 	switch ft {
 	case GameReleaseFeedType:
-		return getStoredGameRelease(db, Release)
+		return deserializeGameRelease(raw, Release)
 	case GamePreReleaseFeedType:
-		return getStoredGameRelease(db, PreRelease)
+		return deserializeGameRelease(raw, PreRelease)
 	case MavenReleaseFeedType:
-		return getStoredMavenRelease(db, Release)
+		return deserializeMavenRelease(raw, Release)
 	case MavenPreReleaseFeedType:
-		return getStoredMavenRelease(db, PreRelease)
+		return deserializeMavenRelease(raw, PreRelease)
 	case LauncherReleaseFeedType:
-		return getStoredLauncherRelease(db)
+		return deserializeLauncherRelease(raw)
 	case LauncherPostFeedType:
-		return getStoredArticles(db)
+		return deserializeArticles(raw)
 	case PatchlinesFeedType:
-		return getStoredPatchlines(db)
+		return deserializePatchlines(raw)
 	default:
 		panic(fmt.Errorf("unknown state: %d", ft))
 	}
@@ -153,7 +167,10 @@ type FeedMessage struct {
 type Feed interface {
 	GetType() FeedType
 	// Formats the latest feed content as an embed
-	BuildMessage(config *config.Config, isNews bool) *FeedMessage
+	BuildMessage(config *config.Config) *FeedMessage
+	// Formats the latest feed content as an embed to be shown to subscribers.
+	// `previous` is the feed's previous content, or nil if no previous content exists.
+	BuildSubscriberMessage(config *config.Config, previous Feed) *FeedMessage
 	// The last version string that was sent to the subscriber
 	// If the subscribed content has a new version string, then we know the subscriber should be notified
 	GetVersion() string
@@ -198,7 +215,7 @@ func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authSto
 
 func (feeds *HytaleFeeds) initializeFeeds() error {
 	for _, feedType := range feedTypes {
-		feed, err := feedType.getStored(feeds.db)
+		feed, err := feedType.getStored(feeds.db, false)
 		if err != nil {
 			return err
 		}
@@ -216,7 +233,7 @@ func (feeds *HytaleFeeds) Poll() {
 			log.Printf("Error fetching feed %s: %v", feedType.ID(), err)
 			continue
 		}
-		content, err := newFeed.content()
+		content, _ := newFeed.content()
 		err = feeds.db.SetLatestPost(feedType.ID(), content)
 		if err != nil {
 			log.Printf("Error setting latest post for feed %s: %v", feedType.ID(), err)
@@ -227,7 +244,15 @@ func (feeds *HytaleFeeds) Poll() {
 }
 
 func (feeds *HytaleFeeds) updateOrAddFeed(newFeed Feed) {
-	feeds.Feeds[newFeed.GetType()] = newFeed
+	feedType := newFeed.GetType()
+	if oldFeed, exists := feeds.Feeds[feedType]; exists {
+		content, _ := oldFeed.content()
+		err := feeds.db.SetPreviousPost(feedType.ID(), content)
+		if err != nil {
+			log.Printf("Error setting previous post for feed %s: %v", feedType.ID(), err)
+		}
+	}
+	feeds.Feeds[feedType] = newFeed
 }
 
 // Notifies any subscribers if they have not received the latest content
@@ -260,7 +285,12 @@ func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string
 				log.Printf("Error accessing channel, removing: %v", err)
 				feeds.removeAllSubscriptions(targetID)
 			} else {
-				message := feed.BuildMessage(feeds.config, true)
+				previous, err := feed.GetType().getStored(feeds.db, true)
+				if err != nil {
+					log.Printf("Cannot get previous feed: %v", err)
+				}
+
+				message := feed.BuildSubscriberMessage(feeds.config, previous)
 				_, err = s.ChannelMessageSendComplex(targetID, &discordgo.MessageSend{
 					Content:    roleMentions(sub.Roles),
 					Embeds:     message.Embeds,
@@ -292,7 +322,12 @@ func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string
 					return
 				}
 
-				message := feed.BuildMessage(feeds.config, true)
+				previous, err := feed.GetType().getStored(feeds.db, true)
+				if err != nil {
+					log.Printf("Cannot get previous feed: %v", err)
+				}
+
+				message := feed.BuildSubscriberMessage(feeds.config, previous)
 				_, err = s.ChannelMessageSendComplex(dm.ID, &discordgo.MessageSend{
 					Embeds:          message.Embeds,
 					Components:      message.Components,

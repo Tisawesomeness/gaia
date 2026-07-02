@@ -10,7 +10,6 @@ import (
 
 	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
-	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/util"
 	"github.com/bwmarrin/discordgo"
 )
@@ -104,34 +103,87 @@ func (f PatchlinesFeed) GetType() FeedType {
 	return PatchlinesFeedType
 }
 
-func (f PatchlinesFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
-	var description string
-	var fields []*discordgo.MessageEmbedField
-	if len(f.Patchlines) == 0 {
-		description = "(no patchlines found)"
-	} else if len(f.Patchlines) < 10 {
-		for id, expiry := range f.Patchlines {
-			if expiry != nil {
-				fields = append(fields, &discordgo.MessageEmbedField{
-					Name:   fmt.Sprintf("`%s`", id),
-					Value:  fmt.Sprintf("Expires <t:%d:R>", expiry.Unix()),
-					Inline: false,
-				})
-			} else {
-				fields = append(fields, &discordgo.MessageEmbedField{
-					Name:   fmt.Sprintf("`%s`", id),
-					Value:  "(no expiry)",
-					Inline: false,
-				})
+func (f PatchlinesFeed) BuildMessage(config *config.Config) *FeedMessage {
+	return f.BuildSubscriberMessage(config, nil)
+}
+
+func (f PatchlinesFeed) BuildSubscriberMessage(config *config.Config, previous Feed) *FeedMessage {
+	var previousPatchlines map[string]*time.Time
+	previousFeed, ok := previous.(PatchlinesFeed)
+	if ok {
+		previousPatchlines = previousFeed.Patchlines
+	}
+
+	added := make(map[string]bool)
+	removed := make(map[string]bool)
+	currentPatchlines := f.Patchlines
+	if previousPatchlines != nil {
+		for name := range currentPatchlines {
+			if _, exists := previousPatchlines[name]; !exists {
+				added[name] = true
 			}
 		}
+		for name := range previousPatchlines {
+			if _, exists := currentPatchlines[name]; !exists {
+				removed[name] = true
+			}
+		}
+	}
+
+	var description string
+	var fields []*discordgo.MessageEmbedField
+	patchlineCount := len(currentPatchlines) + len(removed)
+	if patchlineCount == 0 {
+		description = "(no patchlines found)"
+
+	} else if patchlineCount < 10 {
+		for id, expiry := range currentPatchlines {
+			var name string
+			if added[id] {
+				name = fmt.Sprintf("`%s` (**NEW**)", id)
+			} else {
+				name = fmt.Sprintf("`%s`", id)
+			}
+			var value string
+			if expiry != nil {
+				value = fmt.Sprintf("Expires <t:%d:R>", expiry.Unix())
+			} else {
+				value = "(no expiry)"
+			}
+			fields = append(fields, &discordgo.MessageEmbedField{
+				Name:   name,
+				Value:  value,
+				Inline: false,
+			})
+		}
+		for id := range removed {
+			fields = append(fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("`%s`", id),
+				Value:  "(removed)",
+				Inline: false,
+			})
+		}
+
 	} else {
 		var lines []string
-		for id, expiry := range f.Patchlines {
-			if expiry != nil {
-				lines = append(lines, fmt.Sprintf("`%s`: Expires <t:%d:R>", id, expiry.Unix()))
+		for id, expiry := range currentPatchlines {
+			if added[id] {
+				if expiry != nil {
+					lines = append(lines, fmt.Sprintf("`%s` (**NEW**): Expires <t:%d:R>", id, expiry.Unix()))
+				} else {
+					lines = append(lines, fmt.Sprintf("`%s` (**NEW**): (no expiry)", id))
+				}
 			} else {
-				lines = append(lines, fmt.Sprintf("`%s`: (no expiry)", id))
+				if expiry != nil {
+					lines = append(lines, fmt.Sprintf("`%s`: Expires <t:%d:R>", id, expiry.Unix()))
+				} else {
+					lines = append(lines, fmt.Sprintf("`%s`: (no expiry)", id))
+				}
+			}
+		}
+		for id := range removed {
+			if _, exists := currentPatchlines[id]; !exists {
+				lines = append(lines, fmt.Sprintf("`%s`: (removed)", id))
 			}
 		}
 		description = strings.Join(lines, "\n")
@@ -170,20 +222,11 @@ func (f PatchlinesFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func getStoredPatchlines(db *db.DB) (Feed, error) {
-	raw, err := db.GetLatestPost(PatchlinesFeedType.ID())
-	if err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		return nil, nil
-	}
-
+func deserializePatchlines(data []byte) (Feed, error) {
 	var patchlines map[string]*time.Time
-	if err := json.Unmarshal(raw, &patchlines); err != nil {
+	if err := json.Unmarshal(data, &patchlines); err != nil {
 		return nil, err
 	}
-
 	return PatchlinesFeed{Patchlines: patchlines}, nil
 }
 

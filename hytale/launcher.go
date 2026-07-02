@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/Tisawesomeness/gaia/config"
-	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/util"
 	"github.com/bwmarrin/discordgo"
 )
@@ -35,7 +34,14 @@ func (f LauncherReleaseFeed) GetType() FeedType {
 	return LauncherReleaseFeedType
 }
 
-func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
+func (f LauncherReleaseFeed) BuildMessage(config *config.Config) *FeedMessage {
+	return f.buildMessage(config, false)
+}
+func (f LauncherReleaseFeed) BuildSubscriberMessage(config *config.Config, previous Feed) *FeedMessage {
+	return f.buildMessage(config, true)
+}
+
+func (f LauncherReleaseFeed) buildMessage(config *config.Config, isNews bool) *FeedMessage {
 	var title string
 	if isNews {
 		title = "New Hytale Launcher Version"
@@ -81,17 +87,9 @@ func (f LauncherReleaseFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func getStoredLauncherRelease(db *db.DB) (Feed, error) {
-	raw, err := db.GetLatestPost(LauncherReleaseFeedType.ID())
-	if err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		return nil, nil
-	}
-
+func deserializeLauncherRelease(data []byte) (Feed, error) {
 	var release LauncherRelease
-	err = json.Unmarshal(raw, &release)
+	err := json.Unmarshal(data, &release)
 	return LauncherReleaseFeed{Release: &release}, err
 }
 
@@ -146,7 +144,10 @@ func (f LauncherPostFeed) GetType() FeedType {
 	return LauncherPostFeedType
 }
 
-func (f LauncherPostFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
+func (f LauncherPostFeed) BuildMessage(config *config.Config) *FeedMessage {
+	return f.BuildSubscriberMessage(config, nil)
+}
+func (f LauncherPostFeed) BuildSubscriberMessage(config *config.Config, previous Feed) *FeedMessage {
 	if len(f.Articles.Articles) <= 0 {
 		return &FeedMessage{
 			Embeds: []*discordgo.MessageEmbed{
@@ -177,17 +178,9 @@ func (f LauncherPostFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func getStoredArticles(db *db.DB) (Feed, error) {
-	raw, err := db.GetLatestPost(LauncherPostFeedType.ID())
-	if err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		return nil, nil
-	}
-
+func deserializeArticles(data []byte) (Feed, error) {
 	var articles ArticleList
-	err = json.Unmarshal(raw, &articles)
+	err := json.Unmarshal(data, &articles)
 	return LauncherPostFeed{Articles: &articles}, err
 }
 
