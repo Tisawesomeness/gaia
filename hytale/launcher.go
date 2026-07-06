@@ -30,8 +30,16 @@ type LauncherReleaseFeed struct {
 	Release *LauncherRelease
 }
 
+func (f LauncherReleaseFeed) GetID() string {
+	return LauncherReleaseFeedType.ID()
+}
+
 func (f LauncherReleaseFeed) GetType() FeedType {
 	return LauncherReleaseFeedType
+}
+
+func (f LauncherReleaseFeed) GetDisplay() string {
+	return LauncherReleaseFeedType.Display()
 }
 
 func (f LauncherReleaseFeed) BuildMessage(config *config.Config) *FeedMessage {
@@ -87,14 +95,14 @@ func (f LauncherReleaseFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func deserializeLauncherRelease(data []byte) (Feed, error) {
+func deserializeLauncherRelease(data []byte) (*LauncherReleaseFeed, error) {
 	var release LauncherRelease
 	err := json.Unmarshal(data, &release)
-	return LauncherReleaseFeed{Release: &release}, err
+	return &LauncherReleaseFeed{Release: &release}, err
 }
 
-func fetchLauncherRelease(feeds *HytaleFeeds) (Feed, error) {
-	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherRelease)
+func fetchLauncherRelease(config *config.Config, httpClient *http.Client) (*LauncherReleaseFeed, error) {
+	resp, err := httpClient.Get(config.Feeds.LauncherRelease)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +114,7 @@ func fetchLauncherRelease(feeds *HytaleFeeds) (Feed, error) {
 
 	var release LauncherRelease
 	err = json.NewDecoder(resp.Body).Decode(&release)
-	return LauncherReleaseFeed{Release: &release}, err
+	return &LauncherReleaseFeed{Release: &release}, err
 }
 
 // Articles
@@ -140,8 +148,16 @@ type LauncherPostFeed struct {
 	Articles *ArticleList
 }
 
+func (f LauncherPostFeed) GetID() string {
+	return LauncherPostFeedType.ID()
+}
+
 func (f LauncherPostFeed) GetType() FeedType {
 	return LauncherPostFeedType
+}
+
+func (f LauncherPostFeed) GetDisplay() string {
+	return LauncherPostFeedType.Display()
 }
 
 func (f LauncherPostFeed) BuildMessage(config *config.Config) *FeedMessage {
@@ -178,14 +194,14 @@ func (f LauncherPostFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func deserializeArticles(data []byte) (Feed, error) {
+func deserializeArticles(data []byte) (*LauncherPostFeed, error) {
 	var articles ArticleList
 	err := json.Unmarshal(data, &articles)
-	return LauncherPostFeed{Articles: &articles}, err
+	return &LauncherPostFeed{Articles: &articles}, err
 }
 
-func fetchArticles(feeds *HytaleFeeds) (Feed, error) {
-	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherArticles)
+func fetchArticles(config *config.Config, httpClient *http.Client) (*LauncherPostFeed, error) {
+	resp, err := httpClient.Get(config.Feeds.LauncherArticles)
 	if err != nil {
 		return nil, err
 	}
@@ -197,5 +213,5 @@ func fetchArticles(feeds *HytaleFeeds) (Feed, error) {
 
 	var articles ArticleList
 	err = json.NewDecoder(resp.Body).Decode(&articles)
-	return LauncherPostFeed{Articles: &articles}, err
+	return &LauncherPostFeed{Articles: &articles}, err
 }

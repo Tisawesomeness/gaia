@@ -4,47 +4,63 @@ import (
 	"encoding/xml"
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/Tisawesomeness/gaia/config"
+	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/hytale"
 	"github.com/Tisawesomeness/gaia/testutil/itestutil"
 	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
-	versionsCE       *CommandExecutor
+	versionsDB       *db.DB
 	versionsTestCase = testutil.MakeTestCase(beforeEachVersions, nil)
 )
 
-func init() {
-	ce, err := InitMockExecutor(nil)
+func setupVersions() {
+	db, err := db.NewDB(config.ValkeyConfig{
+		Address:       "127.0.0.1",
+		Port:          9999,
+		DatabaseIndex: 2,
+	})
 	if err != nil {
 		panic(err)
 	}
-	versionsCE = ce
+	versionsDB = db
 }
 
 func teardownVersions() {
-	versionsCE.DB.Close()
+	versionsDB.Close()
 }
 
 func beforeEachVersions() {
-	versionsCE.DB.Clear()
-	versionsCE.HytaleFeeds.Feeds = make(map[hytale.FeedType]hytale.Feed)
+	versionsDB.Clear()
 }
 
-func setVersion(side hytale.Side, patchline hytale.Patchline, version string) {
-	feedType := hytale.GetFeedType(patchline, side)
+func setPatchlines(ce *MockExecutor, patchlines ...string) {
+	patchlinesMap := make(map[string]*time.Time)
+	for _, patchline := range patchlines {
+		patchlinesMap[patchline] = nil
+	}
+	ce.WithPatchlinesFeed(&hytale.PatchlinesFeed{
+		Patchlines: patchlinesMap,
+	})
+}
+
+func setVersion(ce *MockExecutor, side hytale.Side, patchline string, version string) {
 	if side == hytale.Client {
-		versionsCE.HytaleFeeds.Feeds[feedType] = hytale.GameReleaseFeed{
+		ce.WithGameFeed(&hytale.GameFeed{
 			Version: &hytale.GameReleaseVersion{
 				Version: version,
 			},
 			Patchline: patchline,
-		}
+		}, patchline)
 	} else {
-		versionsCE.HytaleFeeds.Feeds[feedType] = hytale.MavenFeed{
+		ce.WithMavenFeed(&hytale.MavenFeed{
 			Version: &hytale.MavenVersioning{
 				XMLName: xml.Name{
 					Local: "versioning",
@@ -57,18 +73,22 @@ func setVersion(side hytale.Side, patchline hytale.Patchline, version string) {
 				},
 			},
 			Patchline: patchline,
-		}
+		}, patchline)
 	}
 }
 
 func TestVersion(t *testing.T) {
+	setupVersions()
 	t.Cleanup(teardownVersions)
 
 	t.Run("/version client", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		version := "2026.01.17-4b0f30090"
-		setVersion(hytale.Client, hytale.Release, version)
+		setVersion(ce, hytale.Client, "release", version)
 
-		ctx := NewMockContext(versionsCE).WithOptionSubCommand("client")
+		ctx := NewMockContext(ce).WithOptionSubCommand("client")
 		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
@@ -81,10 +101,13 @@ func TestVersion(t *testing.T) {
 	}))
 
 	t.Run("/version client patchline=pre-release", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		version := "2026.08.14-1a2b3c4d5"
-		setVersion(hytale.Client, hytale.PreRelease, version)
+		setVersion(ce, hytale.Client, "pre-release", version)
 
-		ctx := NewMockContext(versionsCE).WithOptionSubCommand("client")
+		ctx := NewMockContext(ce).WithOptionSubCommand("client")
 		ctx = ctx.WithOptionString("patchline", "pre-release")
 		ctx.RunCommand("version")
 
@@ -93,15 +116,18 @@ func TestVersion(t *testing.T) {
 		assert.Equal(t, 1, len(embeds))
 		embed := embeds[0]
 		itestutil.AssertEmbedTitleContains(t, embed, "Client")
-		itestutil.AssertEmbedTitleContains(t, embed, "Pre-release")
+		itestutil.AssertEmbedTitleContains(t, embed, "Pre Release")
 		assert.Contains(t, embed.Description, version)
 	}))
 
 	t.Run("/version server", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		version := "1.6.25"
-		setVersion(hytale.Server, hytale.Release, version)
+		setVersion(ce, hytale.Server, "release", version)
 
-		ctx := NewMockContext(versionsCE).WithOptionSubCommand("server")
+		ctx := NewMockContext(ce).WithOptionSubCommand("server")
 		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
@@ -114,10 +140,13 @@ func TestVersion(t *testing.T) {
 	}))
 
 	t.Run("/version server patchline=pre-release", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		version := "1.1.0"
-		setVersion(hytale.Server, hytale.PreRelease, version)
+		setVersion(ce, hytale.Server, "pre-release", version)
 
-		ctx := NewMockContext(versionsCE).WithOptionSubCommand("server")
+		ctx := NewMockContext(ce).WithOptionSubCommand("server")
 		ctx = ctx.WithOptionString("patchline", "pre-release")
 		ctx.RunCommand("version")
 
@@ -126,21 +155,28 @@ func TestVersion(t *testing.T) {
 		assert.Equal(t, 1, len(embeds))
 		embed := embeds[0]
 		itestutil.AssertEmbedTitleContains(t, embed, "Server")
-		itestutil.AssertEmbedTitleContains(t, embed, "Pre-release")
+		itestutil.AssertEmbedTitleContains(t, embed, "Pre Release")
 		assert.Contains(t, embed.Description, version)
 	}))
 
 	t.Run("invalid patchline", versionsTestCase(func(t *testing.T) {
-		ctx := NewMockContext(versionsCE).WithOptionSubCommand("client")
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
+
+		ctx := NewMockContext(ce).WithOptionSubCommand("client")
 		ctx = ctx.WithOptionString("patchline", "invalid")
 		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
-		assert.Contains(t, ctx.replies[0].Content, "Invalid patchline")
+		assert.Contains(t, ctx.replies[0].Content, "Patchline must be one of")
 	}))
 
 	t.Run("missing feed", versionsTestCase(func(t *testing.T) {
-		ctx := NewMockContext(versionsCE).WithOptionSubCommand("client")
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+
+		ctx := NewMockContext(ce).WithOptionSubCommand("client")
 		ctx.RunCommand("version")
 
 		assert.Equal(t, 1, len(ctx.replies))
@@ -148,22 +184,26 @@ func TestVersion(t *testing.T) {
 	}))
 }
 
-func setLauncherRelease(version string) {
-	versionsCE.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedType] = hytale.LauncherReleaseFeed{
+func setLauncherRelease(ce *MockExecutor, version string) {
+	ce.WithLauncherReleaseFeed(&hytale.LauncherReleaseFeed{
 		Release: &hytale.LauncherRelease{
 			Version: version,
 		},
-	}
+	})
 }
 
 func TestLauncher(t *testing.T) {
+	setupVersions()
 	t.Cleanup(teardownVersions)
 
 	t.Run("/launcher success", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		version := "2026.01.12-e43ec47"
-		setLauncherRelease(version)
+		setLauncherRelease(ce, version)
 
-		ctx := NewMockContext(versionsCE)
+		ctx := NewMockContext(ce)
 		ctx.RunCommand("launcher")
 
 		assert.Equal(t, 1, len(ctx.replies))
@@ -174,7 +214,10 @@ func TestLauncher(t *testing.T) {
 	}))
 
 	t.Run("/launcher missing feed", versionsTestCase(func(t *testing.T) {
-		ctx := NewMockContext(versionsCE)
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+
+		ctx := NewMockContext(ce)
 		ctx.RunCommand("launcher")
 
 		assert.Equal(t, 1, len(ctx.replies))
@@ -182,10 +225,10 @@ func TestLauncher(t *testing.T) {
 	}))
 }
 
-func setLauncherArticles(articles *hytale.ArticleList) {
-	versionsCE.HytaleFeeds.Feeds[hytale.LauncherPostFeedType] = hytale.LauncherPostFeed{
+func setLauncherArticles(ce *MockExecutor, articles *hytale.ArticleList) {
+	ce.WithLauncherPostFeed(&hytale.LauncherPostFeed{
 		Articles: articles,
-	}
+	})
 }
 
 func verifyButton(component discordgo.MessageComponent, expectedLabel string) discordgo.Button {
@@ -215,15 +258,19 @@ func extractButtons(components []discordgo.MessageComponent) (discordgo.Button, 
 }
 
 func TestArticles(t *testing.T) {
+	setupVersions()
 	t.Cleanup(teardownVersions)
 
 	t.Run("no articles", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		articles := &hytale.ArticleList{
 			Articles: []*hytale.Article{},
 		}
-		setLauncherArticles(articles)
+		setLauncherArticles(ce, articles)
 
-		ctx := NewMockContext(versionsCE)
+		ctx := NewMockContext(ce)
 		ctx.RunCommand("articles")
 
 		assert.Equal(t, 1, len(ctx.replies))
@@ -231,6 +278,9 @@ func TestArticles(t *testing.T) {
 	}))
 
 	t.Run("one article", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		articles := &hytale.ArticleList{
 			Articles: []*hytale.Article{
 				{
@@ -241,9 +291,9 @@ func TestArticles(t *testing.T) {
 				},
 			},
 		}
-		setLauncherArticles(articles)
+		setLauncherArticles(ce, articles)
 
-		ctx := NewMockContext(versionsCE)
+		ctx := NewMockContext(ce)
 		ctx.RunCommand("articles")
 
 		assert.Equal(t, 1, len(ctx.replies))
@@ -257,6 +307,9 @@ func TestArticles(t *testing.T) {
 	}))
 
 	t.Run("one article - buttons ignored", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		articles := &hytale.ArticleList{
 			Articles: []*hytale.Article{
 				{
@@ -267,22 +320,25 @@ func TestArticles(t *testing.T) {
 				},
 			},
 		}
-		setLauncherArticles(articles)
+		setLauncherArticles(ce, articles)
 
-		ctx := NewMockContext(versionsCE)
+		ctx := NewMockContext(ce)
 		ctx.RunCommand("articles")
 		back, forward := extractButtons(ctx.replies[0].Components)
 
-		ctx2 := NewMockContext(versionsCE).WithComponent(back.CustomID)
+		ctx2 := NewMockContext(ce).WithComponent(back.CustomID)
 		ctx2.RunInteraction()
 		assert.Equal(t, 0, len(ctx2.edits)) // nothing changed
 
-		ctx3 := NewMockContext(versionsCE).WithComponent(forward.CustomID)
+		ctx3 := NewMockContext(ce).WithComponent(forward.CustomID)
 		ctx3.RunInteraction()
 		assert.Equal(t, 0, len(ctx3.edits)) // nothing changed
 	}))
 
 	t.Run("two articles", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		articles := &hytale.ArticleList{
 			Articles: []*hytale.Article{
 				{
@@ -299,10 +355,10 @@ func TestArticles(t *testing.T) {
 				},
 			},
 		}
-		setLauncherArticles(articles)
+		setLauncherArticles(ce, articles)
 
 		// Run /articles
-		ctx := NewMockContext(versionsCE)
+		ctx := NewMockContext(ce)
 		ctx.RunCommand("articles")
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Equal(t, "Latest", ctx.replies[0].Embeds[0].Title)
@@ -311,7 +367,7 @@ func TestArticles(t *testing.T) {
 		assert.True(t, forward.Disabled)
 
 		// Click back
-		ctx2 := NewMockContext(versionsCE).WithComponent(back.CustomID)
+		ctx2 := NewMockContext(ce).WithComponent(back.CustomID)
 		ctx2.RunInteraction()
 		assert.Equal(t, 1, len(ctx2.edits))
 		assert.Equal(t, "Earlier", ctx2.edits[0].Embeds[0].Title)
@@ -320,7 +376,7 @@ func TestArticles(t *testing.T) {
 		assert.False(t, forward2.Disabled)
 
 		// Click forward
-		ctx3 := NewMockContext(versionsCE).WithComponent(forward2.CustomID)
+		ctx3 := NewMockContext(ce).WithComponent(forward2.CustomID)
 		ctx3.RunInteraction()
 		assert.Equal(t, 1, len(ctx3.edits))
 		assert.Equal(t, "Latest", ctx3.edits[0].Embeds[0].Title)
@@ -330,6 +386,9 @@ func TestArticles(t *testing.T) {
 	}))
 
 	t.Run("three articles", versionsTestCase(func(t *testing.T) {
+		ce, err := InitMockExecutorWithMockFeeds(nil, versionsDB)
+		require.NoError(t, err)
+		setPatchlines(ce, "release", "pre-release")
 		articles := &hytale.ArticleList{
 			Articles: []*hytale.Article{
 				{
@@ -352,10 +411,10 @@ func TestArticles(t *testing.T) {
 				},
 			},
 		}
-		setLauncherArticles(articles)
+		setLauncherArticles(ce, articles)
 
 		// Run /articles
-		ctx := NewMockContext(versionsCE)
+		ctx := NewMockContext(ce)
 		ctx.RunCommand("articles")
 		assert.Equal(t, 1, len(ctx.replies))
 		assert.Equal(t, "Latest", ctx.replies[0].Embeds[0].Title)
@@ -364,7 +423,7 @@ func TestArticles(t *testing.T) {
 		assert.True(t, forward.Disabled)
 
 		// Click back to Middle
-		ctx2 := NewMockContext(versionsCE).WithComponent(back.CustomID)
+		ctx2 := NewMockContext(ce).WithComponent(back.CustomID)
 		ctx2.RunInteraction()
 		assert.Equal(t, 1, len(ctx2.edits))
 		assert.Equal(t, "Middle", ctx2.edits[0].Embeds[0].Title)
@@ -373,7 +432,7 @@ func TestArticles(t *testing.T) {
 		assert.False(t, forward2.Disabled)
 
 		// Click back again to Earliest (index 2)
-		ctx3 := NewMockContext(versionsCE).WithComponent(back2.CustomID)
+		ctx3 := NewMockContext(ce).WithComponent(back2.CustomID)
 		ctx3.RunInteraction()
 		assert.Equal(t, 1, len(ctx3.edits))
 		assert.Equal(t, "Earliest", ctx3.edits[0].Embeds[0].Title)
@@ -382,7 +441,7 @@ func TestArticles(t *testing.T) {
 		assert.False(t, forward3.Disabled)
 
 		// Click forward to Middle (index 1)
-		ctx4 := NewMockContext(versionsCE).WithComponent(forward3.CustomID)
+		ctx4 := NewMockContext(ce).WithComponent(forward3.CustomID)
 		ctx4.RunInteraction()
 		assert.Equal(t, 1, len(ctx4.edits))
 		assert.Equal(t, "Middle", ctx4.edits[0].Embeds[0].Title)
@@ -391,7 +450,7 @@ func TestArticles(t *testing.T) {
 		assert.False(t, forward4.Disabled)
 
 		// Click forward again to Latest (index 0)
-		ctx5 := NewMockContext(versionsCE).WithComponent(forward4.CustomID)
+		ctx5 := NewMockContext(ce).WithComponent(forward4.CustomID)
 		ctx5.RunInteraction()
 		assert.Equal(t, 1, len(ctx5.edits))
 		assert.Equal(t, "Latest", ctx5.edits[0].Embeds[0].Title)

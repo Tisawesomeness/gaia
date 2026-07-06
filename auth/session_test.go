@@ -61,7 +61,7 @@ func registerProfilesSuccess(config *config.Config, authType AuthType) {
 	case Server:
 		httpmock.RegisterResponder("GET", config.Auth.Profiles, httpmock.NewStringResponder(200, sampleAccountDataResponse))
 	case Launcher:
-		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(200, testutil.SampleLauncherData))
+		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(200, testutil.SampleLauncherDataWithV0_4))
 	default:
 		panic("unknown auth type")
 	}

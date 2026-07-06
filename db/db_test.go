@@ -59,13 +59,14 @@ func TestDB(t *testing.T) {
 	t.Run("remove user subscription", testCase(func(t *testing.T) {
 		testDB.AddOrUpdateSubscription("user_feed_3", "user_target_3", UserSubscription{Version: "v1"})
 		testDB.RemoveSubscription("user_feed_3", "user_target_3")
-		_, err := testDB.GetSubscription("user_feed_3", "user_target_3")
-		assert.Error(t, err)
+		sub, _ := testDB.GetSubscription("user_feed_3", "user_target_3")
+		assert.Nil(t, sub)
 	}))
 
 	t.Run("edge case: get non-existent", testCase(func(t *testing.T) {
-		_, err := testDB.GetSubscription("x", "y")
-		assert.Error(t, err)
+		sub, err := testDB.GetSubscription("x", "y")
+		assert.Nil(t, sub)
+		assert.NoError(t, err)
 	}))
 
 	t.Run("edge case: remove non-existent", testCase(func(t *testing.T) {
@@ -93,13 +94,14 @@ func TestDB(t *testing.T) {
 	t.Run("remove guild subscription", testCase(func(t *testing.T) {
 		testDB.AddOrUpdateSubscription("guild_feed_3", "guild_x", GuildSubscription{Version: "l"})
 		testDB.RemoveSubscription("guild_feed_3", "guild_x")
-		_, err := testDB.GetSubscription("guild_feed_3", "guild_x")
-		assert.Error(t, err)
+		sub, _ := testDB.GetSubscription("guild_feed_3", "guild_x")
+		assert.Nil(t, sub)
 	}))
 
 	t.Run("get non-existent guild subscription", testCase(func(t *testing.T) {
-		_, err := testDB.GetSubscription("nonexistent", "nonexistent")
-		assert.Error(t, err)
+		sub, err := testDB.GetSubscription("nonexistent", "nonexistent")
+		assert.Nil(t, sub)
+		assert.NoError(t, err)
 	}))
 
 	t.Run("mixed user and guild subscriptions", testCase(func(t *testing.T) {

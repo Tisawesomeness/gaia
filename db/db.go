@@ -119,6 +119,7 @@ func (db DB) GetSubscriptions(feedID string) ([]string, error) {
 	return subscriptionIDs, nil
 }
 
+// Can return nil!
 func (db DB) GetSubscription(feedID string, targetID string) (Subscription, error) {
 	key := sanitize(feedID) + ":subs:" + targetID
 
@@ -130,7 +131,7 @@ func (db DB) GetSubscription(feedID string, targetID string) (Subscription, erro
 	}
 
 	if len(result) <= 0 {
-		return nil, fmt.Errorf("subscription not found")
+		return nil, nil
 	}
 
 	subType := result["type"]

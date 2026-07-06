@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"iter"
 	"math/rand/v2"
 	"net/http"
 	"time"
@@ -16,6 +17,10 @@ import (
 	"github.com/jarcoal/httpmock"
 )
 
+type MockExecutor struct {
+	*CommandExecutor
+}
+
 // Creates a mock command executor.
 //
 // The provided config (or a new config if nil passed) will be modified with:
@@ -23,8 +28,22 @@ import (
 // - URLs for feeds and profile lookups
 // - Disabled breakers
 //
-// This will start the test DB. Be sure to clear the database before each test and cleanup when done.
-func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
+// If no database is provided, this will start the test DB.
+// Be sure to clear the database before each test and cleanup when done.
+//
+// All feeds are initialized to default values defined in [itestutil.RegisterFeedResponders].
+//
+// Creates an auth store with launcher auth.
+func InitMockExecutor(c *config.Config, db *db.DB) (*MockExecutor, error) {
+	return initMockExecutor(c, db, false)
+}
+
+// Like [InitMockExecutor], but creates [MockFeeds] initialized to no feeds present.
+func InitMockExecutorWithMockFeeds(c *config.Config, db *db.DB) (*MockExecutor, error) {
+	return initMockExecutor(c, db, true)
+}
+
+func initMockExecutor(c *config.Config, d *db.DB, mockFeeds bool) (*MockExecutor, error) {
 	if c == nil {
 		c = &config.Config{}
 	}
@@ -51,27 +70,64 @@ func InitMockExecutor(c *config.Config) (*CommandExecutor, error) {
 	c.Auth.Breaker.Enabled = false
 	c.Auth.LauncherData = "https://account-data.example.com/my-account/get-launcher-data?arch=amd64&os=windows"
 
-	db, err := db.NewDB(c.Valkey)
-	if err != nil {
-		return nil, err
+	if d == nil {
+		newDB, err := db.NewDB(c.Valkey)
+		if err != nil {
+			return nil, err
+		}
+		d = newDB
 	}
-	db.Clear()
+	d.Clear()
 
 	http := &http.Client{
 		Timeout: time.Duration(10) * time.Second,
 	}
 	httpmock.ActivateNonDefault(http)
-	itestutil.RegisterFeedResponders(c)
 
 	authStore := atestutil.NewTestAuthStore(auth.Launcher)
-	feeds, err := hytale.NewHytaleFeeds(c, db, http, authStore)
-	if err != nil {
-		return nil, err
+
+	itestutil.RegisterFeedResponders(c)
+	var feeds hytale.HytaleFeeds
+	if mockFeeds {
+		feeds = newMockFeeds()
+	} else {
+		newFeeds, err := hytale.NewHytaleFeeds(c, d, http, authStore)
+		if err != nil {
+			return nil, err
+		}
+		feeds = newFeeds
 	}
 	bootTime := time.Now()
 
-	ce := NewCommandExecutor(c, db, http, authStore, feeds, "0.1.0", &bootTime)
-	return &ce, nil
+	ce := NewCommandExecutor(c, d, http, authStore, feeds, "0.1.0", &bootTime)
+	return &MockExecutor{
+		CommandExecutor: &ce,
+	}, nil
+}
+
+func (ce *MockExecutor) WithPatchlinesFeed(feed *hytale.PatchlinesFeed) *MockExecutor {
+	ce.HytaleFeeds.(*MockFeeds).patchlinesFeed = feed
+	return ce
+}
+
+func (ce *MockExecutor) WithGameFeed(feed *hytale.GameFeed, patchline string) *MockExecutor {
+	ce.HytaleFeeds.(*MockFeeds).gameFeeds[patchline] = feed
+	return ce
+}
+
+func (ce *MockExecutor) WithMavenFeed(feed *hytale.MavenFeed, patchline string) *MockExecutor {
+	ce.HytaleFeeds.(*MockFeeds).mavenFeeds[patchline] = feed
+	return ce
+}
+
+func (ce *MockExecutor) WithLauncherReleaseFeed(feed *hytale.LauncherReleaseFeed) *MockExecutor {
+	ce.HytaleFeeds.(*MockFeeds).launcherReleaseFeed = feed
+	return ce
+}
+
+func (ce *MockExecutor) WithLauncherPostFeed(feed *hytale.LauncherPostFeed) *MockExecutor {
+	ce.HytaleFeeds.(*MockFeeds).launcherPostFeed = feed
+	return ce
 }
 
 type MockGuildData struct {
@@ -198,7 +254,7 @@ func (ctx *CommandContextMock) Edit(data *discordgo.InteractionResponseData) {
 // The command will be called outside of a guild with no arguments by default. Use WithOptions() and WithGuild() to override.
 //
 // BEWARE: `Session()` and `Interaction()` are both nil, which causes Discord-specific functionality to fail.
-func NewMockContext(ce *CommandExecutor) *CommandContextMock {
+func NewMockContext(ce *MockExecutor) *CommandContextMock {
 	return &CommandContextMock{
 		id:             randomID(),
 		options:        make(OptionsMap),
@@ -342,4 +398,83 @@ func (ctx *CommandContextMock) RunInteraction() {
 		panic("Custom ID cannot be empty")
 	}
 	handleInteraction(ctx)
+}
+
+type MockFeeds struct {
+	patchlinesFeed      *hytale.PatchlinesFeed
+	gameFeeds           map[string]*hytale.GameFeed
+	mavenFeeds          map[string]*hytale.MavenFeed
+	launcherReleaseFeed *hytale.LauncherReleaseFeed
+	launcherPostFeed    *hytale.LauncherPostFeed
+}
+
+func newMockFeeds() *MockFeeds {
+	return &MockFeeds{
+		gameFeeds:  make(map[string]*hytale.GameFeed),
+		mavenFeeds: make(map[string]*hytale.MavenFeed),
+	}
+}
+
+func (feeds *MockFeeds) GetPatchlinesFeed() (*hytale.PatchlinesFeed, bool) {
+	return feeds.patchlinesFeed, feeds.patchlinesFeed != nil
+}
+
+func (feeds *MockFeeds) GetGameFeed(patchline string) (*hytale.GameFeed, bool) {
+	feed, ok := feeds.gameFeeds[patchline]
+	return feed, ok
+}
+
+func (feeds *MockFeeds) GetMavenFeed(patchline string) (*hytale.MavenFeed, bool) {
+	feed, ok := feeds.mavenFeeds[patchline]
+	return feed, ok
+}
+
+func (feeds *MockFeeds) GetLauncherReleaseFeed() (*hytale.LauncherReleaseFeed, bool) {
+	return feeds.launcherReleaseFeed, feeds.launcherReleaseFeed != nil
+}
+
+func (feeds *MockFeeds) GetLauncherPostFeed() (*hytale.LauncherPostFeed, bool) {
+	return feeds.launcherPostFeed, feeds.launcherPostFeed != nil
+}
+
+func (feeds *MockFeeds) Feeds() iter.Seq[hytale.Feed] {
+	return func(yield func(hytale.Feed) bool) {
+		if feeds.patchlinesFeed != nil {
+			if !yield(feeds.patchlinesFeed) {
+				return
+			}
+		}
+		for _, feed := range feeds.gameFeeds {
+			if !yield(feed) {
+				return
+			}
+		}
+		for _, feed := range feeds.mavenFeeds {
+			if !yield(feed) {
+				return
+			}
+		}
+		if feeds.launcherReleaseFeed != nil {
+			if !yield(feeds.launcherReleaseFeed) {
+				return
+			}
+		}
+		if feeds.launcherPostFeed != nil {
+			if !yield(feeds.launcherPostFeed) {
+				return
+			}
+		}
+	}
+}
+
+func (feeds *MockFeeds) Poll() {
+	// no-op
+}
+
+func (feeds *MockFeeds) NotifyFeeds(s *discordgo.Session) {
+	// no-op
+}
+
+func (feeds *MockFeeds) RemoveAllSubscriptions(targetID string) {
+	// no-op
 }

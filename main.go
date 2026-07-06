@@ -88,7 +88,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	go pollFeeds(session, config, *feeds)
+	go pollFeeds(session, config, feeds)
 	util.DiscordLog(&config, httpClient, "Bot finished init")
 
 	stop := make(chan os.Signal, 1)

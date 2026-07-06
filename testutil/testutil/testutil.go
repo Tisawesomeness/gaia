@@ -70,8 +70,12 @@ var (
 
 	//go:embed sample/get-launcher-data.json
 	SampleLauncherData string
+	//go:embed sample/get-launcher-data_with_v0.4.json
+	SampleLauncherDataWithV0_4 string
 	//go:embed sample/patchlines.json
 	SamplePatchlinesResponse string
+	//go:embed sample/patchlines_with_v0.4.json
+	SamplePatchlinesResponseWithV0_4 string
 	//go:embed sample/patchlines_expiry.json
 	SamplePatchlinesResponseExpiry string
 

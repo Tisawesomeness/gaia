@@ -72,17 +72,31 @@ func ToCapitalizedSpacedWords(s string) string {
 		if i == 0 {
 			builder.WriteRune(unicode.ToUpper(r))
 		} else {
-			if unicode.IsSpace(rune(s[i-1])) {
+			prev := rune(s[i-1])
+			if prev == '-' || prev == '_' || unicode.IsSpace(prev) {
 				builder.WriteRune(unicode.ToUpper(r))
 			} else if unicode.IsUpper(r) {
 				builder.WriteRune(' ')
 				builder.WriteRune(unicode.ToUpper(r))
+			} else if r == '-' || r == '_' {
+				builder.WriteRune(' ')
 			} else {
 				builder.WriteRune(r)
 			}
 		}
 	}
 	return builder.String()
+}
+
+func TrimTrailingZeroes(s string) string {
+	if s == "" {
+		return ""
+	}
+	trimmed := strings.TrimRight(s, "0")
+	if trimmed == "" {
+		return "0"
+	}
+	return trimmed
 }
 
 func Execute[T any](breaker *gobreaker.CircuitBreaker, req func() (T, error)) (T, error) {
@@ -107,7 +121,7 @@ func NewBadResponseError(description string, resp *http.Response) error {
 			return fmt.Errorf("%s: %s %s returned HTTP %d, %v", description, resp.Request.Method, finalURL, resp.StatusCode, err)
 		} else {
 			bodyStr := string(body)
-			return fmt.Errorf("%s: %s %s returned HTTP %d:\n%s\n%s\n", description, resp.Request.Method, finalURL, resp.StatusCode, resp.Header, bodyStr[:min(50, len(bodyStr))])
+			return fmt.Errorf("%s: %s %s returned HTTP %d:\n%s\n%s\n", description, resp.Request.Method, finalURL, resp.StatusCode, resp.Header, bodyStr[:min(1000, len(bodyStr))])
 		}
 	}
 }

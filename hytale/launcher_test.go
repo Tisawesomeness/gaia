@@ -5,9 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
-	"github.com/Tisawesomeness/gaia/testutil/atestutil"
 	"github.com/Tisawesomeness/gaia/testutil/testutil"
 	"github.com/jarcoal/httpmock"
 	"github.com/maxatome/go-testdeep/td"
@@ -15,7 +13,7 @@ import (
 )
 
 var (
-	expectedLauncherRelease = LauncherReleaseFeed{
+	expectedLauncherRelease = &LauncherReleaseFeed{
 		Release: &LauncherRelease{
 			Version: "2026.01.12-e43ec47",
 			DownloadURLs: DownloadURLs{
@@ -40,7 +38,7 @@ var (
 			},
 		},
 	}
-	expectedArticlesFeed = LauncherPostFeed{
+	expectedArticlesFeed = &LauncherPostFeed{
 		Articles: &ArticleList{
 			Articles: []*Article{
 				{
@@ -72,23 +70,17 @@ func TestLauncher(t *testing.T) {
 			LauncherArticles: "https://launcher.example.com/launcher-feed/release/feed.json",
 		},
 	}
-	authStore := atestutil.NewTestAuthStore(auth.Server)
-	feeds := &HytaleFeeds{
-		config:    config,
-		http:      http,
-		authStore: authStore,
-	}
 
 	t.Run("launcher release", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Feeds.LauncherRelease, httpmock.NewStringResponder(200, testutil.SampleLauncherRelease))
-		feed, err := fetchLauncherRelease(feeds)
+		feed, err := fetchLauncherRelease(config, http)
 		assert.NoError(t, err)
 		td.Cmp(t, feed, expectedLauncherRelease)
 	})
 
 	t.Run("launcher articles", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Feeds.LauncherArticles, httpmock.NewStringResponder(200, testutil.SampleArticlesFeed))
-		feed, err := fetchArticles(feeds)
+		feed, err := fetchArticles(config, http)
 		assert.NoError(t, err)
 		td.Cmp(t, feed, expectedArticlesFeed)
 	})
@@ -96,7 +88,7 @@ func TestLauncher(t *testing.T) {
 	t.Run("launcher release error status", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Feeds.LauncherRelease, httpmock.NewStringResponder(400, ""))
 
-		feed, err := fetchLauncherRelease(feeds)
+		feed, err := fetchLauncherRelease(config, http)
 		assert.Error(t, err)
 		assert.Nil(t, feed)
 		assert.Contains(t, err.Error(), "Fetch launcher release")
@@ -105,7 +97,7 @@ func TestLauncher(t *testing.T) {
 	t.Run("launcher articles error status", func(t *testing.T) {
 		httpmock.RegisterResponder("GET", config.Feeds.LauncherArticles, httpmock.NewStringResponder(400, ""))
 
-		feed, err := fetchArticles(feeds)
+		feed, err := fetchArticles(config, http)
 		assert.Error(t, err)
 		assert.Nil(t, feed)
 		assert.Contains(t, err.Error(), "Fetch articles")

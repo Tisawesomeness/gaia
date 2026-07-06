@@ -8,12 +8,12 @@ import (
 )
 
 var (
-	coreCE       *CommandExecutor
+	coreCE       *MockExecutor
 	coreTestCase = testutil.MakeTestCase(beforeEachCore, nil)
 )
 
-func init() {
-	ce, err := InitMockExecutor(nil)
+func setupCore() {
+	ce, err := InitMockExecutor(nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -29,6 +29,7 @@ func beforeEachCore() {
 }
 
 func TestCoreCommands(t *testing.T) {
+	setupCore()
 	t.Cleanup(teardownCore)
 
 	t.Run("/help", coreTestCase(func(t *testing.T) {

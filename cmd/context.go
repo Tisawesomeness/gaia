@@ -59,7 +59,7 @@ type CommandContext interface {
 	DB() *db.DB
 	HTTP() *http.Client
 	AuthStore() auth.AuthStore
-	HytaleFeeds() *hytale.HytaleFeeds
+	HytaleFeeds() hytale.HytaleFeeds
 	Breakers() *Breakers
 	BotMetadata() *BotMetadata
 	// The raw Discord session, prefer using CommandContext methods since this makes the command untestable
@@ -104,7 +104,7 @@ type commandContext struct {
 	db          *db.DB
 	http        *http.Client
 	authStore   auth.AuthStore
-	hytaleFeeds *hytale.HytaleFeeds
+	hytaleFeeds hytale.HytaleFeeds
 	breakers    *Breakers
 	botMetadata *BotMetadata
 
@@ -132,7 +132,7 @@ func (ctx *commandContext) Config() *config.Config                    { return c
 func (ctx *commandContext) DB() *db.DB                                { return ctx.db }
 func (ctx *commandContext) HTTP() *http.Client                        { return ctx.http }
 func (ctx *commandContext) AuthStore() auth.AuthStore                 { return ctx.authStore }
-func (ctx *commandContext) HytaleFeeds() *hytale.HytaleFeeds          { return ctx.hytaleFeeds }
+func (ctx *commandContext) HytaleFeeds() hytale.HytaleFeeds           { return ctx.hytaleFeeds }
 func (ctx *commandContext) Breakers() *Breakers                       { return ctx.breakers }
 func (ctx *commandContext) BotMetadata() *BotMetadata                 { return ctx.botMetadata }
 func (ctx *commandContext) Session() *discordgo.Session               { return ctx.session }

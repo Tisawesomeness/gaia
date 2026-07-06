@@ -20,18 +20,18 @@ func RegisterFeedResponders(config *config.Config) error {
 	httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(200, testutil.SampleLauncherData))
 
 	var patchlines = []struct {
-		patchline        hytale.Patchline
+		patchline        string
 		sampleReleaseURL string
 		releaseURL       string
 		sampleRelease    string
 		sampleMaven      string
 	}{
-		{hytale.Release, testutil.SampleReleaseURL, testutil.ReleaseURL, testutil.SampleRelease, testutil.SampleMaven},
-		{hytale.PreRelease, testutil.SamplePreReleaseURL, testutil.PreReleaseURL, testutil.SamplePreRelease, testutil.SampleMaven},
+		{"release", testutil.SampleReleaseURL, testutil.ReleaseURL, testutil.SampleRelease, testutil.SampleMaven},
+		{"pre-release", testutil.SamplePreReleaseURL, testutil.PreReleaseURL, testutil.SamplePreRelease, testutil.SampleMaven},
 	}
 
 	for _, tt := range patchlines {
-		httpmock.RegisterResponder("GET", config.Feeds.GameVersion+tt.patchline.ID()+".json", httpmock.NewStringResponder(200, tt.sampleReleaseURL))
+		httpmock.RegisterResponder("GET", config.Feeds.GameVersion+tt.patchline+".json", httpmock.NewStringResponder(200, tt.sampleReleaseURL))
 		httpmock.RegisterResponder("GET", tt.releaseURL, httpmock.NewStringResponder(200, tt.sampleRelease))
 		httpmock.RegisterResponder("GET", hytale.MavenMetadataUrl(config.Feeds, tt.patchline), httpmock.NewStringResponder(200, tt.sampleMaven))
 	}

@@ -1,8 +1,8 @@
 package hytale
 
 import (
-	"errors"
 	"fmt"
+	"iter"
 	"log"
 	"net/http"
 	"strings"
@@ -16,64 +16,50 @@ import (
 type FeedType int
 
 const (
-	GameReleaseFeedType FeedType = iota
-	GamePreReleaseFeedType
-	MavenReleaseFeedType
-	MavenPreReleaseFeedType
+	PatchlinesFeedType FeedType = iota
+	GameFeedType
+	MavenFeedType
 	LauncherReleaseFeedType
 	LauncherPostFeedType
-	PatchlinesFeedType
-)
-
-var (
-	feedTypes = []FeedType{
-		GameReleaseFeedType,
-		GamePreReleaseFeedType,
-		MavenReleaseFeedType,
-		MavenPreReleaseFeedType,
-		LauncherReleaseFeedType,
-		LauncherPostFeedType,
-		PatchlinesFeedType,
-	}
 )
 
 func ParseFeedType(feedType string) (FeedType, error) {
 	switch feedType {
-	case GameReleaseFeedType.ID():
-		return GameReleaseFeedType, nil
-	case GamePreReleaseFeedType.ID():
-		return GamePreReleaseFeedType, nil
-	case MavenReleaseFeedType.ID():
-		return MavenReleaseFeedType, nil
-	case MavenPreReleaseFeedType.ID():
-		return MavenPreReleaseFeedType, nil
+	case PatchlinesFeedType.ID():
+		return PatchlinesFeedType, nil
+	case GameFeedType.ID():
+		return GameFeedType, nil
+	case MavenFeedType.ID():
+		return MavenFeedType, nil
 	case LauncherReleaseFeedType.ID():
 		return LauncherReleaseFeedType, nil
 	case LauncherPostFeedType.ID():
 		return LauncherPostFeedType, nil
-	case PatchlinesFeedType.ID():
-		return PatchlinesFeedType, nil
 	default:
 		return 0, fmt.Errorf("unknown feedType: %s", feedType)
 	}
 }
 
+const (
+	patchlinesID      = "patchlines"
+	gameIDPrefix      = "game"
+	mavenIDPrefix     = "maven"
+	launcherReleaseID = "launcher_release"
+	launcherPostID    = "launcher_post"
+)
+
 func (ft FeedType) ID() string {
 	switch ft {
-	case GameReleaseFeedType:
-		return "game_release"
-	case GamePreReleaseFeedType:
-		return "game_pre_release"
-	case MavenReleaseFeedType:
-		return "maven_release"
-	case MavenPreReleaseFeedType:
-		return "maven_pre_release"
-	case LauncherReleaseFeedType:
-		return "launcher_release"
-	case LauncherPostFeedType:
-		return "launcher_post"
 	case PatchlinesFeedType:
-		return "patchlines"
+		return patchlinesID
+	case GameFeedType:
+		return gameIDPrefix
+	case MavenFeedType:
+		return mavenIDPrefix
+	case LauncherReleaseFeedType:
+		return launcherReleaseID
+	case LauncherPostFeedType:
+		return launcherPostID
 	default:
 		panic(fmt.Errorf("unknown state: %d", ft))
 	}
@@ -81,78 +67,16 @@ func (ft FeedType) ID() string {
 
 func (ft FeedType) Display() string {
 	switch ft {
-	case GameReleaseFeedType:
+	case PatchlinesFeedType:
+		return "Added/Removed Patchlines"
+	case GameFeedType:
 		return "New Client Releases"
-	case GamePreReleaseFeedType:
-		return "New Client Pre-releases"
-	case MavenReleaseFeedType:
+	case MavenFeedType:
 		return "New Server Releases"
-	case MavenPreReleaseFeedType:
-		return "New Server Pre-releases"
 	case LauncherReleaseFeedType:
 		return "New Launcher Versions"
 	case LauncherPostFeedType:
 		return "New Launcher Articles"
-	case PatchlinesFeedType:
-		return "Added/Removed Patchlines"
-	default:
-		panic(fmt.Errorf("unknown state: %d", ft))
-	}
-}
-
-// Gets the feed currently stored in the database
-// May return nil!
-func (ft FeedType) getStored(db *db.DB, previous bool) (Feed, error) {
-	var raw []byte
-	var err error
-	if previous {
-		raw, err = db.GetPreviousPost(ft.ID())
-	} else {
-		raw, err = db.GetLatestPost(ft.ID())
-	}
-	if err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		return nil, nil
-	}
-
-	switch ft {
-	case GameReleaseFeedType:
-		return deserializeGameRelease(raw, Release)
-	case GamePreReleaseFeedType:
-		return deserializeGameRelease(raw, PreRelease)
-	case MavenReleaseFeedType:
-		return deserializeMavenRelease(raw, Release)
-	case MavenPreReleaseFeedType:
-		return deserializeMavenRelease(raw, PreRelease)
-	case LauncherReleaseFeedType:
-		return deserializeLauncherRelease(raw)
-	case LauncherPostFeedType:
-		return deserializeArticles(raw)
-	case PatchlinesFeedType:
-		return deserializePatchlines(raw)
-	default:
-		panic(fmt.Errorf("unknown state: %d", ft))
-	}
-}
-
-func (ft FeedType) fetch(feeds *HytaleFeeds) (Feed, error) {
-	switch ft {
-	case GameReleaseFeedType:
-		return fetchGameRelease(feeds, Release)
-	case GamePreReleaseFeedType:
-		return fetchGameRelease(feeds, PreRelease)
-	case MavenReleaseFeedType:
-		return fetchMavenRelease(feeds, Release)
-	case MavenPreReleaseFeedType:
-		return fetchMavenRelease(feeds, PreRelease)
-	case LauncherReleaseFeedType:
-		return fetchLauncherRelease(feeds)
-	case LauncherPostFeedType:
-		return fetchArticles(feeds)
-	case PatchlinesFeedType:
-		return fetchPatchlines(feeds)
 	default:
 		panic(fmt.Errorf("unknown state: %d", ft))
 	}
@@ -165,114 +89,373 @@ type FeedMessage struct {
 
 // Represents a feed of content
 type Feed interface {
+	// A unique ID representing this feed.
+	GetID() string
+	// The feed's type. Multiple feeds can share the same FeedType.
 	GetType() FeedType
-	// Formats the latest feed content as an embed
+	// The feed's display name as shown in the subscription list.
+	GetDisplay() string
+	// Formats the latest feed content as an embed.
 	BuildMessage(config *config.Config) *FeedMessage
 	// Formats the latest feed content as an embed to be shown to subscribers.
 	// `previous` is the feed's previous content, or nil if no previous content exists.
 	BuildSubscriberMessage(config *config.Config, previous Feed) *FeedMessage
-	// The last version string that was sent to the subscriber
-	// If the subscribed content has a new version string, then we know the subscriber should be notified
+	// The last version string that was sent to the subscriber.
+	// If the subscribed content has a new version string, then we know the subscriber should be notified.
 	GetVersion() string
-	// Gets the feed's current raw content, as a string
+	// Gets the feed's current raw content, as a string.
 	content() (string, error)
 }
 
 // Keeps all feeds up-to-date by periodically checking for new content and notifying subscribers
-type HytaleFeeds struct {
-	Feeds     map[FeedType]Feed
+type HytaleFeeds interface {
+	GetPatchlinesFeed() (*PatchlinesFeed, bool)
+	GetGameFeed(patchline string) (*GameFeed, bool)
+	GetMavenFeed(patchline string) (*MavenFeed, bool)
+	GetLauncherReleaseFeed() (*LauncherReleaseFeed, bool)
+	GetLauncherPostFeed() (*LauncherPostFeed, bool)
+	Feeds() iter.Seq[Feed]
+
+	// Fetches all feeds' latest content
+	Poll()
+	// Notifies any subscribers if they have not received the latest content
+	NotifyFeeds(s *discordgo.Session)
+	// Removes all subscriptions for the provided user/channel ID
+	RemoveAllSubscriptions(targetID string)
+}
+
+type hytaleFeeds struct {
+	patchlinesFeed      *PatchlinesFeed
+	gameFeeds           map[string]*GameFeed
+	mavenFeeds          map[string]*MavenFeed
+	launcherReleaseFeed *LauncherReleaseFeed
+	launcherPostFeed    *LauncherPostFeed
+
 	config    *config.Config
 	db        *db.DB
 	http      *http.Client
 	authStore auth.AuthStore
 }
 
-func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authStore auth.AuthStore) (*HytaleFeeds, error) {
-	feeds := &HytaleFeeds{
-		Feeds:     make(map[FeedType]Feed),
+// Creates a new feeds instance, restoring from database and fetching any that couldn't be restored.
+func NewHytaleFeeds(config *config.Config, db *db.DB, http *http.Client, authStore auth.AuthStore) (HytaleFeeds, error) {
+	feeds := &hytaleFeeds{
+		gameFeeds:  make(map[string]*GameFeed),
+		mavenFeeds: make(map[string]*MavenFeed),
+
 		config:    config,
 		db:        db,
 		http:      http,
 		authStore: authStore,
 	}
 
-	err := feeds.initializeFeeds()
-	if err != nil {
-		return nil, err
-	}
-
-	expectedFeeds := len(feedTypes)
-	if len(feeds.Feeds) < expectedFeeds {
-		log.Println("Feeds have not been stored yet, fetching...")
+	allGood := feeds.initializeFeeds()
+	if !allGood {
+		log.Println("Not all feeds stored yet, fetching...")
 		feeds.Poll()
-		if len(feeds.Feeds) < expectedFeeds {
-			return nil, errors.New("feed state was not initialized")
-		}
 	}
 
 	return feeds, nil
 }
 
-func (feeds *HytaleFeeds) initializeFeeds() error {
-	for _, feedType := range feedTypes {
-		feed, err := feedType.getStored(feeds.db, false)
-		if err != nil {
-			return err
+func (feeds *hytaleFeeds) initializeFeeds() bool {
+	allGood := true
+
+	// Get patchlines first - this decides what feeds are possible later
+	patchlinesFeed, err := getStored(patchlinesID, false, feeds.db, deserializePatchlines)
+	if err != nil {
+		log.Printf("Error getting stored %s feed: %v", patchlinesID, err)
+		allGood = false
+	} else {
+		// Fetch if no patchlines stored in database
+		if patchlinesFeed == nil {
+			newPatchlinesFeed, err := pollFeed(patchlinesID, feeds.patchlinesFeed, feeds.db, func() (*PatchlinesFeed, error) {
+				return fetchPatchlines(feeds.config, feeds.http, feeds.authStore)
+			})
+			if err != nil {
+				log.Printf("%v", err)
+				allGood = false
+			} else {
+				feeds.patchlinesFeed = newPatchlinesFeed
+			}
+		} else {
+			feeds.patchlinesFeed = patchlinesFeed
 		}
-		if feed != nil {
-			feeds.Feeds[feedType] = feed
+
+		if feeds.patchlinesFeed != nil {
+			for patchline := range feeds.patchlinesFeed.Patchlines {
+				normalizedPatchline := strings.ReplaceAll(patchline, "-", "_")
+
+				gameID := gameIDPrefix + "_" + normalizedPatchline
+				gameFeed, err := getStored(gameID, false, feeds.db, func(data []byte) (*GameFeed, error) {
+					return deserializeGame(data, patchline)
+				})
+				if err != nil {
+					log.Printf("Error getting stored %s feed: %v", gameID, err)
+					allGood = false
+				} else if gameFeed != nil {
+					feeds.gameFeeds[patchline] = gameFeed
+				} else {
+					allGood = false
+				}
+
+				mavenID := mavenIDPrefix + "_" + normalizedPatchline
+				mavenFeed, err := getStored(mavenID, false, feeds.db, func(data []byte) (*MavenFeed, error) {
+					return deserializeMaven(data, patchline)
+				})
+				if err != nil {
+					log.Printf("Error getting stored %s feed: %v", mavenID, err)
+					allGood = false
+				} else if mavenFeed != nil {
+					feeds.mavenFeeds[patchline] = mavenFeed
+				} else {
+					allGood = false
+				}
+
+			}
 		}
 	}
-	return nil
+
+	launcherReleaseFeed, err := getStored(launcherReleaseID, false, feeds.db, deserializeLauncherRelease)
+	if err != nil {
+		log.Printf("Error getting stored launcher release feed: %v", err)
+		allGood = false
+	} else if launcherReleaseFeed != nil {
+		feeds.launcherReleaseFeed = launcherReleaseFeed
+	} else {
+		allGood = false
+	}
+
+	launcherPostFeed, err := getStored(launcherPostID, false, feeds.db, deserializeArticles)
+	if err != nil {
+		log.Printf("Error getting stored launcher post feed: %v", err)
+		allGood = false
+	} else if launcherPostFeed != nil {
+		feeds.launcherPostFeed = launcherPostFeed
+	} else {
+		allGood = false
+	}
+
+	return allGood
 }
 
-func (feeds *HytaleFeeds) Poll() {
-	for _, feedType := range feedTypes {
-		newFeed, err := feedType.fetch(feeds)
-		if err != nil {
-			log.Printf("Error fetching feed %s: %v", feedType.ID(), err)
-			continue
+// May return nil!
+func getStored[T Feed](feedID string, previous bool, db *db.DB, deserializeFunc func([]byte) (*T, error)) (*T, error) {
+	var raw []byte
+	var err error
+	if previous {
+		raw, err = db.GetPreviousPost(feedID)
+	} else {
+		raw, err = db.GetLatestPost(feedID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+	return deserializeFunc(raw)
+}
+
+func (feeds *hytaleFeeds) GetPatchlinesFeed() (*PatchlinesFeed, bool) {
+	return feeds.patchlinesFeed, feeds.patchlinesFeed != nil
+}
+
+func (feeds *hytaleFeeds) GetGameFeed(patchline string) (*GameFeed, bool) {
+	feed, ok := feeds.gameFeeds[patchline]
+	return feed, ok
+}
+
+func (feeds *hytaleFeeds) GetMavenFeed(patchline string) (*MavenFeed, bool) {
+	feed, ok := feeds.mavenFeeds[patchline]
+	return feed, ok
+}
+
+func (feeds *hytaleFeeds) GetLauncherReleaseFeed() (*LauncherReleaseFeed, bool) {
+	return feeds.launcherReleaseFeed, feeds.launcherReleaseFeed != nil
+}
+
+func (feeds *hytaleFeeds) GetLauncherPostFeed() (*LauncherPostFeed, bool) {
+	return feeds.launcherPostFeed, feeds.launcherPostFeed != nil
+}
+
+func (feeds *hytaleFeeds) Feeds() iter.Seq[Feed] {
+	return func(yield func(Feed) bool) {
+		if feeds.patchlinesFeed != nil {
+			if !yield(feeds.patchlinesFeed) {
+				return
+			}
 		}
-		content, _ := newFeed.content()
-		err = feeds.db.SetLatestPost(feedType.ID(), content)
-		if err != nil {
-			log.Printf("Error setting latest post for feed %s: %v", feedType.ID(), err)
-			continue
+		for _, feed := range feeds.gameFeeds {
+			if !yield(feed) {
+				return
+			}
 		}
-		feeds.updateOrAddFeed(newFeed)
+		for _, feed := range feeds.mavenFeeds {
+			if !yield(feed) {
+				return
+			}
+		}
+		if feeds.launcherReleaseFeed != nil {
+			if !yield(feeds.launcherReleaseFeed) {
+				return
+			}
+		}
+		if feeds.launcherPostFeed != nil {
+			if !yield(feeds.launcherPostFeed) {
+				return
+			}
+		}
 	}
 }
 
-func (feeds *HytaleFeeds) updateOrAddFeed(newFeed Feed) {
-	feedType := newFeed.GetType()
-	if oldFeed, exists := feeds.Feeds[feedType]; exists {
-		content, _ := oldFeed.content()
-		err := feeds.db.SetPreviousPost(feedType.ID(), content)
-		if err != nil {
-			log.Printf("Error setting previous post for feed %s: %v", feedType.ID(), err)
+func (feeds *hytaleFeeds) Poll() {
+	patchlinesFeed, err := pollFeed(patchlinesID, feeds.patchlinesFeed, feeds.db, func() (*PatchlinesFeed, error) {
+		return fetchPatchlines(feeds.config, feeds.http, feeds.authStore)
+	})
+	if err != nil {
+		log.Printf("%v", err)
+	} else {
+		feeds.patchlinesFeed = patchlinesFeed
+	}
+
+	patchlinesFeed = feeds.patchlinesFeed
+	if patchlinesFeed != nil {
+		for patchline := range patchlinesFeed.Patchlines {
+			normalizedPatchline := strings.ReplaceAll(patchline, "-", "_")
+
+			gameID := gameIDPrefix + "_" + normalizedPatchline
+			gameFeed, err := pollFeed(gameID, feeds.gameFeeds[patchline], feeds.db, func() (*GameFeed, error) {
+				return fetchGame(feeds.config, feeds.http, feeds.authStore, patchline)
+			})
+			if err != nil {
+				log.Printf("%v", err)
+			} else if gameFeed != nil {
+				feeds.gameFeeds[patchline] = gameFeed
+			}
+
+			mavenID := mavenIDPrefix + "_" + normalizedPatchline
+			mavenFeed, err := pollFeed(mavenID, feeds.mavenFeeds[patchline], feeds.db, func() (*MavenFeed, error) {
+				return fetchMaven(feeds.config, feeds.http, patchline)
+			})
+			if err != nil {
+				log.Printf("%v", err)
+			} else if mavenFeed != nil {
+				feeds.mavenFeeds[patchline] = mavenFeed
+			}
+
 		}
 	}
-	feeds.Feeds[feedType] = newFeed
-}
 
-// Notifies any subscribers if they have not received the latest content
-func (feeds HytaleFeeds) NotifyFeeds(s *discordgo.Session) {
-	for feedType, feed := range feeds.Feeds {
-		targetIDs, err := feeds.db.GetSubscriptions(feedType.ID())
-		if err != nil {
-			log.Printf("Error getting target IDs for feed %s: %v", feedType.ID(), err)
-			continue
-		}
-		for _, targetID := range targetIDs {
-			feeds.notify(s, feed, targetID)
-		}
+	launcherReleaseFeed, err := pollFeed(launcherReleaseID, feeds.launcherReleaseFeed, feeds.db, func() (*LauncherReleaseFeed, error) {
+		return fetchLauncherRelease(feeds.config, feeds.http)
+	})
+	if err != nil {
+		log.Printf("%v", err)
+	} else if launcherReleaseFeed != nil {
+		feeds.launcherReleaseFeed = launcherReleaseFeed
+	}
+
+	launcherPostFeed, err := pollFeed(launcherPostID, feeds.launcherPostFeed, feeds.db, func() (*LauncherPostFeed, error) {
+		return fetchArticles(feeds.config, feeds.http)
+	})
+	if err != nil {
+		log.Printf("%v", err)
+	} else if launcherPostFeed != nil {
+		feeds.launcherPostFeed = launcherPostFeed
 	}
 }
 
-func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string) {
-	sub, err := feeds.db.GetSubscription(feed.GetType().ID(), targetID)
+func pollFeed[T Feed](feedID string, oldFeed *T, db *db.DB, fetchFunc func() (*T, error)) (*T, error) {
+	newFeed, err := fetchFunc()
+	if err != nil {
+		return nil, fmt.Errorf("Error fetching feed %s: %v", feedID, err)
+	}
+	content, err := (*newFeed).content()
+	if err != nil {
+		return nil, fmt.Errorf("Error getting content for feed %s: %v", feedID, err)
+	}
+	err = db.SetLatestPost(feedID, content)
+	if err != nil {
+		return nil, fmt.Errorf("Error setting latest post for feed %s: %v", feedID, err)
+	}
+	if oldFeed != nil {
+		content, _ := (*oldFeed).content()
+		err := db.SetPreviousPost(feedID, content)
+		if err != nil {
+			log.Printf("Error setting previous post for feed %s: %v", feedID, err)
+		}
+	}
+	return newFeed, err
+}
+
+func (feeds *hytaleFeeds) NotifyFeeds(s *discordgo.Session) {
+	if feeds.patchlinesFeed != nil {
+		prevPatchlines, err := getStored(patchlinesID, true, feeds.db, deserializePatchlines)
+		if err != nil {
+			log.Printf("Error getting previous stored %s feed: %v", patchlinesID, err)
+		}
+		feeds.notifyFeed(s, feeds.patchlinesFeed, prevPatchlines)
+	}
+
+	for patchline, gameFeed := range feeds.gameFeeds {
+		gameID := gameFeed.GetID()
+		prevGameFeed, err := getStored(gameID, true, feeds.db, func(data []byte) (*GameFeed, error) {
+			return deserializeGame(data, patchline)
+		})
+		if err != nil {
+			log.Printf("Error getting previous stored %s feed: %v", gameID, err)
+		}
+		feeds.notifyFeed(s, gameFeed, prevGameFeed)
+	}
+
+	for patchline, mavenFeed := range feeds.mavenFeeds {
+		mavenID := mavenFeed.GetID()
+		prevMavenFeed, err := getStored(mavenID, true, feeds.db, func(data []byte) (*MavenFeed, error) {
+			return deserializeMaven(data, patchline)
+		})
+		if err != nil {
+			log.Printf("Error getting previous stored %s feed: %v", mavenID, err)
+		}
+		feeds.notifyFeed(s, mavenFeed, prevMavenFeed)
+	}
+
+	if feeds.launcherReleaseFeed != nil {
+		prevLauncherRelease, err := getStored(launcherReleaseID, true, feeds.db, deserializeLauncherRelease)
+		if err != nil {
+			log.Printf("Error getting previous stored %s feed: %v", launcherReleaseID, err)
+		}
+		feeds.notifyFeed(s, feeds.launcherReleaseFeed, prevLauncherRelease)
+	}
+
+	if feeds.launcherPostFeed != nil {
+		prevLauncherPost, err := getStored(launcherPostID, true, feeds.db, deserializeArticles)
+		if err != nil {
+			log.Printf("Error getting previous stored %s feed: %v", launcherPostID, err)
+		}
+		feeds.notifyFeed(s, feeds.launcherPostFeed, prevLauncherPost)
+	}
+}
+
+func (feeds *hytaleFeeds) notifyFeed(s *discordgo.Session, feed Feed, previous Feed) {
+	feedID := feed.GetID()
+	targetIDs, err := feeds.db.GetSubscriptions(feedID)
+	if err != nil {
+		log.Printf("Error getting target IDs for feed %s: %v", feedID, err)
+		return
+	}
+	for _, targetID := range targetIDs {
+		feeds.notify(s, feed, previous, targetID)
+	}
+}
+
+func (feeds *hytaleFeeds) notify(s *discordgo.Session, feed Feed, previous Feed, targetID string) {
+	sub, err := feeds.db.GetSubscription(feed.GetID(), targetID)
 	if err != nil {
 		log.Printf("Error getting subscription from db: %v", err)
+		return
+	}
+	if sub == nil {
 		return
 	}
 
@@ -283,13 +466,8 @@ func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string
 			_, err = s.Channel(targetID)
 			if err != nil {
 				log.Printf("Error accessing channel, removing: %v", err)
-				feeds.removeAllSubscriptions(targetID)
+				feeds.RemoveAllSubscriptions(targetID)
 			} else {
-				previous, err := feed.GetType().getStored(feeds.db, true)
-				if err != nil {
-					log.Printf("Cannot get previous feed: %v", err)
-				}
-
 				message := feed.BuildSubscriberMessage(feeds.config, previous)
 				_, err = s.ChannelMessageSendComplex(targetID, &discordgo.MessageSend{
 					Content:    roleMentions(sub.Roles),
@@ -304,7 +482,7 @@ func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string
 					return
 				}
 
-				feeds.db.AddOrUpdateSubscription(feed.GetType().ID(), targetID, db.GuildSubscription{
+				feeds.db.AddOrUpdateSubscription(feed.GetID(), targetID, db.GuildSubscription{
 					Version: feed.GetVersion(),
 					Roles:   sub.Roles,
 				})
@@ -314,17 +492,12 @@ func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string
 			_, err = s.User(targetID)
 			if err != nil {
 				log.Printf("Error accessing user, removing: %v", err)
-				feeds.removeAllSubscriptions(targetID)
+				feeds.RemoveAllSubscriptions(targetID)
 			} else {
 				dm, err := s.UserChannelCreate(targetID)
 				if err != nil {
 					log.Printf("Cannot open DM: %v", err)
 					return
-				}
-
-				previous, err := feed.GetType().getStored(feeds.db, true)
-				if err != nil {
-					log.Printf("Cannot get previous feed: %v", err)
 				}
 
 				message := feed.BuildSubscriberMessage(feeds.config, previous)
@@ -338,7 +511,7 @@ func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string
 					return
 				}
 
-				feeds.db.AddOrUpdateSubscription(feed.GetType().ID(), targetID, db.UserSubscription{
+				feeds.db.AddOrUpdateSubscription(feed.GetID(), targetID, db.UserSubscription{
 					Version: feed.GetVersion(),
 				})
 			}
@@ -349,9 +522,9 @@ func (feeds HytaleFeeds) notify(s *discordgo.Session, feed Feed, targetID string
 	}
 }
 
-func (feeds HytaleFeeds) removeAllSubscriptions(targetID string) {
-	for feedType := range feeds.Feeds {
-		feeds.db.RemoveSubscription(feedType.ID(), targetID)
+func (feeds *hytaleFeeds) RemoveAllSubscriptions(targetID string) {
+	for feed := range feeds.Feeds() {
+		feeds.db.RemoveSubscription(feed.GetID(), targetID)
 	}
 }
 

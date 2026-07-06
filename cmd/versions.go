@@ -1,25 +1,19 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/Tisawesomeness/gaia/hytale"
 	"github.com/bwmarrin/discordgo"
 )
 
 var (
-	patchlineOption = &discordgo.ApplicationCommandOption{
+	patchlineOptionVersions = &discordgo.ApplicationCommandOption{
 		Type:        discordgo.ApplicationCommandOptionString,
 		Name:        "patchline",
 		Description: "The release channel",
-		Choices: []*discordgo.ApplicationCommandOptionChoice{
-			{
-				Name:  hytale.Release.Display(),
-				Value: hytale.Release.ID(),
-			},
-			{
-				Name:  hytale.PreRelease.Display(),
-				Value: hytale.PreRelease.ID(),
-			},
-		},
 	}
 
 	VersionCommand = &discordgo.ApplicationCommand{
@@ -30,13 +24,13 @@ var (
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Name:        "server",
 				Description: "List Hytale server versions",
-				Options:     []*discordgo.ApplicationCommandOption{patchlineOption},
+				Options:     []*discordgo.ApplicationCommandOption{patchlineOptionVersions},
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Name:        "client",
 				Description: "Get the latest Hytale client version",
-				Options:     []*discordgo.ApplicationCommandOption{patchlineOption},
+				Options:     []*discordgo.ApplicationCommandOption{patchlineOptionVersions},
 			},
 		},
 	}
@@ -52,6 +46,14 @@ var (
 	}
 )
 
+func displayPatchlineList(patchlines map[string]*time.Time) string {
+	var parts []string
+	for patchline, _ := range patchlines {
+		parts = append(parts, fmt.Sprintf("`%s`", patchline))
+	}
+	return strings.Join(parts, ", ")
+}
+
 func versionCommand(ctx CommandContext) {
 	options := ctx.Options()
 
@@ -66,20 +68,33 @@ func versionCommand(ctx CommandContext) {
 	}
 
 	option, exists := options["patchline"]
-	var patchlineValue string
+	patchlineInput := "release"
 	if exists {
-		patchlineValue = option.StringValue()
+		patchlineInput = option.StringValue()
+	}
+
+	var patchline string
+	if patchlineInput == "release" {
+		patchline = "release"
 	} else {
-		patchlineValue = "release"
+		patchlineFeed, exists := ctx.HytaleFeeds().GetPatchlinesFeed()
+		if !exists {
+			ctx.ReplyError("Could not retrieve Hytale patchlines.", nil)
+			return
+		}
+		patchline = hytale.ClosestPatchline(patchlineInput, patchlineFeed.Patchlines)
+		if patchline == "" {
+			ctx.ReplyWarn("Patchline must be one of: " + displayPatchlineList(patchlineFeed.Patchlines))
+			return
+		}
 	}
 
-	patchline, err := hytale.ParsePatchline(patchlineValue)
-	if err != nil {
-		ctx.ReplyWarn("Invalid patchline")
-		return
+	var feed hytale.Feed
+	if side == hytale.Client {
+		feed, exists = ctx.HytaleFeeds().GetGameFeed(patchline)
+	} else {
+		feed, exists = ctx.HytaleFeeds().GetMavenFeed(patchline)
 	}
-
-	feed, exists := ctx.HytaleFeeds().Feeds[hytale.GetFeedType(patchline, side)]
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale version.", nil)
 		return
@@ -93,7 +108,7 @@ func versionCommand(ctx CommandContext) {
 }
 
 func launcherCommand(ctx CommandContext) {
-	feed, exists := ctx.HytaleFeeds().Feeds[hytale.LauncherReleaseFeedType]
+	feed, exists := ctx.HytaleFeeds().GetLauncherReleaseFeed()
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale Launcher version.", nil)
 		return
@@ -113,18 +128,13 @@ type ArticleState struct {
 }
 
 func articlesCommand(ctx CommandContext) {
-	feed, exists := ctx.HytaleFeeds().Feeds[hytale.LauncherPostFeedType]
+	feed, exists := ctx.HytaleFeeds().GetLauncherPostFeed()
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale article.", nil)
 		return
 	}
 
-	launcherPostFeed, ok := feed.(hytale.LauncherPostFeed)
-	if !ok {
-		ctx.ReplyError("Could not retrieve the latest Hytale article.", nil)
-		return
-	}
-	articles := launcherPostFeed.Articles.Articles
+	articles := feed.Articles.Articles
 	if len(articles) == 0 {
 		ctx.ReplyEphemeral("No articles found.")
 		return

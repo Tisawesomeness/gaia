@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"slices"
 	"sort"
 	"strings"
 
@@ -12,22 +13,14 @@ import (
 )
 
 var (
-	feedChoices = []*discordgo.ApplicationCommandOptionChoice{
+	feedTypeChoices = []*discordgo.ApplicationCommandOptionChoice{
 		{
-			Name:  hytale.GameReleaseFeedType.Display(),
-			Value: hytale.GameReleaseFeedType.ID(),
+			Name:  hytale.GameFeedType.Display(),
+			Value: hytale.GameFeedType.ID(),
 		},
 		{
-			Name:  hytale.GamePreReleaseFeedType.Display(),
-			Value: hytale.GamePreReleaseFeedType.ID(),
-		},
-		{
-			Name:  hytale.MavenReleaseFeedType.Display(),
-			Value: hytale.MavenReleaseFeedType.ID(),
-		},
-		{
-			Name:  hytale.MavenPreReleaseFeedType.Display(),
-			Value: hytale.MavenPreReleaseFeedType.ID(),
+			Name:  hytale.MavenFeedType.Display(),
+			Value: hytale.MavenFeedType.ID(),
 		},
 		{
 			Name:  hytale.LauncherReleaseFeedType.Display(),
@@ -41,6 +34,11 @@ var (
 			Name:  hytale.PatchlinesFeedType.Display(),
 			Value: hytale.PatchlinesFeedType.ID(),
 		},
+	}
+	patchlineOptionSubscriptions = &discordgo.ApplicationCommandOption{
+		Type:        discordgo.ApplicationCommandOptionString,
+		Name:        "patchline",
+		Description: "The patchline to subscribe to (for new client/server releases)",
 	}
 	manageSubscriptionsPermissions = int64(discordgo.PermissionManageWebhooks)
 
@@ -57,8 +55,9 @@ var (
 				Name:        "type",
 				Description: "What to subscribe to",
 				Required:    true,
-				Choices:     feedChoices,
+				Choices:     feedTypeChoices,
 			},
+			patchlineOptionSubscriptions,
 			{
 				Type:        discordgo.ApplicationCommandOptionChannel,
 				Name:        "channel",
@@ -85,8 +84,9 @@ var (
 				Name:        "type",
 				Description: "What to subscribe to",
 				Required:    true,
-				Choices:     feedChoices,
+				Choices:     feedTypeChoices,
 			},
+			patchlineOptionSubscriptions,
 		},
 	}
 
@@ -118,10 +118,70 @@ var (
 	}
 )
 
+func getFeed(feeds hytale.HytaleFeeds, feedType hytale.FeedType, patchline string) (hytale.Feed, bool) {
+	switch feedType {
+	case hytale.PatchlinesFeedType:
+		return feeds.GetPatchlinesFeed()
+	case hytale.GameFeedType:
+		return feeds.GetGameFeed(patchline)
+	case hytale.MavenFeedType:
+		return feeds.GetMavenFeed(patchline)
+	case hytale.LauncherReleaseFeedType:
+		return feeds.GetLauncherReleaseFeed()
+	case hytale.LauncherPostFeedType:
+		return feeds.GetLauncherPostFeed()
+	default:
+		panic("unknown feed type")
+	}
+}
+
 func subscribeCommand(ctx CommandContext) {
 	options := ctx.Options()
 
 	subType := options["type"].StringValue()
+	feedType, err := hytale.ParseFeedType(subType)
+	if err != nil {
+		ctx.ReplyWarn("Invalid feed type.")
+		return
+	}
+
+	var patchline string
+	if feedType == hytale.GameFeedType || feedType == hytale.MavenFeedType {
+		option, exists := options["patchline"]
+		patchlineInput := "release"
+		if exists {
+			patchlineInput = option.StringValue()
+		}
+
+		if patchlineInput == "release" {
+			patchline = "release"
+		} else {
+			patchlineFeed, exists := ctx.HytaleFeeds().GetPatchlinesFeed()
+			if !exists {
+				ctx.ReplyError("Could not retrieve Hytale patchlines.", nil)
+				return
+			}
+			patchline = hytale.ClosestPatchline(patchlineInput, patchlineFeed.Patchlines)
+			if patchline == "" {
+				ctx.ReplyWarn("Patchline must be one of: " + displayPatchlineList(patchlineFeed.Patchlines))
+				return
+			}
+		}
+
+	} else {
+		_, exists := options["patchline"]
+		if exists {
+			ctx.ReplyWarn(feedType.Display() + " subscriptions do not have a patchline")
+			return
+		}
+	}
+
+	feed, exists := getFeed(ctx.HytaleFeeds(), feedType, patchline)
+	if !exists {
+		ctx.ReplyError("Could not retrieve subscription data.", nil)
+		return
+	}
+
 	channel := options["channel"].ChannelValue(nil)
 	var role *discordgo.Role
 	roleOption, exists := options["role"]
@@ -129,74 +189,91 @@ func subscribeCommand(ctx CommandContext) {
 		role = roleOption.RoleValue(nil, "")
 	}
 
-	feedType, err := hytale.ParseFeedType(subType)
-	if err != nil {
-		ctx.ReplyWarn("Invalid feed type.")
-		return
-	}
-	feed, exists := ctx.HytaleFeeds().Feeds[feedType]
-	if !exists {
-		ctx.ReplyWarn("Invalid feed type.")
-		return
-	}
-
 	roles := []string{}
 	if role != nil {
 		roles = append(roles, role.ID)
 	}
-	err = ctx.DB().AddOrUpdateSubscription(feedType.ID(), channel.ID, db.GuildSubscription{
+	err = ctx.DB().AddOrUpdateSubscription(feed.GetID(), channel.ID, db.GuildSubscription{
 		Version: feed.GetVersion(),
 		Roles:   roles,
 	})
 	if err != nil {
 		ctx.ReplyError("Error while trying to save subscription", err)
 	} else {
-		ctx.Reply(fmt.Sprintf("Subscribed %s to %s", channel.Mention(), feedType.Display()))
+		ctx.Reply(fmt.Sprintf("Subscribed %s to %s", channel.Mention(), feed.GetDisplay()))
 	}
 }
 
 func subscribeDMCommand(ctx CommandContext) {
 	options := ctx.Options()
-	subType := options["type"].StringValue()
 
+	subType := options["type"].StringValue()
 	feedType, err := hytale.ParseFeedType(subType)
 	if err != nil {
 		ctx.ReplyWarn("Invalid feed type.")
 		return
 	}
-	feed, exists := ctx.HytaleFeeds().Feeds[feedType]
+
+	var patchline string
+	if feedType == hytale.GameFeedType || feedType == hytale.MavenFeedType {
+		option, exists := options["patchline"]
+		patchlineInput := "release"
+		if exists {
+			patchlineInput = option.StringValue()
+		}
+
+		if patchlineInput == "release" {
+			patchline = "release"
+		} else {
+			patchlineFeed, exists := ctx.HytaleFeeds().GetPatchlinesFeed()
+			if !exists {
+				ctx.ReplyError("Could not retrieve Hytale patchlines.", nil)
+				return
+			}
+			patchline = hytale.ClosestPatchline(patchlineInput, patchlineFeed.Patchlines)
+			if patchline == "" {
+				ctx.ReplyWarn("Patchline must be one of: " + displayPatchlineList(patchlineFeed.Patchlines))
+				return
+			}
+		}
+
+	} else {
+		_, exists := options["patchline"]
+		if exists {
+			ctx.ReplyWarn(feedType.Display() + " subscriptions do not have a patchline")
+			return
+		}
+	}
+
+	feed, exists := getFeed(ctx.HytaleFeeds(), feedType, patchline)
 	if !exists {
-		ctx.ReplyWarn("Invalid feed type.")
+		ctx.ReplyError("Could not retrieve subscription data.", nil)
 		return
 	}
 
-	err = ctx.DB().AddOrUpdateSubscription(feedType.ID(), ctx.User().ID, db.UserSubscription{
+	err = ctx.DB().AddOrUpdateSubscription(feed.GetID(), ctx.User().ID, db.UserSubscription{
 		Version: feed.GetVersion(),
 	})
 	if err != nil {
 		ctx.ReplyError("Error while trying to save subscription", err)
 	} else {
-		ctx.Reply(fmt.Sprintf("Subscribed to %s", feedType.Display()))
+		ctx.Reply(fmt.Sprintf("Subscribed to %s", feed.GetDisplay()))
 	}
 }
 
 func listCommand(ctx CommandContext) {
 	guildID := ctx.GuildID()
 	if guildID == "" {
-		userSubscriptions := make(map[hytale.FeedType]string)
-		for feedType := range ctx.HytaleFeeds().Feeds {
-			targetIDs, err := ctx.DB().GetSubscriptions(feedType.ID())
+		userSubscriptions := []hytale.Feed{}
+		for feed := range ctx.HytaleFeeds().Feeds() {
+			targetIDs, err := ctx.DB().GetSubscriptions(feed.GetID())
 			if err != nil {
-				log.Printf("Error fetching subscriptions for %s: %v", feedType.ID(), err)
+				log.Printf("Error fetching subscriptions for %s: %v", feed.GetID(), err)
 				continue
 			}
 
-			for _, targetID := range targetIDs {
-				if targetID == ctx.User().ID {
-					if _, exists := ctx.HytaleFeeds().Feeds[feedType]; exists {
-						userSubscriptions[feedType] = feedType.Display()
-					}
-				}
+			if slices.Contains(targetIDs, ctx.User().ID) {
+				userSubscriptions = append(userSubscriptions, feed)
 			}
 		}
 
@@ -214,8 +291,8 @@ func listCommand(ctx CommandContext) {
 			}
 
 			subscriptionNames := []string{}
-			for _, displayName := range userSubscriptions {
-				subscriptionNames = append(subscriptionNames, "- "+displayName)
+			for _, feed := range userSubscriptions {
+				subscriptionNames = append(subscriptionNames, "- "+feed.GetDisplay())
 			}
 			embed.Description = strings.Join(subscriptionNames, "\n")
 		}
@@ -237,23 +314,23 @@ func listCommand(ctx CommandContext) {
 			channelMap[channel.ID] = channel
 		}
 
-		channelSubscriptions := make(map[string][]hytale.FeedType)
-		for feedType := range ctx.HytaleFeeds().Feeds {
-			tagetIDs, err := ctx.DB().GetSubscriptions(feedType.ID())
+		channelSubscriptions := make(map[string][]hytale.Feed)
+		for feed := range ctx.HytaleFeeds().Feeds() {
+			tagetIDs, err := ctx.DB().GetSubscriptions(feed.GetID())
 			if err != nil {
-				log.Printf("Error fetching subscriptions for %s: %v", feedType.ID(), err)
+				log.Printf("Error fetching subscriptions for %s: %v", feed.GetID(), err)
 				continue
 			}
 
 			for _, targetID := range tagetIDs {
-				sub, err := ctx.DB().GetSubscription(feedType.ID(), targetID)
+				sub, err := ctx.DB().GetSubscription(feed.GetID(), targetID)
 				if err != nil {
-					log.Printf("Error fetching subscription for %s %s: %v", feedType.ID(), targetID, err)
+					log.Printf("Error fetching subscription for %s %s: %v", feed.GetID(), targetID, err)
 				}
 				_, ok := sub.(db.GuildSubscription)
 				if ok {
 					if channel, exists := channelMap[targetID]; exists {
-						channelSubscriptions[channel.ID] = append(channelSubscriptions[channel.ID], feedType)
+						channelSubscriptions[channel.ID] = append(channelSubscriptions[channel.ID], feed)
 					}
 				}
 			}
@@ -274,13 +351,11 @@ func listCommand(ctx CommandContext) {
 			}
 
 			description := []string{}
-			for channelID, subscriptions := range channelSubscriptions {
+			for channelID, feeds := range channelSubscriptions {
 				if channel, exists := channelMap[channelID]; exists {
 					subscriptionNames := []string{}
-					for _, sub := range subscriptions {
-						if feed, exists := ctx.HytaleFeeds().Feeds[sub]; exists {
-							subscriptionNames = append(subscriptionNames, feed.GetType().Display())
-						}
+					for _, feed := range feeds {
+						subscriptionNames = append(subscriptionNames, feed.GetDisplay())
 					}
 					description = append(description, "- "+channel.Mention()+" - **"+strings.Join(subscriptionNames, ", ")+"**")
 				}
@@ -297,11 +372,7 @@ func unsubscribeCommand(ctx CommandContext) {
 	options := ctx.Options()
 
 	if guildID == "" {
-		for feedType := range ctx.HytaleFeeds().Feeds {
-			if err := ctx.DB().RemoveSubscription(feedType.ID(), ctx.User().ID); err != nil {
-				log.Printf("Error removing subscription for %s: %v", feedType.ID(), err)
-			}
-		}
+		ctx.HytaleFeeds().RemoveAllSubscriptions(ctx.User().ID)
 		ctx.Reply("Unsubscribed all feeds.")
 	} else {
 		var channelID string
@@ -310,11 +381,7 @@ func unsubscribeCommand(ctx CommandContext) {
 		}
 
 		if channelID != "" {
-			for feedType := range ctx.HytaleFeeds().Feeds {
-				if err := ctx.DB().RemoveSubscription(feedType.ID(), channelID); err != nil {
-					log.Printf("Error removing subscription for %s: %v", feedType.ID(), err)
-				}
-			}
+			ctx.HytaleFeeds().RemoveAllSubscriptions(channelID)
 			channel := options["channel"].ChannelValue(nil)
 			ctx.Reply("Unsubscribed all feeds from channel: " + channel.Mention())
 		} else {
@@ -325,11 +392,7 @@ func unsubscribeCommand(ctx CommandContext) {
 			}
 
 			for _, channel := range channels {
-				for feedType := range ctx.HytaleFeeds().Feeds {
-					if err := ctx.DB().RemoveSubscription(feedType.ID(), channel.ID); err != nil {
-						log.Printf("Error removing subscription for %s in channel %s: %v", feedType.ID(), channel.ID, err)
-					}
-				}
+				ctx.HytaleFeeds().RemoveAllSubscriptions(channel.ID)
 			}
 
 			ctx.Reply("Unsubscribed all feeds in this guild.")

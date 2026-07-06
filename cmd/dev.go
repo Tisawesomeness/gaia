@@ -26,13 +26,18 @@ var (
 			},
 		},
 	}
+	patchlineOptionDev = &discordgo.ApplicationCommandOption{
+		Type:        discordgo.ApplicationCommandOptionString,
+		Name:        "patchline",
+		Description: "The release channel",
+	}
 
 	MavenCommand = &discordgo.ApplicationCommand{
 		Name:        "maven",
 		Description: "Generate a maven build file for Hytale development",
 		Options: []*discordgo.ApplicationCommandOption{
 			scriptSizeOption,
-			patchlineOption,
+			patchlineOptionDev,
 		},
 	}
 
@@ -56,7 +61,7 @@ var (
 					},
 				},
 			},
-			patchlineOption,
+			patchlineOptionDev,
 		},
 	}
 )
@@ -214,18 +219,28 @@ func gradleCommand(ctx CommandContext) {
 func buildScriptCommand(ctx CommandContext, buildScript buildScript) {
 	options := ctx.Options()
 
-	patchlineValue := "release"
+	patchlineInput := "release"
 	if option, exists := options["patchline"]; exists {
-		patchlineValue = option.StringValue()
+		patchlineInput = option.StringValue()
 	}
 
-	patchline, err := hytale.ParsePatchline(patchlineValue)
-	if err != nil {
-		ctx.ReplyWarn("Invalid patchline")
-		return
+	var patchline string
+	if patchlineInput == "release" {
+		patchline = "release"
+	} else {
+		patchlineFeed, exists := ctx.HytaleFeeds().GetPatchlinesFeed()
+		if !exists {
+			ctx.ReplyError("Could not retrieve Hytale patchlines.", nil)
+			return
+		}
+		patchline = hytale.ClosestPatchline(patchlineInput, patchlineFeed.Patchlines)
+		if patchline == "" {
+			ctx.ReplyWarn("Patchline must be one of: " + displayPatchlineList(patchlineFeed.Patchlines))
+			return
+		}
 	}
 
-	feed, exists := ctx.HytaleFeeds().Feeds[hytale.GetFeedType(patchline, hytale.Server)]
+	feed, exists := ctx.HytaleFeeds().GetMavenFeed(patchline)
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale version.", nil)
 		return
@@ -244,7 +259,7 @@ func buildScriptCommand(ctx CommandContext, buildScript buildScript) {
 		Version:    version,
 	}
 	var buf bytes.Buffer
-	err = buildScript.template.Execute(&buf, vars)
+	err := buildScript.template.Execute(&buf, vars)
 	if err != nil {
 		ctx.ReplyError("Could not generate build script", nil)
 		return

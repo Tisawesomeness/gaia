@@ -7,12 +7,73 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Tisawesomeness/gaia/auth"
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/util"
 	"github.com/bwmarrin/discordgo"
 )
+
+// Given the list of patchlines (keys of patchlinesMap), determine the patchline
+// that is closest to the given string, or empty if no patchline is close.
+//
+// Corrects for simple typos such as using an underscore instead of a dash,
+// but otherwise will not overly correct mistakes.
+func ClosestPatchline(s string, patchlinesMap map[string]*time.Time) string {
+	normalizedInput := normalize(s)
+	for patchline := range patchlinesMap {
+		normalizedPatchline := normalize(patchline)
+		if strings.HasPrefix(normalizedPatchline, "v") && strings.Contains(normalizedPatchline, ".") {
+			if normalizeVersion(normalizedInput) == normalizeVersion(normalizedPatchline) {
+				return patchline
+			}
+		} else {
+			if normalizedInput == normalize(patchline) {
+				return patchline
+			}
+		}
+	}
+	return ""
+}
+
+func normalize(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, "_", "-")
+	s = strings.ReplaceAll(s, " ", "-")
+	return s
+}
+
+func normalizeVersion(s string) string {
+	s = strings.TrimPrefix(s, "v")
+	var builder strings.Builder
+	var numericBuilder strings.Builder
+	wasDigit := false
+	for _, r := range s {
+		if unicode.IsDigit(r) {
+			numericBuilder.WriteRune(r)
+			wasDigit = true
+		} else {
+			if wasDigit {
+				builder.WriteString(util.TrimTrailingZeroes(numericBuilder.String()))
+				numericBuilder = strings.Builder{}
+			}
+			builder.WriteRune(r)
+			wasDigit = false
+		}
+	}
+	builder.WriteString(util.TrimTrailingZeroes(numericBuilder.String()))
+	return builder.String()
+}
+
+func DisplayPatchline(patchline string) string {
+	// Catch "v0.4"-style patchlines
+	if strings.Contains(patchline, ".") {
+		return patchline
+	}
+	return util.ToCapitalizedSpacedWords(patchline)
+}
 
 // Fetches all patchlines from the Hytale API, mapped to their expiration time (or nil if no expiry).
 func GetPatchlines(config *config.Config, httpClient *http.Client, authStore auth.AuthStore) (map[string]*time.Time, error) {
@@ -99,8 +160,16 @@ type PatchlinesFeed struct {
 	Patchlines map[string]*time.Time
 }
 
+func (f PatchlinesFeed) GetID() string {
+	return PatchlinesFeedType.ID()
+}
+
 func (f PatchlinesFeed) GetType() FeedType {
 	return PatchlinesFeedType
+}
+
+func (f PatchlinesFeed) GetDisplay() string {
+	return PatchlinesFeedType.Display()
 }
 
 func (f PatchlinesFeed) BuildMessage(config *config.Config) *FeedMessage {
@@ -222,18 +291,18 @@ func (f PatchlinesFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func deserializePatchlines(data []byte) (Feed, error) {
+func deserializePatchlines(data []byte) (*PatchlinesFeed, error) {
 	var patchlines map[string]*time.Time
 	if err := json.Unmarshal(data, &patchlines); err != nil {
 		return nil, err
 	}
-	return PatchlinesFeed{Patchlines: patchlines}, nil
+	return &PatchlinesFeed{Patchlines: patchlines}, nil
 }
 
-func fetchPatchlines(feeds *HytaleFeeds) (Feed, error) {
-	patchlines, err := GetPatchlines(feeds.config, feeds.http, feeds.authStore)
+func fetchPatchlines(config *config.Config, httpClient *http.Client, authStore auth.AuthStore) (*PatchlinesFeed, error) {
+	patchlines, err := GetPatchlines(config, httpClient, authStore)
 	if err != nil {
 		return nil, err
 	}
-	return PatchlinesFeed{Patchlines: patchlines}, nil
+	return &PatchlinesFeed{Patchlines: patchlines}, nil
 }

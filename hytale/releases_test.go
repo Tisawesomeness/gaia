@@ -21,22 +21,22 @@ var (
 	expectedReleaseUrl    = "https://example-game-assets-release.r2.cloudflarestorage.com/version/release.json"
 	expectedPreReleaseUrl = "https://example-game-assets-release.r2.cloudflarestorage.com/version/pre-release.json"
 
-	expectedRelease = GameReleaseFeed{
+	expectedRelease = &GameFeed{
 		Version: &GameReleaseVersion{
 			Version: "2026.01.17-4b0f30090",
 		},
-		Patchline: Release,
+		Patchline: "release",
 	}
-	expectedPreRelease = GameReleaseFeed{
+	expectedPreRelease = &GameFeed{
 		Version: &GameReleaseVersion{
 			Version: "2026.01.17-4b0f30090",
 		},
-		Patchline: PreRelease,
+		Patchline: "pre-release",
 	}
 )
 
-func expectedMavenFeed(patchline Patchline) MavenFeed {
-	return MavenFeed{
+func expectedMavenFeed(patchline string) *MavenFeed {
+	return &MavenFeed{
 		Version: &MavenVersioning{
 			XMLName: xml.Name{
 				Local: "versioning",
@@ -80,40 +80,36 @@ func TestReleases(t *testing.T) {
 		},
 	}
 	authStore := atestutil.NewTestAuthStore(auth.Server)
-	feeds := &HytaleFeeds{
-		config:    config,
-		http:      http,
-		authStore: authStore,
-	}
 
-	var patchlines = []struct {
-		patchline        Patchline
+	var testCases = []struct {
+		patchline        string
+		display          string
 		sampleReleaseURL string
 		sampleRelease    string
 		sampleMaven      string
 		expectedUrl      string
-		expectedFeed     GameReleaseFeed
+		expectedFeed     *GameFeed
 	}{
-		{Release, testutil.SampleReleaseURL, testutil.SampleRelease, testutil.SampleMaven, expectedReleaseUrl, expectedRelease},
-		{PreRelease, testutil.SamplePreReleaseURL, testutil.SamplePreRelease, testutil.SampleMaven, expectedPreReleaseUrl, expectedPreRelease},
+		{"release", "Release", testutil.SampleReleaseURL, testutil.SampleRelease, testutil.SampleMaven, expectedReleaseUrl, expectedRelease},
+		{"pre-release", "Pre Release", testutil.SamplePreReleaseURL, testutil.SamplePreRelease, testutil.SampleMaven, expectedPreReleaseUrl, expectedPreRelease},
 	}
 
-	for _, tt := range patchlines {
-		t.Run(fmt.Sprintf("game %s", tt.patchline.Display()), func(t *testing.T) {
-			httpmock.RegisterResponder("GET", config.Feeds.GameVersion+tt.patchline.ID()+".json", httpmock.NewStringResponder(200, tt.sampleReleaseURL))
-			url, err := fetchGameReleaseUrl(feeds, tt.patchline)
+	for _, tt := range testCases {
+		t.Run(fmt.Sprintf("game %s", tt.display), func(t *testing.T) {
+			httpmock.RegisterResponder("GET", config.Feeds.GameVersion+tt.patchline+".json", httpmock.NewStringResponder(200, tt.sampleReleaseURL))
+			url, err := fetchGameReleaseUrl(config, http, authStore, tt.patchline)
 			assert.NoError(t, err)
 			assert.Equal(t, url, tt.expectedUrl)
 
 			httpmock.RegisterResponder("GET", url, httpmock.NewStringResponder(200, tt.sampleRelease))
-			feed, err := fetchGameRelease(feeds, tt.patchline)
+			feed, err := fetchGame(config, http, authStore, tt.patchline)
 			assert.NoError(t, err)
 			td.Cmp(t, feed, tt.expectedFeed)
 		})
 
-		t.Run(fmt.Sprintf("maven %s", tt.patchline.Display()), func(t *testing.T) {
+		t.Run(fmt.Sprintf("maven %s", tt.display), func(t *testing.T) {
 			httpmock.RegisterResponder("GET", MavenMetadataUrl(config.Feeds, tt.patchline), httpmock.NewStringResponder(200, tt.sampleMaven))
-			feed, err := fetchMavenRelease(feeds, tt.patchline)
+			feed, err := fetchMaven(config, http, tt.patchline)
 			assert.NoError(t, err)
 			td.Cmp(t, feed, expectedMavenFeed(tt.patchline))
 		})

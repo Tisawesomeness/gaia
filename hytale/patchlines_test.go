@@ -1,6 +1,7 @@
 package hytale
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -26,6 +27,45 @@ var (
 	}
 )
 
+func TestClosestPatchline(t *testing.T) {
+	samplePatchlines := map[string]*time.Time{
+		"release":     nil,
+		"pre-release": nil,
+		"v0.4":        nil,
+		"v0.4.1":      nil,
+	}
+
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{"Release", "release"},
+		{"release", "release"},
+		{"Pre-Release", "pre-release"},
+		{"Pre release", "pre-release"},
+		{"pre_release", "pre-release"},
+		{"pre-release", "pre-release"},
+		{"v0.4", "v0.4"},
+		{"V0.4", "v0.4"},
+		{"0.4", "v0.4"},
+		{"0.40", "v0.4"},
+		{"v0.4.1", "v0.4.1"},
+		{"v0.40.10", "v0.4.1"},
+		{"rellease", ""},
+		{"v0.41", ""},
+		{"v0.4+abc", ""},
+		{"xyz", ""},
+		{"", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("ClosestPatchline(%q) = %q", tc.input, tc.expected), func(t *testing.T) {
+			result := ClosestPatchline(tc.input, samplePatchlines)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
 func TestPatchlines(t *testing.T) {
 	http := &http.Client{
 		Timeout: time.Duration(10) * time.Second,
@@ -42,7 +82,7 @@ func TestPatchlines(t *testing.T) {
 	}
 
 	t.Run("fetch patchlines", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Feeds.Patchlines, httpmock.NewStringResponder(200, testutil.SamplePatchlinesResponse))
+		httpmock.RegisterResponder("GET", config.Feeds.Patchlines, httpmock.NewStringResponder(200, testutil.SamplePatchlinesResponseWithV0_4))
 		authStore := atestutil.NewTestAuthStore(auth.Server)
 
 		profile, err := GetPatchlines(config, http, authStore)
@@ -68,7 +108,7 @@ func TestPatchlines(t *testing.T) {
 	})
 
 	t.Run("fetch patchlines, launcher auth redirects to launcher data", func(t *testing.T) {
-		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(200, testutil.SampleLauncherData))
+		httpmock.RegisterResponder("GET", config.Auth.LauncherData, httpmock.NewStringResponder(200, testutil.SampleLauncherDataWithV0_4))
 		authStore := atestutil.NewTestAuthStore(auth.Launcher)
 
 		profile, err := GetPatchlines(config, http, authStore)

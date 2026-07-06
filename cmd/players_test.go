@@ -10,12 +10,12 @@ import (
 )
 
 var (
-	playersCE       *CommandExecutor
+	playersCE       *MockExecutor
 	playersTestCase = testutil.MakeTestCase(beforeEachPlayers, nil)
 )
 
-func init() {
-	ce, err := InitMockExecutor(nil)
+func setupPlayers() {
+	ce, err := InitMockExecutor(nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -60,6 +60,7 @@ func registerUsername(username string, response string) {
 }
 
 func TestProfile(t *testing.T) {
+	setupPlayers()
 	t.Cleanup(teardownPlayers)
 	config := playersCE.Config
 
@@ -149,6 +150,7 @@ func TestProfile(t *testing.T) {
 }
 
 func TestSkin(t *testing.T) {
+	setupPlayers()
 	t.Cleanup(teardownPlayers)
 	config := playersCE.Config
 
@@ -287,6 +289,7 @@ func TestSkin(t *testing.T) {
 }
 
 func TestRender(t *testing.T) {
+	setupPlayers()
 	t.Cleanup(teardownPlayers)
 
 	t.Run("/head Valid UUID default size", playersTestCase(func(t *testing.T) {

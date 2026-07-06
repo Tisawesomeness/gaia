@@ -2,6 +2,8 @@ package util
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCapitalizeFirstLetter(t *testing.T) {
@@ -30,14 +32,12 @@ func TestCapitalizeFirstLetter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := CapitalizeFirstLetter(tt.input)
-			if result != tt.expected {
-				t.Errorf("CapitalizeFirstLetter(%q) = %q; want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestToSpacedWords(t *testing.T) {
+func TestToCapitalizedSpacedWords(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -83,14 +83,58 @@ func TestToSpacedWords(t *testing.T) {
 			input:    "Hello World",
 			expected: "Hello World",
 		},
+		{
+			name:     "With underscore",
+			input:    "pre_release",
+			expected: "Pre Release",
+		},
+		{
+			name:     "With dash",
+			input:    "pre-release",
+			expected: "Pre Release",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ToCapitalizedSpacedWords(tt.input)
-			if result != tt.expected {
-				t.Errorf("CamelCaseToUppercase(%q) = %q; want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestTrimTrailingZeroes(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "Zero",
+			input:    "0",
+			expected: "0",
+		},
+		{
+			name:     "Trailing zeroes",
+			input:    "0.400",
+			expected: "0.4",
+		},
+		{
+			name:     "No trailing zeroes",
+			input:    "0.401",
+			expected: "0.401",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := TrimTrailingZeroes(tt.input)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -141,9 +185,7 @@ func TestWrapDegrees(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := WrapDegrees(tt.input)
-			if result != tt.expected {
-				t.Errorf("WrapDegrees(%d) = %d; want %d", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -210,9 +252,7 @@ func TestCoerce(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Coerce(tt.value, tt.min, tt.max, tt.orElse)
-			if result != tt.expected {
-				t.Errorf("Coerce(%d, %d, %d, %d) = %d; want %d", tt.value, tt.min, tt.max, tt.orElse, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

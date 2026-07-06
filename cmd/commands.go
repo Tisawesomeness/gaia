@@ -27,7 +27,7 @@ type CommandExecutor struct {
 	DB          *db.DB
 	HTTP        *http.Client
 	AuthStore   auth.AuthStore
-	HytaleFeeds *hytale.HytaleFeeds
+	HytaleFeeds hytale.HytaleFeeds
 	Breakers    *Breakers
 	BotMetadata *BotMetadata
 }
@@ -43,7 +43,7 @@ func NewCommandExecutor(
 	db *db.DB,
 	httpClient *http.Client,
 	authStore auth.AuthStore,
-	hytaleFeeds *hytale.HytaleFeeds,
+	hytaleFeeds hytale.HytaleFeeds,
 	version string,
 	bootTime *time.Time,
 ) CommandExecutor {

@@ -11,12 +11,12 @@ import (
 )
 
 var (
-	devCE       *CommandExecutor
+	devCE       *MockExecutor
 	devTestCase = testutil.MakeTestCase(beforeEachDev, nil)
 )
 
-func init() {
-	ce, err := InitMockExecutor(nil)
+func setupDev() {
+	ce, err := InitMockExecutor(nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -49,6 +49,7 @@ func assertContentOrFileName(t *testing.T, reply *discordgo.InteractionResponseD
 }
 
 func TestDevCommands(t *testing.T) {
+	setupDev()
 	t.Cleanup(teardownDev)
 
 	t.Run("/maven", devTestCase(func(t *testing.T) {
