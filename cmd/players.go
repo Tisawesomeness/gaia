@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 
 	"github.com/Tisawesomeness/gaia/hytale"
@@ -90,7 +91,7 @@ func NewRenderCommand(name string, description string, renderType hytale.RenderT
 				},
 			},
 		},
-		handler: func(ctx CommandContext) {
+		handler: func(ctx *CommandContext) {
 			renderCommand(ctx, renderType)
 		},
 	}
@@ -99,6 +100,9 @@ func NewRenderCommand(name string, description string, renderType hytale.RenderT
 var (
 	minDegrees = -360.0
 	maxDegrees = 360.0
+
+	uuidRegex     = regexp.MustCompile(`^([0-9a-fA-F]{8})-?([0-9a-fA-F]{4})-?([0-9a-fA-F]{4})-?([0-9a-fA-F]{4})-?([0-9a-fA-F]{12})$`)
+	usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]{3,16}$`)
 
 	cosmeticGroups = []cosmeticGroup{
 		{
@@ -231,28 +235,37 @@ type cosmeticGroup struct {
 	cosmetics []cosmeticType
 }
 
-func tryFetchProfileFromUUID(uuid string, ctx CommandContext) (*hytale.PublicGameProfile, error) {
-	return util.Execute(ctx.Breakers().HytaleSession, func() (*hytale.PublicGameProfile, error) {
-		return hytale.FetchProfileFromUUID(ctx.Config(), ctx.HTTP(), ctx.AuthStore(), uuid)
+// Checks if the provided UUID is valid and formats it with dashes if necessary.
+func validateAndFormatUUID(uuid string) (string, bool) {
+	matches := uuidRegex.FindStringSubmatch(uuid)
+	if matches == nil {
+		return "", false
+	}
+	return fmt.Sprintf("%s-%s-%s-%s-%s", matches[1], matches[2], matches[3], matches[4], matches[5]), true
+}
+
+func tryFetchProfileFromUUID(uuid string, ctx *CommandContext) (*hytale.PublicGameProfile, error) {
+	return util.Execute(ctx.Breakers.HytaleSession, func() (*hytale.PublicGameProfile, error) {
+		return hytale.FetchProfileFromUUID(uuid, ctx.Config, ctx.HTTP, ctx.AuthStore)
 	})
 }
 
-func tryFetchProfileFromUsername(username string, ctx CommandContext) (*hytale.PublicGameProfile, error) {
-	return util.Execute(ctx.Breakers().HytaleSession, func() (*hytale.PublicGameProfile, error) {
-		return hytale.FetchProfileFromUsername(ctx.Config(), ctx.HTTP(), ctx.AuthStore(), username)
+func tryFetchProfileFromUsername(username string, ctx *CommandContext) (*hytale.PublicGameProfile, error) {
+	return util.Execute(ctx.Breakers.HytaleSession, func() (*hytale.PublicGameProfile, error) {
+		return hytale.FetchProfileFromUsername(username, ctx.Config, ctx.HTTP, ctx.AuthStore)
 	})
 }
 
-func profileCommand(ctx CommandContext) {
+func profileCommand(ctx *CommandContext) {
 	identifier := ctx.Options()["player"].StringValue()
 
 	var profile *hytale.PublicGameProfile
 	var err error
-	uuid, isUUID := hytale.ValidateUUID(identifier)
+	uuid, isUUID := validateAndFormatUUID(identifier)
 	if isUUID {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
-	} else if hytale.ValidateUsername(identifier) {
+	} else if usernameRegex.MatchString(identifier) {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
@@ -270,7 +283,7 @@ func profileCommand(ctx CommandContext) {
 			ctx.Reply(fmt.Sprintf("There is no player with the UUID `%s`.", identifier))
 			return
 		} else {
-			ctx.Reply(fmt.Sprintf("There is no player with the username `%s`.", identifier))
+			checkAvailability(identifier, ctx)
 			return
 		}
 	}
@@ -278,11 +291,11 @@ func profileCommand(ctx CommandContext) {
 	ctx.ReplyEmbed(&discordgo.MessageEmbed{
 		Author: &discordgo.MessageEmbedAuthor{
 			Name:    "Profile for " + profile.Username,
-			URL:     ctx.Config().Profile.ProfileWebsite + profile.Username,
-			IconURL: hytale.RenderHead(ctx.Config(), profile.Username, 128, 30),
+			URL:     ctx.Config.Profile.ProfileWebsite + profile.Username,
+			IconURL: hytale.RenderHead(ctx.Config, profile.Username, 128, 30),
 		},
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: hytale.RenderFullBody(ctx.Config(), profile.Username, 512, 360-30),
+			URL: hytale.RenderFullBody(ctx.Config, profile.Username, 512, 360-30),
 		},
 		Description: fmt.Sprintf("Short UUID: `%s`\nLong UUID: `%s`",
 			strings.ReplaceAll(profile.UUID, "-", ""),
@@ -291,16 +304,83 @@ func profileCommand(ctx CommandContext) {
 	})
 }
 
-func skinCommand(ctx CommandContext) {
+func checkAvailability(username string, ctx *CommandContext) {
+	kratosClient, ok := ctx.AuthStore.GetKratosClient()
+	if !ok {
+		ctx.ReplyEmbed(&discordgo.MessageEmbed{
+			Title:       "Profile for " + username,
+			Description: "Username not in use (unknown status)",
+			Color:       0x000000,
+		})
+	}
+
+	_, err := ctx.Breakers.KratosSession.Execute(func() (any, error) {
+		availability, err := hytale.CheckAvailability(username, ctx.Config, kratosClient)
+		if err != nil {
+			return nil, err
+		}
+
+		switch availability {
+		case hytale.Available:
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
+				Title:       "Profile for " + username,
+				Description: "Username available",
+				Color:       0xFFFFFF,
+			})
+		case hytale.Reserved:
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
+				Title:       "Profile for " + username,
+				Description: "Username reserved",
+				Color:       0xFFFF00,
+			})
+		case hytale.HytaleReserved:
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
+				Title:       "Profile for " + username,
+				Description: "Username reserved by the Hytale Team",
+				Color:       0x00FFFF,
+			})
+		case hytale.Prohibited:
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
+				Title:       "Profile for " + username,
+				Description: "Username contains a prohibited word",
+				Color:       0x00FFFF,
+			})
+		case hytale.InUse:
+			// If profile returns 404 but username is in use,
+			// either Hytale is lying, or we got unlucky with timing
+			log.Printf("Username %s in use, but profile returned 404!", username)
+			ctx.ReplyExternalError("An error occurred while contacting Hytale servers.")
+		case hytale.Unknown:
+			ctx.ReplyEmbed(&discordgo.MessageEmbed{
+				Title:       "Profile for " + username,
+				Description: "Username not in use (unknown status)",
+				Color:       0x000000,
+			})
+		}
+
+		return nil, nil
+	})
+
+	if err != nil {
+		log.Printf("Error checking availability (circuit breaker): %v", err)
+		ctx.ReplyEmbed(&discordgo.MessageEmbed{
+			Title:       "Profile for " + username,
+			Description: "Username not in use (unknown status)",
+			Color:       0x000000,
+		})
+	}
+}
+
+func skinCommand(ctx *CommandContext) {
 	identifier := ctx.Options()["player"].StringValue()
 
 	var profile *hytale.PublicGameProfile
 	var err error
-	uuid, isUUID := hytale.ValidateUUID(identifier)
+	uuid, isUUID := validateAndFormatUUID(identifier)
 	if isUUID {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
-	} else if hytale.ValidateUsername(identifier) {
+	} else if usernameRegex.MatchString(identifier) {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
@@ -325,11 +405,11 @@ func skinCommand(ctx CommandContext) {
 	embed := &discordgo.MessageEmbed{
 		Author: &discordgo.MessageEmbedAuthor{
 			Name:    "Skin details for " + profile.Username,
-			URL:     ctx.Config().Profile.ProfileWebsite + profile.Username,
-			IconURL: hytale.RenderHead(ctx.Config(), profile.Username, 128, 30),
+			URL:     ctx.Config.Profile.ProfileWebsite + profile.Username,
+			IconURL: hytale.RenderHead(ctx.Config, profile.Username, 128, 30),
 		},
 		Image: &discordgo.MessageEmbedImage{
-			URL: hytale.RenderFullBody(ctx.Config(), profile.Username, 2048, 0),
+			URL: hytale.RenderFullBody(ctx.Config, profile.Username, 2048, 0),
 		},
 		Color: 0x00FF00,
 	}
@@ -377,7 +457,7 @@ func skinCommand(ctx CommandContext) {
 	ctx.ReplyEmbed(embed)
 }
 
-func renderCommand(ctx CommandContext, renderType hytale.RenderType) {
+func renderCommand(ctx *CommandContext, renderType hytale.RenderType) {
 	options := ctx.Options()
 	identifier := options["player"].StringValue()
 
@@ -399,11 +479,11 @@ func renderCommand(ctx CommandContext, renderType hytale.RenderType) {
 
 	var profile *hytale.PublicGameProfile
 	var err error
-	uuid, isUUID := hytale.ValidateUUID(identifier)
+	uuid, isUUID := validateAndFormatUUID(identifier)
 	if isUUID {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUUID(uuid, ctx)
-	} else if hytale.ValidateUsername(identifier) {
+	} else if usernameRegex.MatchString(identifier) {
 		ctx.DeferReply()
 		profile, err = tryFetchProfileFromUsername(identifier, ctx)
 	} else {
@@ -417,15 +497,15 @@ func renderCommand(ctx CommandContext, renderType hytale.RenderType) {
 		return
 	}
 
-	cape, hasCape := profile.Skin["cape"]
-	if (!hasCape || cape == nil) && renderType == hytale.CapeRender {
+	_, hasCape := profile.Skin["cape"]
+	if !hasCape && renderType == hytale.CapeRender {
 		ctx.Reply("That player does not have a cape.")
 		return
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Image: &discordgo.MessageEmbedImage{
-			URL: renderType.Render(ctx.Config(), profile.Username, size, rotate),
+			URL: renderType.Render(ctx.Config, profile.Username, size, rotate),
 		},
 	}
 

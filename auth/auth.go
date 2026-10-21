@@ -1,66 +1,30 @@
 package auth
 
 import (
-	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
+	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/Tisawesomeness/gaia/util"
 )
 
-type AuthType int
-
-const (
-	// Authenticated with `hytale-launcher` client ID and `auth:launcher` scope
-	Launcher AuthType = iota
-	// Authenticated with `hytale-server` client ID and `auth:server` scope
-	Server
-)
-
-func (at AuthType) ClientID() string {
-	switch at {
-	case Launcher:
-		return "hytale-launcher"
-	case Server:
-		return "hytale-server"
-	default:
-		panic("Unknown auth type")
-	}
-}
-
-func (at AuthType) String() string {
-	switch at {
-	case Launcher:
-		return "launcher"
-	case Server:
-		return "server"
-	default:
-		panic("Unknown auth type")
-	}
-}
-
 type TokenResponse struct {
-	AccessToken      string `json:"access_token"`
-	RefreshToken     string `json:"refresh_token"`
-	IDToken          string `json:"id_token"`
-	Error            string `json:"error"`
-	ErrorDescription string `json:"error_description"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	IDToken      string `json:"id_token"`
+	Error        string `json:"error"`
 	// In seconds from request time
 	ExpiresIn int `json:"expires_in"`
 }
 
 func (t TokenResponse) isSuccess() bool {
-	return t.Error == "" && t.AccessToken != "" && t.RefreshToken != ""
+	return t.Error == "" && t.AccessToken != ""
 }
 
 type DeviceAuthResponse struct {
@@ -74,26 +38,48 @@ type DeviceAuthResponse struct {
 	Interval int `json:"interval"`
 }
 
-func defaultDeviceAuthResponse(config *config.Config) DeviceAuthResponse {
+func defaultDeviceAuthResponse() DeviceAuthResponse {
 	return DeviceAuthResponse{
-		ExpiresIn: config.Auth.DeviceAuthTimeout,
+		ExpiresIn: 600,
 		Interval:  5,
 	}
 }
 
-// Starts the OAuth device flow, used for Server auth. This will block until authentication is finished.
-// onAuthRequired is called with the verification URL and code to be shown to the user.
-func OAuthDeviceFlow(ctx context.Context, config *config.Config, httpClient *http.Client, onAuthRequired func(DeviceAuthResponse)) (TokenResponse, error) {
+type LauncherDataResponse struct {
+	Owner    string        `json:"owner"`
+	Profiles []GameProfile `json:"profiles"`
+}
+
+type GameProfile struct {
+	UUID     string `json:"uuid"`
+	Username string `json:"username"`
+}
+
+type GameSessionRequest struct {
+	UUID string `json:"uuid"`
+}
+type GameSessionResponse struct {
+	SessionToken  string `json:"sessionToken"`
+	IdentityToken string `json:"identityToken"`
+	// In RFC3339Nano format
+	ExpiresAt string `json:"expiresAt"`
+}
+
+// Starts the OAuth device flow, printing a log message asking the user to visit the verification link
+// and enter a code. This will block until authentication is finished.
+func OAuthDeviceFlow(config *config.Config, httpClient *http.Client) (TokenResponse, error) {
 	deviceAuthResponse, err := startDeviceAuth(config, httpClient)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to start device auth: %v", err)
 	}
 
-	if onAuthRequired != nil {
-		onAuthRequired(deviceAuthResponse)
-	}
+	log.Println("===================================")
+	log.Println("===== Authentication Required =====")
+	log.Printf("Visit: %s\n", deviceAuthResponse.VerificationURI)
+	log.Printf("Enter code: %s\n", deviceAuthResponse.UserCode)
+	log.Println("===================================")
 
-	tokenResponse, err := pollForToken(ctx, config, httpClient, deviceAuthResponse)
+	tokenResponse, err := pollForToken(deviceAuthResponse, config, httpClient)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("failed to poll for token: %v", err)
 	}
@@ -103,8 +89,8 @@ func OAuthDeviceFlow(ctx context.Context, config *config.Config, httpClient *htt
 
 func startDeviceAuth(config *config.Config, httpClient *http.Client) (DeviceAuthResponse, error) {
 	params := url.Values{}
-	params.Add("client_id", "hytale-server")
-	params.Add("scope", "openid offline auth:server")
+	params.Add("client_id", config.Auth.ClientID)
+	params.Add("scope", config.Auth.Scope)
 
 	resp, err := httpClient.PostForm(config.Auth.DeviceAuth, params)
 	if err != nil {
@@ -121,7 +107,7 @@ func startDeviceAuth(config *config.Config, httpClient *http.Client) (DeviceAuth
 		return DeviceAuthResponse{}, err
 	}
 
-	deviceAuthResponse := defaultDeviceAuthResponse(config)
+	deviceAuthResponse := defaultDeviceAuthResponse()
 	err = json.Unmarshal(body, &deviceAuthResponse)
 	if err != nil {
 		return DeviceAuthResponse{}, err
@@ -130,17 +116,16 @@ func startDeviceAuth(config *config.Config, httpClient *http.Client) (DeviceAuth
 	return deviceAuthResponse, nil
 }
 
-func pollForToken(ctx context.Context, config *config.Config, httpClient *http.Client, deviceAuthResponse DeviceAuthResponse) (TokenResponse, error) {
+func pollForToken(deviceAuthResponse DeviceAuthResponse, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
 	params := url.Values{}
-	params.Add("client_id", "hytale-server")
+	params.Add("client_id", config.Auth.ClientID)
 	params.Add("device_code", deviceAuthResponse.DeviceCode)
 	params.Add("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
 
 	ticker := time.NewTicker(time.Duration(deviceAuthResponse.Interval) * time.Second)
 	defer ticker.Stop()
 
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(min(deviceAuthResponse.ExpiresIn))*time.Second)
-	defer cancel()
+	timeout := time.After(time.Duration(deviceAuthResponse.ExpiresIn) * time.Second)
 
 	for {
 		select {
@@ -169,152 +154,16 @@ func pollForToken(ctx context.Context, config *config.Config, httpClient *http.C
 			if tokenResponse.Error == "" {
 				return tokenResponse, nil
 			}
-			if tokenResponse.Error != "authorization_pending" {
-				return TokenResponse{}, fmt.Errorf("error polling for token: `%s`: %s", tokenResponse.Error, tokenResponse.ErrorDescription)
-			}
 
-		case <-ctx.Done():
-			return TokenResponse{}, ctx.Err()
+		case <-timeout:
+			return TokenResponse{}, fmt.Errorf("timeout waiting for token")
 		}
 	}
 }
 
-type RedirectParams struct {
-	Code  string
-	State string
-}
-
-type RedirectCaptureFunc func(context.Context, string) (RedirectParams, error)
-
-// Starts the OAuth browser flow, used for Launcher auth. This will block until authentication is finished.
-//
-// getRedirectFromUser is called with the auth URL to be shown to the user, and must return the code/state parameters extracted from a browser redirect.
-// You can either start a local web server and intercept the redirect, or ask the user to paste the redirect URL.
-//
-// port is the port the user will be redirected to. If using a local web server, this is the port of the web server.
-// If not using a local web server, port should be an arbitrary unused port.
-func OAuthBrowserFlow(ctx context.Context, config *config.Config, httpClient *http.Client, port uint16, getRedirectFromUser RedirectCaptureFunc) (TokenResponse, error) {
-	if getRedirectFromUser == nil {
-		return TokenResponse{}, errors.New("getRedirectFromUser cannot be nil")
-	}
-
-	state, err := generateRandomString(32)
-	if err != nil {
-		return TokenResponse{}, fmt.Errorf("failed to generate state: %w", err)
-	}
-	encodedState := encodeStateWithPort(state, port)
-
-	codeVerifier, err := generateRandomString(64)
-	if err != nil {
-		return TokenResponse{}, fmt.Errorf("failed to generate code verifier: %w", err)
-	}
-	codeChallenge := calculateCodeChallenge(codeVerifier)
-
-	authUrl := buildAuthStateURL(config, encodedState, codeChallenge)
-
-	params, err := func() (RedirectParams, error) {
-		ctx, cancel := context.WithTimeout(ctx, time.Duration(config.Auth.BrowserAuthTimeout)*time.Second)
-		defer cancel() // Scoped within this block
-		return getRedirectFromUser(ctx, authUrl)
-	}()
-
-	if err != nil {
-		return TokenResponse{}, fmt.Errorf("getQueryFromRedirect failed: %w", err)
-	}
-	clientRedirectQuery := params
-
-	if clientRedirectQuery.State != state {
-		return TokenResponse{}, fmt.Errorf("invalid OAuth state parameter in redirect")
-	}
-	code := clientRedirectQuery.Code
-	if code == "" {
-		return TokenResponse{}, errors.New("authorization code missing in redirect query parameters")
-	}
-
-	tokenResp, err := exchangeCodeForToken(config, httpClient, code, codeVerifier)
-	if err != nil {
-		return TokenResponse{}, fmt.Errorf("token exchange failed: %w", err)
-	}
-	return tokenResp, nil
-}
-
-func generateRandomString(len int) (string, error) {
-	bytes := make([]byte, len)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", fmt.Errorf("failed to read random bytes: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(bytes), nil
-}
-
-type stateWithPort struct {
-	State string `json:"state"`
-	Port  uint16 `json:"port"`
-}
-
-func encodeStateWithPort(state string, port uint16) string {
-	s := stateWithPort{
-		State: state,
-		Port:  port,
-	}
-	bytes, _ := json.Marshal(s)
-	return base64.RawURLEncoding.EncodeToString(bytes)
-}
-
-func calculateCodeChallenge(codeVerifier string) string {
-	hash := sha256.Sum256([]byte(codeVerifier))
-	return base64.RawURLEncoding.EncodeToString(hash[:])
-}
-
-func buildAuthStateURL(config *config.Config, state string, codeChallenge string) string {
+func OAuthRefresh(oauthRefreshToken string, config *config.Config, httpClient *http.Client) (TokenResponse, error) {
 	params := url.Values{}
-	params.Add("response_type", "code")
-	params.Add("client_id", "hytale-launcher")
-	params.Add("redirect_uri", config.Auth.RedirectURI)
-	params.Add("scope", "openid offline auth:launcher")
-	params.Add("state", state)
-	params.Add("code_challenge", codeChallenge)
-	params.Add("code_challenge_method", "S256")
-	return fmt.Sprintf("%s?%s", config.Auth.BrowserAuth, params.Encode())
-}
-
-func exchangeCodeForToken(config *config.Config, httpClient *http.Client, code string, verifier string) (TokenResponse, error) {
-	form := url.Values{}
-	form.Add("grant_type", "authorization_code")
-	form.Add("client_id", "hytale-launcher")
-	form.Add("code", code)
-	form.Add("redirect_uri", config.Auth.RedirectURI)
-	form.Add("code_verifier", verifier)
-
-	req, err := http.NewRequest("POST", config.Auth.Token, strings.NewReader(form.Encode()))
-	if err != nil {
-		return TokenResponse{}, fmt.Errorf("failed to create token request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return TokenResponse{}, fmt.Errorf("failed to execute token request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, _ := io.ReadAll(resp.Body)
-	body := string(bodyBytes)
-
-	if resp.StatusCode != http.StatusOK {
-		return TokenResponse{}, fmt.Errorf("token exchange failed with HTTP status %d: %s", resp.StatusCode, body)
-	}
-
-	var tokenResp TokenResponse
-	if err := json.Unmarshal([]byte(body), &tokenResp); err != nil {
-		return TokenResponse{}, fmt.Errorf("failed to parse token response JSON: %w", err)
-	}
-	return tokenResp, nil
-}
-
-func OAuthRefresh(config *config.Config, httpClient *http.Client, oauthRefreshToken string, authType AuthType) (TokenResponse, error) {
-	params := url.Values{}
-	params.Add("client_id", authType.ClientID())
+	params.Add("client_id", config.Auth.ClientID)
 	params.Add("refresh_token", oauthRefreshToken)
 	params.Add("grant_type", "refresh_token")
 
@@ -344,4 +193,106 @@ func OAuthRefresh(config *config.Config, httpClient *http.Client, oauthRefreshTo
 	}
 
 	return tokenResponse, nil
+}
+
+func GetAccountProfiles(oauthAccessToken string, config *config.Config, httpClient *http.Client) (LauncherDataResponse, error) {
+	req, err := http.NewRequest("GET", config.Auth.Profiles, nil)
+	if err != nil {
+		return LauncherDataResponse{}, err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", oauthAccessToken))
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return LauncherDataResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return LauncherDataResponse{}, util.NewBadResponseError("Get account profiles", resp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return LauncherDataResponse{}, err
+	}
+
+	var launcherDataResponse LauncherDataResponse
+	err = json.Unmarshal(body, &launcherDataResponse)
+	if err != nil {
+		return LauncherDataResponse{}, err
+	}
+
+	return launcherDataResponse, nil
+}
+
+func CreateGameSession(oauthAccessToken string, uuid string, config *config.Config, httpClient *http.Client) (GameSessionResponse, error) {
+	requestBody, err := json.Marshal(GameSessionRequest{UUID: uuid})
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	req, err := http.NewRequest("POST", config.Auth.CreateGameSession, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", oauthAccessToken))
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return GameSessionResponse{}, util.NewBadResponseError("Create game session", resp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	var gameSessionResponse GameSessionResponse
+	err = json.Unmarshal(body, &gameSessionResponse)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	return gameSessionResponse, nil
+}
+
+func RefreshGameSession(gameSessionToken string, uuid string, config *config.Config, httpClient *http.Client) (GameSessionResponse, error) {
+	req, err := http.NewRequest("POST", config.Auth.RefreshGameSession, nil)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", gameSessionToken))
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return GameSessionResponse{}, util.NewBadResponseError("Refresh game session", resp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	var gameSessionResponse GameSessionResponse
+	err = json.Unmarshal(body, &gameSessionResponse)
+	if err != nil {
+		return GameSessionResponse{}, err
+	}
+
+	return gameSessionResponse, nil
 }

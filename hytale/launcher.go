@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"unicode"
 
 	"github.com/Tisawesomeness/gaia/config"
+	"github.com/Tisawesomeness/gaia/db"
 	"github.com/Tisawesomeness/gaia/util"
 	"github.com/bwmarrin/discordgo"
 )
@@ -30,26 +32,11 @@ type LauncherReleaseFeed struct {
 	Release *LauncherRelease
 }
 
-func (f LauncherReleaseFeed) GetID() string {
-	return LauncherReleaseFeedType.ID()
-}
-
 func (f LauncherReleaseFeed) GetType() FeedType {
-	return LauncherReleaseFeedType
+	return LauncherPostFeedType
 }
 
-func (f LauncherReleaseFeed) GetDisplay() string {
-	return LauncherReleaseFeedType.Display()
-}
-
-func (f LauncherReleaseFeed) BuildMessage(config *config.Config) *FeedMessage {
-	return f.buildMessage(config, false)
-}
-func (f LauncherReleaseFeed) BuildSubscriberMessage(config *config.Config, previous Feed) *FeedMessage {
-	return f.buildMessage(config, true)
-}
-
-func (f LauncherReleaseFeed) buildMessage(config *config.Config, isNews bool) *FeedMessage {
+func (f LauncherReleaseFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
 	var title string
 	if isNews {
 		title = "New Hytale Launcher Version"
@@ -66,7 +53,7 @@ func (f LauncherReleaseFeed) buildMessage(config *config.Config, isNews bool) *F
 		fields := []*discordgo.MessageEmbedField{}
 		for platform, urls := range f.Release.DownloadURLs {
 			for arch, downloadURL := range urls {
-				platformName := util.CapitalizeFirstLetter(platform)
+				platformName := capitalizeFirstLetter(platform)
 				fieldName := fmt.Sprintf("%s (%s)", platformName, arch)
 				fields = append(fields, &discordgo.MessageEmbedField{
 					Name:   fieldName,
@@ -83,6 +70,15 @@ func (f LauncherReleaseFeed) buildMessage(config *config.Config, isNews bool) *F
 	}
 }
 
+func capitalizeFirstLetter(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	runes := []rune(s)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
+}
+
 func (f LauncherReleaseFeed) GetVersion() string {
 	return f.Release.Version
 }
@@ -95,14 +91,22 @@ func (f LauncherReleaseFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func deserializeLauncherRelease(data []byte) (*LauncherReleaseFeed, error) {
+func getStoredLauncherRelease(db *db.DB) (Feed, error) {
+	raw, err := db.GetLatestPost(LauncherReleaseFeedType.ID())
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+
 	var release LauncherRelease
-	err := json.Unmarshal(data, &release)
-	return &LauncherReleaseFeed{Release: &release}, err
+	err = json.Unmarshal(raw, &release)
+	return LauncherReleaseFeed{Release: &release}, err
 }
 
-func fetchLauncherRelease(config *config.Config, httpClient *http.Client) (*LauncherReleaseFeed, error) {
-	resp, err := httpClient.Get(config.Feeds.LauncherRelease)
+func fetchLauncherRelease(feeds *HytaleFeeds) (Feed, error) {
+	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherRelease)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +118,7 @@ func fetchLauncherRelease(config *config.Config, httpClient *http.Client) (*Laun
 
 	var release LauncherRelease
 	err = json.NewDecoder(resp.Body).Decode(&release)
-	return &LauncherReleaseFeed{Release: &release}, err
+	return LauncherReleaseFeed{Release: &release}, err
 }
 
 // Articles
@@ -148,22 +152,11 @@ type LauncherPostFeed struct {
 	Articles *ArticleList
 }
 
-func (f LauncherPostFeed) GetID() string {
-	return LauncherPostFeedType.ID()
-}
-
 func (f LauncherPostFeed) GetType() FeedType {
 	return LauncherPostFeedType
 }
 
-func (f LauncherPostFeed) GetDisplay() string {
-	return LauncherPostFeedType.Display()
-}
-
-func (f LauncherPostFeed) BuildMessage(config *config.Config) *FeedMessage {
-	return f.BuildSubscriberMessage(config, nil)
-}
-func (f LauncherPostFeed) BuildSubscriberMessage(config *config.Config, previous Feed) *FeedMessage {
+func (f LauncherPostFeed) BuildMessage(config *config.Config, isNews bool) *FeedMessage {
 	if len(f.Articles.Articles) <= 0 {
 		return &FeedMessage{
 			Embeds: []*discordgo.MessageEmbed{
@@ -194,14 +187,22 @@ func (f LauncherPostFeed) content() (string, error) {
 	return string(contentBytes), nil
 }
 
-func deserializeArticles(data []byte) (*LauncherPostFeed, error) {
+func getStoredArticles(db *db.DB) (Feed, error) {
+	raw, err := db.GetLatestPost(LauncherPostFeedType.ID())
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+
 	var articles ArticleList
-	err := json.Unmarshal(data, &articles)
-	return &LauncherPostFeed{Articles: &articles}, err
+	err = json.Unmarshal(raw, &articles)
+	return LauncherPostFeed{Articles: &articles}, err
 }
 
-func fetchArticles(config *config.Config, httpClient *http.Client) (*LauncherPostFeed, error) {
-	resp, err := httpClient.Get(config.Feeds.LauncherArticles)
+func fetchArticles(feeds *HytaleFeeds) (Feed, error) {
+	resp, err := feeds.http.Get(feeds.config.Feeds.LauncherArticles)
 	if err != nil {
 		return nil, err
 	}
@@ -213,5 +214,5 @@ func fetchArticles(config *config.Config, httpClient *http.Client) (*LauncherPos
 
 	var articles ArticleList
 	err = json.NewDecoder(resp.Body).Decode(&articles)
-	return &LauncherPostFeed{Articles: &articles}, err
+	return LauncherPostFeed{Articles: &articles}, err
 }

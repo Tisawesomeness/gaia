@@ -1,16 +1,10 @@
 package auth
 
 import (
-	"bufio"
-	"context"
 	"errors"
-	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"net/url"
-	"os"
-	"strings"
+	"net/http/cookiejar"
 	"sync"
 	"time"
 
@@ -19,49 +13,35 @@ import (
 	"github.com/Tisawesomeness/gaia/util"
 )
 
-type Token struct {
-	Token    string
-	AuthType AuthType
-}
-
 // Keeps an OAuth and Hytale game session up-to-date by scheduling refreshes shortly before expiry.
-type AuthStore interface {
-	// Retrieves the current OAuth access token.
-	// Returns an error if the token is expired, as the background task should keep it up-to-date.
-	GetOAuthToken() (Token, error)
-	// Retrieves the current game session token.
-	// Returns an error if the token is expired, as the background task should keep it up-to-date.
-	GetGameSessionToken() (Token, error)
-}
-
-type authStore struct {
+type AuthStore struct {
 	config     *config.Config
 	db         *db.DB
 	httpClient *http.Client
 
-	authType                AuthType
 	oauthToken              db.OAuthToken
 	profileUUID             string
 	gameSession             db.GameSessionToken
 	tokenMutex              *sync.Mutex
 	oauthRefreshTimer       *time.Timer
 	gameSessionRefreshTimer *time.Timer
+
+	// May be nil
+	kratosClient       *http.Client
+	kratosRefreshTimer *time.Timer
 }
 
-var (
-	expiredOAuthError       = errors.New("Expired OAuth")
-	expiredGameSessionError = errors.New("Expired game session")
-)
+var expiredOAuthError = errors.New("Expired OAuth")
+var expiredGameSessionError = errors.New("Expired game session")
 
-// Authenticates to Hytale OAuth and creates a server game session.
+// Authenticates to Hytale OAuth and creates a game session.
 // Will resume from tokens stored in database if available.
-// Otherwise, asks the bot admin to complete the OAuth flow.
-func NewAuthStore(config *config.Config, db *db.DB, httpClient *http.Client) (AuthStore, error) {
-	store := &authStore{
+// Otherwise, asks the user to complete the OAuth flow.
+func NewAuthStore(config *config.Config, db *db.DB, httpClient *http.Client) (*AuthStore, error) {
+	store := &AuthStore{
 		config:     config,
 		db:         db,
 		httpClient: httpClient,
-		authType:   getAuthType(config),
 		tokenMutex: &sync.Mutex{},
 	}
 
@@ -73,31 +53,32 @@ func NewAuthStore(config *config.Config, db *db.DB, httpClient *http.Client) (Au
 	return store, nil
 }
 
-func getAuthType(config *config.Config) AuthType {
-	switch config.Credentials.AuthMethod {
-	case "launcher":
-		return Launcher
-	case "server":
-		return Server
-	default:
-		panic("unknown auth type")
-	}
-}
-
-func (a *authStore) initialize() error {
+func (a *AuthStore) initialize() error {
 	err := a.initSessions()
 	if err != nil {
 		return err
 	}
+
+	var kratosRefresh *time.Time
+	if a.config.Credentials.HytaleEmail != "" && a.config.Credentials.HytalePassword != "" {
+		kratosRefresh, err = a.initKratos()
+		if err != nil {
+			log.Printf("Could not init Kratos: %v", err)
+		}
+	}
+
 	a.scheduleOAuthRefresh()
 	a.scheduleGameSessionRefresh()
+	if a.kratosClient != nil && kratosRefresh != nil {
+		a.scheduleKratosRefresh(kratosRefresh)
+	}
 	return nil
 }
 
-func (a *authStore) initSessions() error {
+func (a *AuthStore) initSessions() error {
 	oauthToken, err := a.initializeFreshOAuth()
 	if err != nil {
-		if errors.Is(err, expiredOAuthError) {
+		if errors.Is(err, expiredGameSessionError) {
 			log.Println("OAuth token expired, starting new flow...")
 		} else {
 			log.Printf("Failed to initialize OAuth: %v", err)
@@ -140,15 +121,67 @@ func (a *authStore) initSessions() error {
 	return nil
 }
 
+func (a *AuthStore) initKratos() (*time.Time, error) {
+	kratosClient, err := initHTTPWithCookies(a.config)
+	if err != nil {
+		return nil, err
+	}
+	a.kratosClient = kratosClient
+
+	kratosRefresh, err := a.db.GetKratosRefresh()
+	if err == nil && kratosRefresh != nil {
+		log.Println("Found Kratos session")
+		if !time.Now().After(*kratosRefresh) {
+			return kratosRefresh, nil
+		} else {
+			log.Println("Kratos session expired")
+		}
+	}
+
+	newKratosRefresh, err := a.kratosLoginAndStore(kratosClient)
+	if err != nil {
+		return nil, err
+	}
+	return newKratosRefresh, nil
+}
+
+func (a *AuthStore) kratosLoginAndStore(kratosClient *http.Client) (*time.Time, error) {
+	log.Println("Starting Kratos login...")
+	err := KratosLogin(a.config, kratosClient)
+	if err != nil {
+		return nil, err
+	}
+	log.Println("Kratos login successful")
+
+	kratosRefresh := time.Now().Add(time.Duration(a.config.Kratos.RenewalHours) * time.Hour)
+	err = a.db.SetKratosRefresh(kratosRefresh)
+	if err != nil {
+		return nil, err
+	}
+	return &kratosRefresh, nil
+}
+
+func initHTTPWithCookies(config *config.Config) (*http.Client, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+	tr := &http.Transport{
+		MaxIdleConns: config.HTTP.MaxIdleConns,
+	}
+	return &http.Client{
+		Transport: tr,
+		Timeout:   time.Duration(config.HTTP.Timeout) * time.Second,
+		Jar:       jar,
+	}, nil
+}
+
 // Attempts to initialize the OAuth token directly from storage
 // Refreshes if near expiry
-func (a *authStore) initializeFreshOAuth() (db.OAuthToken, error) {
+func (a *AuthStore) initializeFreshOAuth() (db.OAuthToken, error) {
 	storedOAuthToken, err := a.db.GetOAuthToken()
 	if err != nil || storedOAuthToken == nil {
 		return db.OAuthToken{}, errors.New("No stored OAuth token")
-	}
-	if storedOAuthToken.AuthType != a.authType.String() {
-		return db.OAuthToken{}, errors.New("Stored OAuth token was authenticated with different method, re-auth needed")
 	}
 	log.Println("Found stored OAuth token")
 
@@ -165,47 +198,32 @@ func (a *authStore) initializeFreshOAuth() (db.OAuthToken, error) {
 
 // Attempts to initialize the game session token directly from storage
 // Refreshes if near expiry
-func (a *authStore) initializeFreshGameSession() (db.GameSessionToken, string, error) {
+func (a *AuthStore) initializeFreshGameSession() (db.GameSessionToken, string, error) {
 	storedGameSession, err := a.db.GetGameSession()
 	if err != nil || storedGameSession == nil {
 		return db.GameSessionToken{}, "", errors.New("No stored game session token found")
 	}
-	if storedGameSession.AuthType != a.authType.String() {
-		return db.GameSessionToken{}, "", errors.New("Stored game session was authenticated with different method,, re-auth needed")
-	}
 	log.Println("Found stored game session token")
 
-	var profileUUID string
-	if a.config.Credentials.ProfileUUID != "" {
-		profileUUID = a.config.Credentials.ProfileUUID
-	} else {
-		storedProfileUUID, err := a.db.GetProfileUUID()
-		if err != nil || storedProfileUUID == "" {
-			return db.GameSessionToken{}, "", errors.New("No stored profile UUID found")
-		}
-		profileUUID = storedProfileUUID
+	storedProfileUUID, err := a.db.GetProfileUUID()
+	if err != nil || storedProfileUUID == "" {
+		return db.GameSessionToken{}, "", errors.New("No stored profile UUID found")
 	}
 
 	if time.Now().After((*storedGameSession).ExpiresAt) {
 		return db.GameSessionToken{}, "", expiredGameSessionError
 	}
-	refreshedSession, err := a.ensureGameSessionRefreshed(*storedGameSession, profileUUID)
+	refreshedSession, err := a.ensureGameSessionRefreshed(*storedGameSession, storedProfileUUID)
 	if err != nil {
 		return db.GameSessionToken{}, "", err
 	}
 
-	return refreshedSession, profileUUID, nil
+	return refreshedSession, storedProfileUUID, nil
 }
 
 // Tries to initialize the profile UUID from database first,
 // then tries requesting it with the OAuth token
-// If config.Credentials.ProfileUUID is set, use that directly
-func (a *authStore) initializeProfile(oAuthToken db.OAuthToken) (string, error) {
-	if a.config.Credentials.ProfileUUID != "" {
-		log.Printf("Using config profile: %s", a.config.Credentials.ProfileUUID)
-		return a.config.Credentials.ProfileUUID, nil
-	}
-
+func (a *AuthStore) initializeProfile(oAuthToken db.OAuthToken) (string, error) {
 	storedUUID, err := a.db.GetProfileUUID()
 	if err != nil || storedUUID == "" {
 		if err != nil {
@@ -222,23 +240,9 @@ func (a *authStore) initializeProfile(oAuthToken db.OAuthToken) (string, error) 
 	}
 }
 
-func (a authStore) onAuthRequired(deviceAuthResponse DeviceAuthResponse) {
+func (a AuthStore) performOAuthAndStore() (db.OAuthToken, error) {
 	util.DiscordLog(a.config, a.httpClient, "Authentication required!")
-	log.Println("===================================")
-	log.Println("===== Authentication Required =====")
-	log.Printf("Visit: %s\n", deviceAuthResponse.VerificationURI)
-	log.Printf("Enter code: %s\n", deviceAuthResponse.UserCode)
-	log.Println("===================================")
-}
-
-func (a authStore) performOAuthAndStore() (db.OAuthToken, error) {
-	var tokenResponse TokenResponse
-	var err error
-	if a.authType == Server {
-		tokenResponse, err = OAuthDeviceFlow(context.Background(), a.config, a.httpClient, a.onAuthRequired)
-	} else {
-		tokenResponse, err = a.performBrowserOauth()
-	}
+	tokenResponse, err := OAuthDeviceFlow(a.config, a.httpClient)
 	if err != nil {
 		return db.OAuthToken{}, err
 	}
@@ -247,7 +251,6 @@ func (a authStore) performOAuthAndStore() (db.OAuthToken, error) {
 		AccessToken:  tokenResponse.AccessToken,
 		RefreshToken: tokenResponse.RefreshToken,
 		ExpiresAt:    time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second),
-		AuthType:     a.authType.String(),
 	}
 
 	err = a.db.SetOAuthToken(token)
@@ -258,154 +261,19 @@ func (a authStore) performOAuthAndStore() (db.OAuthToken, error) {
 	return token, nil
 }
 
-type paramsAndErr struct {
-	Params RedirectParams
-	Err    error
-}
-
-func (a authStore) performBrowserOauth() (TokenResponse, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	var once sync.Once
-
-	resultCh := make(chan paramsAndErr, 1)
-	var notifyCh chan string
-	port := uint16(9999) // Arbitrary default port
-
-	// Local web server (if enabled) captures redirect after authorization
-	// Fully automatic like Hytale Launcher, but requires running bot and browser
-	// on the same machine
-	if a.config.Credentials.StartRedirectListener {
-		listener, err := net.Listen("tcp", "")
-		if err != nil {
-			return TokenResponse{}, fmt.Errorf("failed to start listener: %v", err)
-		}
-		defer listener.Close()
-
-		notifyCh = make(chan string, 1)
-		port = uint16(listener.Addr().(*net.TCPAddr).Port)
-
-		server := &http.Server{
-			Handler: a.capturedRedirectHandler(&once, resultCh, notifyCh),
-		}
-		go func() {
-			defer server.Close()
-			if err := server.Serve(listener); err != nil && err != http.ErrServerClosed && !errors.Is(err, net.ErrClosed) {
-				send(&once, resultCh, RedirectParams{}, fmt.Errorf("error starting server: %v\n", err))
-			}
-		}()
-	}
-
-	// Buidls the auth URL, then passes to getRedirectFromUser() to show to user and extract the authorization code
-	// Once getRedirectFromUser() returns, OAuthBrowserFlow() exchanges the authorization code for a token
-	token, err := OAuthBrowserFlow(ctx, a.config, a.httpClient, port, a.getRedirectFromUserFunc(&once, resultCh))
-
-	// Update web page with auth status, if enabled
-	if notifyCh != nil {
-		select {
-		case notifyCh <- func() string {
-			if err == nil {
-				return "Authentication successful. You can close this window."
-			} else {
-				return err.Error()
-			}
-		}():
-		default: // No receiver, do nothing
-		}
-	}
-	return token, err
-}
-
-func (a authStore) capturedRedirectHandler(once *sync.Once, resultCh chan<- paramsAndErr, notifyCh <-chan string) http.HandlerFunc {
-	// Listens for any HTTP request, should be the user getting redirected after authorizing
-	// code/state or error is sent to resultCh so getRedirectFromUser() can proceed
-	return func(w http.ResponseWriter, r *http.Request) {
-		query := r.URL.Query()
-		code := query.Get("code")
-		state := query.Get("state")
-		if code == "" || state == "" {
-			send(once, resultCh, RedirectParams{}, errors.New("missing code or state parameters"))
-			http.Error(w, "Missing code or state parameters", http.StatusBadRequest)
-		} else {
-			send(once, resultCh, RedirectParams{Code: code, State: state}, nil)
-			fmt.Fprintln(w, "Exchanging authorization code for token...")
-		}
-		// When authentication completes/fails, notify user in their browser
-		select {
-		case notification := <-notifyCh:
-			fmt.Fprintln(w, notification)
-		case <-r.Context().Done():
-			// exit
-		}
-	}
-}
-
-func (a authStore) getRedirectFromUserFunc(once *sync.Once, resultCh chan paramsAndErr) RedirectCaptureFunc {
-	return func(ctx context.Context, authUrl string) (RedirectParams, error) {
-		log.Println("===================================")
-		log.Println("===== Authentication Required =====")
-		log.Printf("Visit: %s\n", authUrl)
-		log.Println("After logging in, you will be redirected automatically.")
-		log.Println("If you are redirected to a non-existent page, paste the URL below.")
-		log.Println("===================================")
-
-		// In case user can't reach local web server (or not enabled), also accept URL pasted in stdin
-		fmt.Print("> ")
-		stdinReader := bufio.NewReader(os.Stdin)
-		go func() {
-			// Known issue: ReadString() blocks forever if there is no input
-			// Not a big deal (causes a single goroutine leak), but needs to be
-			// fixed if future code also reads from stdin
-			input, err := stdinReader.ReadString('\n')
-			if err != nil {
-				send(once, resultCh, RedirectParams{}, fmt.Errorf("failed to read input: %v\n", err))
-				return
-			}
-			input = strings.TrimSpace(input)
-
-			u, err := url.Parse(input)
-			if err != nil {
-				send(once, resultCh, RedirectParams{}, fmt.Errorf("not a URL: %v\n", err))
-				return
-			}
-
-			query := u.Query()
-			params := RedirectParams{
-				Code:  query.Get("code"),
-				State: query.Get("state"),
-			}
-			send(once, resultCh, params, nil)
-		}()
-
-		// Wait for either web server or stdin
-		select {
-		case params := <-resultCh:
-			return params.Params, params.Err
-		case <-ctx.Done():
-			return RedirectParams{}, ctx.Err()
-		}
-	}
-}
-
-func send(once *sync.Once, c chan<- paramsAndErr, params RedirectParams, err error) {
-	once.Do(func() {
-		c <- paramsAndErr{Params: params, Err: err}
-	})
-}
-
-func (a authStore) fetchProfileUUIDAndStore(oAuthToken db.OAuthToken) (string, error) {
+func (a AuthStore) fetchProfileUUIDAndStore(oAuthToken db.OAuthToken) (string, error) {
 	log.Println("Fetching account profiles...")
-	profiles, err := GetAccountProfiles(oAuthToken.AccessToken, a.authType, a.config, a.httpClient)
+	profiles, err := GetAccountProfiles(oAuthToken.AccessToken, a.config, a.httpClient)
 	if err != nil {
 		return "", err
 	}
 
-	if len(profiles) <= 0 {
+	if len(profiles.Profiles) <= 0 {
 		return "", errors.New("No profiles found!")
 	}
 
 	// Arbitrary choice of first UUID available
-	profileUUID := profiles[0].UUID
+	profileUUID := profiles.Profiles[0].UUID
 	log.Printf("Using first profile: %s", profileUUID)
 	err = a.db.SetProfileUUID(profileUUID)
 	if err != nil {
@@ -415,7 +283,7 @@ func (a authStore) fetchProfileUUIDAndStore(oAuthToken db.OAuthToken) (string, e
 	return profileUUID, nil
 }
 
-func (a authStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUUID string) (db.GameSessionToken, error) {
+func (a AuthStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUUID string) (db.GameSessionToken, error) {
 	if time.Now().After(oAuthToken.ExpiresAt) {
 		return db.GameSessionToken{}, errors.New("Tried to create game session from expired OAuth token")
 	}
@@ -426,10 +294,13 @@ func (a authStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUU
 		return db.GameSessionToken{}, err
 	}
 
+	expiresAt, err := time.Parse(time.RFC3339Nano, sessionResponse.ExpiresAt)
+	if err != nil {
+		return db.GameSessionToken{}, err
+	}
 	session := db.GameSessionToken{
 		SessionToken: sessionResponse.SessionToken,
-		ExpiresAt:    sessionResponse.ExpiresAt,
-		AuthType:     oAuthToken.AuthType,
+		ExpiresAt:    expiresAt,
 	}
 	err = a.db.SetGameSession(session)
 	if err != nil {
@@ -440,7 +311,7 @@ func (a authStore) createGameSessionAndStore(oAuthToken db.OAuthToken, profileUU
 }
 
 // Refreshes the token if expired, otherwise returns the original token
-func (a authStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
+func (a AuthStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
 	if time.Now().Add(time.Duration(a.config.Auth.OAuthRefreshBuffer) * time.Second).After(oAuthToken.ExpiresAt) {
 		return a.refreshOAuthAndStore(oAuthToken)
 	}
@@ -448,9 +319,9 @@ func (a authStore) ensureOAuthRefreshed(oAuthToken db.OAuthToken) (db.OAuthToken
 }
 
 // Refreshes the token if expired, otherwise returns the original token
-func (a authStore) refreshOAuthAndStore(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
+func (a AuthStore) refreshOAuthAndStore(oAuthToken db.OAuthToken) (db.OAuthToken, error) {
 	log.Println("Refreshing OAuth token...")
-	tokenResponse, err := OAuthRefresh(a.config, a.httpClient, oAuthToken.RefreshToken, a.authType)
+	tokenResponse, err := OAuthRefresh(oAuthToken.RefreshToken, a.config, a.httpClient)
 	if err != nil {
 		return db.OAuthToken{}, err
 	}
@@ -459,7 +330,6 @@ func (a authStore) refreshOAuthAndStore(oAuthToken db.OAuthToken) (db.OAuthToken
 		AccessToken:  tokenResponse.AccessToken,
 		RefreshToken: tokenResponse.RefreshToken,
 		ExpiresAt:    time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second),
-		AuthType:     oAuthToken.AuthType,
 	}
 
 	err = a.db.SetOAuthToken(token)
@@ -471,7 +341,7 @@ func (a authStore) refreshOAuthAndStore(oAuthToken db.OAuthToken) (db.OAuthToken
 }
 
 // Refreshes the token if expired, otherwise returns the original token
-func (a authStore) ensureGameSessionRefreshed(gameSession db.GameSessionToken, profileUUID string) (db.GameSessionToken, error) {
+func (a AuthStore) ensureGameSessionRefreshed(gameSession db.GameSessionToken, profileUUID string) (db.GameSessionToken, error) {
 	if time.Now().Add(time.Duration(a.config.Auth.GameSessionRefreshBuffer) * time.Second).After(gameSession.ExpiresAt) {
 		return a.refreshGameSessionAndStore(gameSession, profileUUID)
 	}
@@ -479,17 +349,20 @@ func (a authStore) ensureGameSessionRefreshed(gameSession db.GameSessionToken, p
 }
 
 // Refreshes the token if expired, otherwise returns the original token
-func (a authStore) refreshGameSessionAndStore(gameSession db.GameSessionToken, profileUUID string) (db.GameSessionToken, error) {
+func (a AuthStore) refreshGameSessionAndStore(gameSession db.GameSessionToken, profileUUID string) (db.GameSessionToken, error) {
 	log.Println("Refreshing game session token...")
 	sessionResponse, err := RefreshGameSession(gameSession.SessionToken, profileUUID, a.config, a.httpClient)
 	if err != nil {
 		return db.GameSessionToken{}, err
 	}
 
+	expiresAt, err := time.Parse(time.RFC3339Nano, sessionResponse.ExpiresAt)
+	if err != nil {
+		return db.GameSessionToken{}, err
+	}
 	session := db.GameSessionToken{
 		SessionToken: sessionResponse.SessionToken,
-		ExpiresAt:    sessionResponse.ExpiresAt,
-		AuthType:     gameSession.AuthType,
+		ExpiresAt:    expiresAt,
 	}
 
 	err = a.db.SetGameSession(session)
@@ -500,7 +373,7 @@ func (a authStore) refreshGameSessionAndStore(gameSession db.GameSessionToken, p
 	return session, nil
 }
 
-func (a *authStore) scheduleOAuthRefresh() {
+func (a *AuthStore) scheduleOAuthRefresh() {
 	a.tokenMutex.Lock()
 	expiresAt := a.oauthToken.ExpiresAt
 	a.tokenMutex.Unlock()
@@ -526,7 +399,7 @@ func (a *authStore) scheduleOAuthRefresh() {
 	})
 }
 
-func (a *authStore) scheduleGameSessionRefresh() {
+func (a *AuthStore) scheduleGameSessionRefresh() {
 	a.tokenMutex.Lock()
 	expiresAt := a.gameSession.ExpiresAt
 	a.tokenMutex.Unlock()
@@ -572,30 +445,46 @@ func (a *authStore) scheduleGameSessionRefresh() {
 	})
 }
 
-func (a *authStore) GetOAuthToken() (Token, error) {
+func (a *AuthStore) scheduleKratosRefresh(refreshAt *time.Time) {
+	timeUntilRefresh := max(time.Until(*refreshAt), 0)
+
+	a.kratosRefreshTimer = time.AfterFunc(timeUntilRefresh, func() {
+		err := KratosLogin(a.config, a.kratosClient)
+		if err != nil {
+			log.Printf("Error refreshing Kratos: %v", err)
+		}
+
+		refreshTime := time.Now().Add(time.Duration(a.config.Kratos.RenewalHours) * time.Hour)
+		a.scheduleKratosRefresh(&refreshTime)
+	})
+}
+
+// Retrieves the current OAuth access token.
+// Returns an error if the token is expired, as the background task should keep it up-to-date.
+func (a *AuthStore) GetOAuthToken() (string, error) {
 	a.tokenMutex.Lock()
 	defer a.tokenMutex.Unlock()
 
 	if time.Now().After(a.oauthToken.ExpiresAt) {
-		return Token{}, errors.New("OAuth token is expired")
+		return "", errors.New("OAuth token is expired")
 	}
 
-	return Token{
-		Token:    a.oauthToken.AccessToken,
-		AuthType: a.authType,
-	}, nil
+	return a.oauthToken.AccessToken, nil
 }
 
-func (a *authStore) GetGameSessionToken() (Token, error) {
+// Retrieves the current game session token.
+// Returns an error if the token is expired, as the background task should keep it up-to-date.
+func (a *AuthStore) GetGameSessionToken() (string, error) {
 	a.tokenMutex.Lock()
 	defer a.tokenMutex.Unlock()
 
 	if time.Now().After(a.gameSession.ExpiresAt) {
-		return Token{}, errors.New("Game session token is expired")
+		return "", errors.New("Game session token is expired")
 	}
 
-	return Token{
-		Token:    a.gameSession.SessionToken,
-		AuthType: a.authType,
-	}, nil
+	return a.gameSession.SessionToken, nil
+}
+
+func (a *AuthStore) GetKratosClient() (*http.Client, bool) {
+	return a.kratosClient, a.kratosClient != nil
 }

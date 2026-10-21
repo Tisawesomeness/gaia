@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -9,11 +8,26 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+const (
+	CleanupInterval   = 5 * time.Minute
+	InteractionExpiry = 30 * time.Minute
+)
+
 var (
-	patchlineOptionVersions = &discordgo.ApplicationCommandOption{
+	patchlineOption = &discordgo.ApplicationCommandOption{
 		Type:        discordgo.ApplicationCommandOptionString,
 		Name:        "patchline",
 		Description: "The release channel",
+		Choices: []*discordgo.ApplicationCommandOptionChoice{
+			{
+				Name:  hytale.Release.Display(),
+				Value: hytale.Release.ID(),
+			},
+			{
+				Name:  hytale.PreRelease.Display(),
+				Value: hytale.PreRelease.ID(),
+			},
+		},
 	}
 
 	VersionCommand = &discordgo.ApplicationCommand{
@@ -24,13 +38,13 @@ var (
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Name:        "server",
 				Description: "List Hytale server versions",
-				Options:     []*discordgo.ApplicationCommandOption{patchlineOptionVersions},
+				Options:     []*discordgo.ApplicationCommandOption{patchlineOption},
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Name:        "client",
 				Description: "Get the latest Hytale client version",
-				Options:     []*discordgo.ApplicationCommandOption{patchlineOptionVersions},
+				Options:     []*discordgo.ApplicationCommandOption{patchlineOption},
 			},
 		},
 	}
@@ -46,15 +60,25 @@ var (
 	}
 )
 
-func displayPatchlineList(patchlines map[string]*time.Time) string {
-	var parts []string
-	for patchline, _ := range patchlines {
-		parts = append(parts, fmt.Sprintf("`%s`", patchline))
-	}
-	return strings.Join(parts, ", ")
+func StartInteractionCleanup() {
+	ticker := time.NewTicker(CleanupInterval)
+	go func() {
+		for range ticker.C {
+			cleanupOldInteractions()
+		}
+	}()
 }
 
-func versionCommand(ctx CommandContext) {
+func cleanupOldInteractions() {
+	now := time.Now()
+	for id, interaction := range articleInteractions {
+		if now.Sub(interaction.LastUsed) > InteractionExpiry {
+			delete(articleInteractions, id)
+		}
+	}
+}
+
+func versionCommand(ctx *CommandContext) {
 	options := ctx.Options()
 
 	var side hytale.Side
@@ -64,57 +88,42 @@ func versionCommand(ctx CommandContext) {
 		side = hytale.Server
 	} else {
 		ctx.ReplyWarn("Invalid side")
-		return
 	}
 
 	option, exists := options["patchline"]
-	patchlineInput := "release"
+	var patchlineValue string
 	if exists {
-		patchlineInput = option.StringValue()
+		patchlineValue = option.StringValue()
+	} else {
+		patchlineValue = "release"
 	}
 
-	var patchline string
-	if patchlineInput == "release" {
-		patchline = "release"
-	} else {
-		patchlineFeed, exists := ctx.HytaleFeeds().GetPatchlinesFeed()
-		if !exists {
-			ctx.ReplyError("Could not retrieve Hytale patchlines.", nil)
-			return
-		}
-		patchline = hytale.ClosestPatchline(patchlineInput, patchlineFeed.Patchlines)
-		if patchline == "" {
-			ctx.ReplyWarn("Patchline must be one of: " + displayPatchlineList(patchlineFeed.Patchlines))
-			return
-		}
+	patchline, err := hytale.ParsePatchline(patchlineValue)
+	if err != nil {
+		ctx.ReplyWarn("Invalid patchline")
 	}
 
-	var feed hytale.Feed
-	if side == hytale.Client {
-		feed, exists = ctx.HytaleFeeds().GetGameFeed(patchline)
-	} else {
-		feed, exists = ctx.HytaleFeeds().GetMavenFeed(patchline)
-	}
+	feed, exists := ctx.HytaleFeeds.Feeds[hytale.GetFeedType(patchline, side)]
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale version.", nil)
 		return
 	}
 
-	message := feed.BuildMessage(ctx.Config())
+	message := feed.BuildMessage(ctx.Config, false)
 	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Embeds:     message.Embeds,
 		Components: message.Components,
 	})
 }
 
-func launcherCommand(ctx CommandContext) {
-	feed, exists := ctx.HytaleFeeds().GetLauncherReleaseFeed()
+func launcherCommand(ctx *CommandContext) {
+	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherReleaseFeedType]
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale Launcher version.", nil)
 		return
 	}
 
-	message := feed.BuildMessage(ctx.Config())
+	message := feed.BuildMessage(ctx.Config, false)
 	ctx.ReplyComplex(&discordgo.InteractionResponseData{
 		Embeds:     message.Embeds,
 		Components: message.Components,
@@ -122,51 +131,54 @@ func launcherCommand(ctx CommandContext) {
 }
 
 // Article browsing session state
-type ArticleState struct {
+type ArticleInteraction struct {
 	CurrentIndex int
 	Articles     []*hytale.Article
+	LastUsed     time.Time
 }
 
-func articlesCommand(ctx CommandContext) {
-	feed, exists := ctx.HytaleFeeds().GetLauncherPostFeed()
+var articleInteractions = make(map[string]*ArticleInteraction)
+
+func articlesCommand(ctx *CommandContext) {
+	feed, exists := ctx.HytaleFeeds.Feeds[hytale.LauncherPostFeedType]
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale article.", nil)
 		return
 	}
 
-	articles := feed.Articles.Articles
+	launcherPostFeed, ok := feed.(hytale.LauncherPostFeed)
+	if !ok {
+		ctx.ReplyError("Could not retrieve the latest Hytale article.", nil)
+		return
+	}
+	articles := launcherPostFeed.Articles.Articles
 	if len(articles) == 0 {
 		ctx.ReplyEphemeral("No articles found.")
 		return
 	}
 
-	interactionID := ctx.InteractionID()
-	ctx.NewInteraction(interactionID, &ArticleState{
+	interactionID := ctx.Interaction.Interaction.ID
+	articleInteractions[interactionID] = &ArticleInteraction{
 		CurrentIndex: 0,
 		Articles:     articles,
-	})
+		LastUsed:     time.Now(),
+	}
 
 	latestArticle := articles[0]
-	message := latestArticle.BuildMessage(ctx.Config())
-
-	customID := CustomID{
-		InteractionType: "article",
-		Action:          "",
-		SessionID:       interactionID,
-	}
+	message := latestArticle.BuildMessage(ctx.Config)
 
 	// Note: going *back* in time means going *forward* in the articles array
 	buttons := []discordgo.MessageComponent{
 		discordgo.Button{
 			Label:    "Back",
 			Style:    discordgo.PrimaryButton,
-			CustomID: customID.WithAction("back").String(),
+			CustomID: "article_back_" + interactionID,
 			Disabled: len(articles) <= 1, // Disable if there's only one article
 		},
 		discordgo.Button{
 			Label:    "Forward",
 			Style:    discordgo.PrimaryButton,
-			CustomID: customID.WithAction("forward").String(),
+			CustomID: "article_forward_" + interactionID,
 			Disabled: true, // Disable if it's the first article
 		},
 	}
@@ -178,50 +190,58 @@ func articlesCommand(ctx CommandContext) {
 	})
 }
 
-func handleArticleButton(ctx CommandContext, state any) {
-	interaction := state.(*ArticleState)
-	customID := ctx.CustomID()
-	switch customID.Action {
-	case "back":
-		if interaction.CurrentIndex == len(interaction.Articles)-1 {
-			return // ignore invalid button press
-		}
+func isArticleInteraction(customID string) bool {
+	return strings.HasPrefix(customID, "article_back_") || strings.HasPrefix(customID, "article_forward_")
+}
+
+func HandleArticleButton(s *discordgo.Session, i *discordgo.InteractionCreate, ctx *CommandContext) {
+	customID := i.MessageComponentData().CustomID
+	interactionID := strings.TrimPrefix(customID, "article_back_")
+	interactionID = strings.TrimPrefix(interactionID, "article_forward_")
+
+	interaction, exists := articleInteractions[interactionID]
+	if !exists {
+		ctx.ReplyEphemeral("This interaction has expired.")
+		return
+	}
+
+	interaction.LastUsed = time.Now()
+
+	if strings.HasPrefix(customID, "article_back_") {
 		interaction.CurrentIndex++
-	case "forward":
-		if interaction.CurrentIndex == 0 {
-			return // ignore invalid button press
-		}
+	} else if strings.HasPrefix(customID, "article_forward_") {
 		interaction.CurrentIndex--
-	default:
-		return // ignore unknown action
 	}
 
 	currentArticle := interaction.Articles[interaction.CurrentIndex]
 
-	message := currentArticle.BuildMessage(ctx.Config())
+	message := currentArticle.BuildMessage(ctx.Config)
 
 	// Note: going *back* in time means going *forward* in the articles array
 	buttons := []discordgo.MessageComponent{
 		discordgo.Button{
 			Label:    "Back",
 			Style:    discordgo.PrimaryButton,
-			CustomID: customID.WithAction("back").String(),
+			CustomID: "article_back_" + interactionID,
 			Disabled: interaction.CurrentIndex == len(interaction.Articles)-1,
 		},
 		discordgo.Button{
 			Label:    "Forward",
 			Style:    discordgo.PrimaryButton,
-			CustomID: customID.WithAction("forward").String(),
+			CustomID: "article_forward_" + interactionID,
 			Disabled: interaction.CurrentIndex == 0,
 		},
 	}
 
 	// Edit the original message
 	paginateMessage(message, buttons)
-	ctx.Edit(&discordgo.InteractionResponseData{
-		Embeds:          message.Embeds,
-		Components:      message.Components,
-		AllowedMentions: &discordgo.MessageAllowedMentions{},
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:          message.Embeds,
+			Components:      message.Components,
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
+		},
 	})
 }
 

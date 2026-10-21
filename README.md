@@ -3,6 +3,7 @@
 A Discord bot keeping watch over Orbis. Gaia is a Hytale utility bot with features such as:
 
 - Username <-> UUID conversion
+- Check if a username is reserved
 - Skin lookup
 - Get notified/pinged for new Hytale versions
 - Browse launcher articles
@@ -25,12 +26,12 @@ go run .
 
 It will prompt you with an OAuth login flow, like when running a Hytale server.
 
-## Test
+### Username Reservation
 
-```sh
-# Start the Valkey test server
-valkey-server ./valkey_test.conf &
+Username reservation lookups require your Hytale account credentials to be set in either `config.json` or in environment variables:
 
-# Run tests
-go test ./...
+```
+GAIA_HYTALE_EMAIL
+GAIA_HYTALE_PASSWORD
+GAIA_HYTALE_2FA_SECRET
 ```

@@ -15,13 +15,12 @@ type DB struct {
 	v valkey.Client
 }
 
-func NewDB(config config.ValkeyConfig) (*DB, error) {
+func NewDB(config config.Config) (*DB, error) {
 	options := valkey.ClientOption{
-		InitAddress: []string{config.Address + ":" + strconv.Itoa(config.Port)},
-		SelectDB:    config.DatabaseIndex,
+		InitAddress: []string{config.Valkey.Address + ":" + strconv.Itoa(config.Valkey.Port)},
 	}
-	if config.Password != "" {
-		options.Password = config.Password
+	if config.Valkey.Password != "" {
+		options.Password = config.Valkey.Password
 	}
 	client, err := valkey.NewClient(options)
 	if err != nil {
@@ -119,7 +118,6 @@ func (db DB) GetSubscriptions(feedID string) ([]string, error) {
 	return subscriptionIDs, nil
 }
 
-// Can return nil!
 func (db DB) GetSubscription(feedID string, targetID string) (Subscription, error) {
 	key := sanitize(feedID) + ":subs:" + targetID
 
@@ -131,7 +129,7 @@ func (db DB) GetSubscription(feedID string, targetID string) (Subscription, erro
 	}
 
 	if len(result) <= 0 {
-		return nil, nil
+		return nil, fmt.Errorf("subscription not found")
 	}
 
 	subType := result["type"]
@@ -190,34 +188,9 @@ func (db DB) GetLatestPost(feedID string) ([]byte, error) {
 	return raw, err
 }
 
-// May return nil!
-func (db DB) GetPreviousPost(feedID string) ([]byte, error) {
-	// get <feedID>:previous
-	command := db.v.B().Get().Key(sanitize(feedID) + ":previous").Build()
-	resp := db.v.Do(context.Background(), command)
-	err := resp.Error()
-	if err != nil {
-		if valkey.IsValkeyNil(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	raw, err := resp.AsBytes()
-	if err != nil {
-		return nil, err
-	}
-	return raw, err
-}
-
 func (db DB) SetLatestPost(feedID string, content string) error {
 	// set <feedID>:latest <content>
 	command := db.v.B().Set().Key(sanitize(feedID) + ":latest").Value(content).Build()
-	return db.v.Do(context.Background(), command).Error()
-}
-
-func (db DB) SetPreviousPost(feedID string, content string) error {
-	// set <feedID>:previous <content>
-	command := db.v.B().Set().Key(sanitize(feedID) + ":previous").Value(content).Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 
@@ -225,7 +198,6 @@ type OAuthToken struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresAt    time.Time
-	AuthType     string
 }
 
 // May return nil!
@@ -245,16 +217,10 @@ func (db DB) GetOAuthToken() (*OAuthToken, error) {
 		return nil, err
 	}
 
-	authType, exists := result["auth_type"]
-	if !exists {
-		authType = "server"
-	}
-
 	return &OAuthToken{
 		AccessToken:  result["access_token"],
 		RefreshToken: result["refresh_token"],
 		ExpiresAt:    time.Unix(expiresAt, 0),
-		AuthType:     authType,
 	}, nil
 }
 
@@ -264,7 +230,6 @@ func (db DB) SetOAuthToken(oAuthToken OAuthToken) error {
 		FieldValue("access_token", oAuthToken.AccessToken).
 		FieldValue("refresh_token", oAuthToken.RefreshToken).
 		FieldValue("expires_at", strconv.FormatInt(oAuthToken.ExpiresAt.Unix(), 10)).
-		FieldValue("auth_type", oAuthToken.AuthType).
 		Build()
 	return db.v.Do(context.Background(), command).Error()
 }
@@ -297,7 +262,6 @@ func (db DB) SetProfileUUID(uuid string) error {
 type GameSessionToken struct {
 	SessionToken string
 	ExpiresAt    time.Time
-	AuthType     string
 }
 
 // May return nil!
@@ -317,15 +281,9 @@ func (db DB) GetGameSession() (*GameSessionToken, error) {
 		return nil, err
 	}
 
-	authType, exists := result["auth_type"]
-	if !exists {
-		authType = "server"
-	}
-
 	return &GameSessionToken{
 		SessionToken: result["session_token"],
 		ExpiresAt:    time.Unix(expiresAt, 0),
-		AuthType:     authType,
 	}, nil
 }
 
@@ -334,12 +292,36 @@ func (db DB) SetGameSession(sessionToken GameSessionToken) error {
 	command := db.v.B().Hset().Key("game_session").FieldValue().
 		FieldValue("session_token", sessionToken.SessionToken).
 		FieldValue("expires_at", strconv.FormatInt(sessionToken.ExpiresAt.Unix(), 10)).
-		FieldValue("auth_type", sessionToken.AuthType).
 		Build()
 	return db.v.Do(context.Background(), command).Error()
 }
 
-func (db DB) Clear() {
-	command := db.v.B().Flushdb().Sync().Build()
-	db.v.Do(context.Background(), command)
+// May return nil!
+func (db DB) GetKratosRefresh() (*time.Time, error) {
+	// get kratos_refresh
+	command := db.v.B().Get().Key("kratos_refresh").Build()
+	resp := db.v.Do(context.Background(), command)
+	err := resp.Error()
+	if err != nil {
+		if valkey.IsValkeyNil(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	raw, err := resp.AsBytes()
+	if err != nil {
+		return nil, err
+	}
+	refreshUnix, err := strconv.ParseInt(string(raw), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	refreshTime := time.Unix(refreshUnix, 0)
+	return &refreshTime, nil
+}
+
+func (db DB) SetKratosRefresh(refresh time.Time) error {
+	// set kratos_refresh <refresh>
+	command := db.v.B().Set().Key("kratos_refresh").Value(strconv.FormatInt(refresh.Unix(), 10)).Build()
+	return db.v.Do(context.Background(), command).Error()
 }

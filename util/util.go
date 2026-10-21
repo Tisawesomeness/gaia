@@ -12,7 +12,6 @@ import (
 
 	"github.com/Tisawesomeness/gaia/config"
 	"github.com/sony/gobreaker"
-	"golang.org/x/exp/constraints"
 )
 
 type webhookMessage struct {
@@ -52,16 +51,6 @@ func DiscordLog(config *config.Config, httpClient *http.Client, msg string) {
 	defer resp.Body.Close()
 }
 
-// Capitalizes the first letter of a string
-func CapitalizeFirstLetter(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-	runes := []rune(s)
-	runes[0] = unicode.ToUpper(runes[0])
-	return string(runes)
-}
-
 // Convert a string in mixed case to "Capitalized Words Separated By Spaces"
 func ToCapitalizedSpacedWords(s string) string {
 	if s == "" {
@@ -72,31 +61,17 @@ func ToCapitalizedSpacedWords(s string) string {
 		if i == 0 {
 			builder.WriteRune(unicode.ToUpper(r))
 		} else {
-			prev := rune(s[i-1])
-			if prev == '-' || prev == '_' || unicode.IsSpace(prev) {
+			if unicode.IsSpace(rune(s[i-1])) {
 				builder.WriteRune(unicode.ToUpper(r))
 			} else if unicode.IsUpper(r) {
 				builder.WriteRune(' ')
 				builder.WriteRune(unicode.ToUpper(r))
-			} else if r == '-' || r == '_' {
-				builder.WriteRune(' ')
 			} else {
 				builder.WriteRune(r)
 			}
 		}
 	}
 	return builder.String()
-}
-
-func TrimTrailingZeroes(s string) string {
-	if s == "" {
-		return ""
-	}
-	trimmed := strings.TrimRight(s, "0")
-	if trimmed == "" {
-		return "0"
-	}
-	return trimmed
 }
 
 func Execute[T any](breaker *gobreaker.CircuitBreaker, req func() (T, error)) (T, error) {
@@ -111,27 +86,14 @@ func Execute[T any](breaker *gobreaker.CircuitBreaker, req func() (T, error)) (T
 
 // Returns an error with HTTP code, headers, and body attached
 func NewBadResponseError(description string, resp *http.Response) error {
-	request := resp.Request
-	if request == nil {
-		return fmt.Errorf("%s: returned HTTP %d", description, resp.StatusCode)
+	finalURL := resp.Request.URL.String()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("%s: %s %s returned HTTP %d, %v", description, resp.Request.Method, finalURL, resp.StatusCode, err)
 	} else {
-		finalURL := request.URL.String()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("%s: %s %s returned HTTP %d, %v", description, resp.Request.Method, finalURL, resp.StatusCode, err)
-		} else {
-			bodyStr := string(body)
-			return fmt.Errorf("%s: %s %s returned HTTP %d:\n%s\n%s\n", description, resp.Request.Method, finalURL, resp.StatusCode, resp.Header, bodyStr[:min(1000, len(bodyStr))])
-		}
+		bodyStr := string(body)
+		return fmt.Errorf("%s: %s %s returned HTTP %d:\n%s\n%s\n", description, resp.Request.Method, finalURL, resp.StatusCode, resp.Header, bodyStr[:min(50, len(bodyStr))])
 	}
-}
-
-func AsCookieHeader(cookies []*http.Cookie) string {
-	cookieStrings := make([]string, len(cookies))
-	for i, cookie := range cookies {
-		cookieStrings[i] = cookie.String()
-	}
-	return strings.Join(cookieStrings, "; ")
 }
 
 // Wraps an angle in degrees to a value between 0 and 359.
@@ -140,16 +102,4 @@ func WrapDegrees(degrees int) int {
 		return degrees % 360
 	}
 	return (degrees%360 + 360) % 360
-}
-
-type Number interface {
-	constraints.Integer | constraints.Float
-}
-
-// Returns the value if it is within the provided range (inclusive). Otherwise, returns orElse.
-func Coerce[T Number](value, min, max, orElse T) T {
-	if min <= value && value <= max {
-		return value
-	}
-	return orElse
 }

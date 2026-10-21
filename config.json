@@ -1,0 +1,81 @@
+{
+  "credentials": {
+    "token": "YOUR_DISCORD_BOT_TOKEN",
+    "hytale_email": "YOUR_HYTALE_EMAIL",
+    "hytale_password": "YOUR_HYTALE_PASSWORD",
+    "hytale_2fa_secret": "YOUR_HYTALE_2FA_SECRET"
+  },
+  "valkey": {
+    "address": "127.0.0.1",
+    "port": 6379,
+    "password": ""
+  },
+  "test_server": "",
+  "log_webhook": "",
+  "is_self_hosted": true,
+  "create_commands_on_startup": true,
+  "playing": "/help | Playing Hytale",
+  "branding": {
+    "author": "",
+    "author_tag": "",
+    "invite": "",
+    "help_server": "",
+    "website": "",
+    "github": "",
+    "issues": "",
+    "terms": "",
+    "privacy": ""
+  },
+  "kratos": {
+    "renewal_hours": 120,
+    "breaker": {
+      "enabled": true,
+      "max_half_open_requests": 3,
+      "reset_interval": 300,
+      "timeout": 30,
+      "failure_ratio": 0.6
+    },
+    "accounts_backend": "https://backend.accounts.hytale.com"
+  },
+  "auth": {
+    "oauth_refresh_buffer": 300,
+    "game_session_refresh_buffer": 300,
+    "breaker": {
+      "enabled": true,
+      "max_half_open_requests": 3,
+      "reset_interval": 300,
+      "timeout": 30,
+      "failure_ratio": 0.6
+    },
+    "client_id": "hytale-server",
+    "scope": "openid offline auth:server",
+    "device_auth": "https://oauth.accounts.hytale.com/oauth2/device/auth",
+    "token": "https://oauth.accounts.hytale.com/oauth2/token",
+    "profiles": "https://account-data.hytale.com/my-account/get-profiles",
+    "create_game_session": "https://sessions.hytale.com/game-session/new",
+    "refresh_game_session": "https://sessions.hytale.com/game-session/refresh"
+  },
+  "profile": {
+    "by_uuid": "https://account-data.hytale.com/profile/uuid/",
+    "by_username": "https://account-data.hytale.com/profile/username/",
+    "availability": "https://accounts.hytale.com/api/account/username-reservations/availability",
+    "hyvatar": "https://hyvatar.io/render/",
+    "profile_website": "https://hytags.com/username/"
+  },
+  "feeds": {
+    "poll_on_startup": false,
+    "notify_on_startup": true,
+    "interval": 600,
+    "game_version": "https://account-data.hytale.com/game-assets/version/",
+    "launcher_release": "https://launcher.hytale.com/version/release/launcher.json",
+    "launcher_articles": "https://launcher.hytale.com/launcher-feed/release/feed.json",
+    "article_image_prefix": "https://launcher.hytale.com/launcher-feed/release/",
+    "maven_repo": "https://maven.hytale.com",
+    "maven_group": "com.hypixel.hytale",
+    "maven_artifact": "Server"
+  },
+  "http": {
+    "timeout": 5,
+    "max_idle_conns": 10
+  }
+}

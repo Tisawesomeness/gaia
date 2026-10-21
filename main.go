@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not create data directory: %v", err)
 	}
-	database, err := db.NewDB(config.Valkey)
+	database, err := db.NewDB(config)
 	if err != nil {
 		log.Fatalf("Error creating Valkey client: %v", err)
 	}
@@ -82,13 +82,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = cmd.InitCommands(session, &config)
+	err = cmd.InitCommands(session, config)
 	if err != nil {
 		util.DiscordLogf(&config, httpClient, "Error while registering commands: %v", err)
 		os.Exit(1)
 	}
 
-	go pollFeeds(session, config, feeds)
+	go pollFeeds(session, config, *feeds)
 	util.DiscordLog(&config, httpClient, "Bot finished init")
 
 	stop := make(chan os.Signal, 1)

@@ -26,8 +26,8 @@ type CommandExecutor struct {
 	Config      *config.Config
 	DB          *db.DB
 	HTTP        *http.Client
-	AuthStore   auth.AuthStore
-	HytaleFeeds hytale.HytaleFeeds
+	AuthStore   *auth.AuthStore
+	HytaleFeeds *hytale.HytaleFeeds
 	Breakers    *Breakers
 	BotMetadata *BotMetadata
 }
@@ -36,14 +36,15 @@ type CommandExecutor struct {
 // ex: if Hytale session goes down, circuit breaker will gradually retry
 type Breakers struct {
 	HytaleSession *gobreaker.CircuitBreaker
+	KratosSession *gobreaker.CircuitBreaker
 }
 
 func NewCommandExecutor(
 	config *config.Config,
 	db *db.DB,
 	httpClient *http.Client,
-	authStore auth.AuthStore,
-	hytaleFeeds hytale.HytaleFeeds,
+	authStore *auth.AuthStore,
+	hytaleFeeds *hytale.HytaleFeeds,
 	version string,
 	bootTime *time.Time,
 ) CommandExecutor {
@@ -53,17 +54,14 @@ func NewCommandExecutor(
 		HTTP:        httpClient,
 		AuthStore:   authStore,
 		HytaleFeeds: hytaleFeeds,
-		Breakers:    makeBreakers(config),
+		Breakers: &Breakers{
+			HytaleSession: makeBreaker("HytaleSession", config.Auth.Breaker),
+			KratosSession: makeBreaker("KratosSession", config.Kratos.Breaker),
+		},
 		BotMetadata: &BotMetadata{
 			Version:  version,
 			BootTime: bootTime,
 		},
-	}
-}
-
-func makeBreakers(config *config.Config) *Breakers {
-	return &Breakers{
-		HytaleSession: makeBreaker("HytaleSession", config.Auth.Breaker),
 	}
 }
 
@@ -77,10 +75,163 @@ func makeBreaker(name string, config config.BreakerConfig) *gobreaker.CircuitBre
 			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
 			return config.Enabled && counts.Requests >= config.MaxHalfOpenRequests && failureRatio >= config.FailureRatio
 		},
+
 		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
 			log.Printf("Circuit breaker %s %s -> %s", name, from.String(), to.String())
 		},
 	})
+}
+
+// Contains utility methods that make commands less error-prone:
+//
+// - Reply... methods with mentions disabled by default and work whether deferred or not
+//
+// - User() gets the user without having to nil-check Interaction.User / Interaction.Member
+//
+// - etc.
+type CommandContext struct {
+	Config      *config.Config
+	DB          *db.DB
+	HTTP        *http.Client
+	AuthStore   *auth.AuthStore
+	HytaleFeeds *hytale.HytaleFeeds
+	Breakers    *Breakers
+	BotMetadata *BotMetadata
+
+	// The raw Discord session, prefer using CommandContext methods
+	Session *discordgo.Session
+	// The raw Discord event, prefer using CommandContext methods
+	Interaction *discordgo.InteractionCreate
+	hasDeferred bool
+}
+
+func (ce CommandExecutor) newCommandContext(s *discordgo.Session, i *discordgo.InteractionCreate) *CommandContext {
+	return &CommandContext{
+		Config:      ce.Config,
+		DB:          ce.DB,
+		HTTP:        ce.HTTP,
+		AuthStore:   ce.AuthStore,
+		HytaleFeeds: ce.HytaleFeeds,
+		Breakers:    ce.Breakers,
+		BotMetadata: ce.BotMetadata,
+		Session:     s,
+		Interaction: i,
+		hasDeferred: false,
+	}
+}
+
+// Generates a map of option ID to option data
+func (ctx *CommandContext) Options() map[string]*discordgo.ApplicationCommandInteractionDataOption {
+	options := ctx.Interaction.ApplicationCommandData().Options
+	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
+	for _, opt := range options {
+		optionMap[opt.Name] = opt
+	}
+	return optionMap
+}
+
+// Gets the user that executed this command, works in both guilds and DMs
+func (ctx *CommandContext) User() *discordgo.User {
+	if ctx.Interaction.Member != nil {
+		return ctx.Interaction.Member.User
+	} else {
+		return ctx.Interaction.User
+	}
+}
+
+// Signals to Discord that the command was received and a follow-up will come later.
+// After deferring, regular replies (InteractionResponseChannelMessageWithSource) will do nothing.
+// Use the ctx.Reply... methods instead.
+func (ctx *CommandContext) DeferReply() {
+	ctx.hasDeferred = true
+	ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+}
+
+func (ctx *CommandContext) Reply(content string) {
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
+		Content: content,
+	})
+}
+
+func (ctx *CommandContext) ReplyEphemeral(content string) {
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
+		Content: content,
+		Flags:   discordgo.MessageFlagsEphemeral,
+	})
+}
+
+func (ctx *CommandContext) ReplyEmbed(embed *discordgo.MessageEmbed) {
+	ctx.ReplyComplex(&discordgo.InteractionResponseData{
+		Embeds: []*discordgo.MessageEmbed{embed},
+	})
+}
+
+func (ctx *CommandContext) ReplyComplex(data *discordgo.InteractionResponseData) {
+	// Default to no mentions allowed
+	if data.AllowedMentions == nil {
+		data.AllowedMentions = &discordgo.MessageAllowedMentions{}
+	}
+
+	for _, embed := range data.Embeds {
+		if embed.Footer == nil {
+			embed.Footer = &discordgo.MessageEmbedFooter{
+				Text: "Gaia " + ctx.BotMetadata.Version,
+			}
+		}
+	}
+
+	var err error
+	if ctx.hasDeferred {
+		var attachments []*discordgo.MessageAttachment
+		if data.Attachments == nil {
+			attachments = []*discordgo.MessageAttachment{}
+		} else {
+			attachments = *data.Attachments
+		}
+
+		_, err = ctx.Session.FollowupMessageCreate(ctx.Interaction.Interaction, false, &discordgo.WebhookParams{
+			Content:         data.Content,
+			Components:      data.Components,
+			Embeds:          data.Embeds,
+			TTS:             data.TTS,
+			Files:           data.Files,
+			Attachments:     attachments,
+			AllowedMentions: data.AllowedMentions,
+			Flags:           data.Flags,
+		})
+	} else {
+		err = ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: data,
+		})
+	}
+
+	if err != nil {
+		ctx.reportError(err)
+	}
+}
+
+func (ctx *CommandContext) ReplyWarn(content string) {
+	ctx.ReplyEphemeral(":warning: " + content)
+}
+
+func (ctx *CommandContext) ReplyExternalError(content string) {
+	ctx.ReplyEphemeral(":x: " + content)
+}
+
+func (ctx *CommandContext) ReplyError(message string, err error) {
+	ctx.ReplyEphemeral(":boom: " + message)
+	if err != nil {
+		ctx.reportError(err)
+	}
+}
+
+func (ctx *CommandContext) reportError(err error) {
+	id := ctx.Interaction.ApplicationCommandData().Name
+	options := formatCommandOptions(ctx.Interaction.ApplicationCommandData().Options)
+	log.Printf("Error in command /%s options %s:\n%+v", id, options, err)
 }
 
 func formatCommandOptions(options []*discordgo.ApplicationCommandInteractionDataOption) string {
@@ -102,25 +253,10 @@ type Category struct {
 
 type Command struct {
 	discord *discordgo.ApplicationCommand
-	handler func(ctx CommandContext)
+	handler func(ctx *CommandContext)
 }
 
-type InteractionType struct {
-	prefix  string
-	handler func(ctx CommandContext, state any)
-}
-
-type InteractionSession struct {
-	State    any
-	UserID   string
-	LastUsed time.Time
-}
-
-var (
-	categories          []*Category
-	interactionTypes    []*InteractionType
-	interactionSessions map[string]*InteractionSession
-)
+var categories []*Category
 
 func init() {
 	categories = []*Category{
@@ -150,34 +286,11 @@ func init() {
 			{GradleCommand, gradleCommand},
 		}},
 	}
-	interactionTypes = []*InteractionType{
-		{"article", handleArticleButton},
-	}
-	interactionSessions = make(map[string]*InteractionSession)
-}
-
-func getCommand(name string) *Command {
-	commandName := strings.TrimPrefix(name, "test-")
-	for _, category := range categories {
-		for _, command := range category.commands {
-			if commandName == command.discord.Name {
-				return command
-			}
-		}
-	}
-	return nil
-}
-
-func getInteractionType(interactionType string) *InteractionType {
-	for _, interaction := range interactionTypes {
-		if interaction.prefix == interactionType {
-			return interaction
-		}
-	}
-	return nil
 }
 
 func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	ctx := ce.newCommandContext(s, i)
+
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
 		// https://www.youtube.com/watch?v=bLHL75H_VEM
@@ -189,52 +302,32 @@ func (ce CommandExecutor) HandleInteractionCreate(s *discordgo.Session, i *disco
 			}
 		}()
 
-		ctx := ce.newCommandContext(s, i)
-		handleCommand(ctx, i.ApplicationCommandData().Name)
+		commandName := strings.TrimPrefix(i.ApplicationCommandData().Name, "test-")
+		for _, category := range categories {
+			for _, command := range category.commands {
+				if commandName == command.discord.Name {
+					command.handler(ctx)
+					return
+				}
+			}
+		}
 
 	case discordgo.InteractionMessageComponent:
+		customID := i.MessageComponentData().CustomID
+
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("Panic in interaction %s:\n%v", i.MessageComponentData().CustomID, r)
+				log.Printf("Panic in interaction %s:\n%v", customID, r)
 			}
 		}()
 
-		ctx := ce.newCommandContext(s, i)
-		handleInteraction(ctx)
-	}
-}
-
-func handleCommand(ctx CommandContext, name string) {
-	command := getCommand(name)
-	if command != nil {
-		if ctx.UserCanExecute(command.discord) {
-			command.handler(ctx)
+		if isArticleInteraction(customID) {
+			HandleArticleButton(s, i, ctx)
 		}
 	}
 }
 
-func handleInteraction(ctx CommandContext) {
-	customID := ctx.CustomID()
-	interactionType := getInteractionType(customID.InteractionType)
-	if interactionType != nil {
-		interactionSession := interactionSessions[customID.SessionID]
-		if interactionSession != nil {
-			if ctx.User().ID != interactionSession.UserID {
-				ctx.ReplyEphemeral("You cannot interact with someone else's menu.")
-				return
-			}
-			expiresAfter := time.Duration(ctx.Config().Discord.InteractionCleanupInterval) * time.Second
-			if time.Now().After(interactionSession.LastUsed.Add(expiresAfter)) {
-				ctx.ReplyEphemeral("That menu has expired.")
-				return
-			}
-			interactionSession.LastUsed = time.Now()
-			interactionType.handler(ctx, interactionSession.State)
-		}
-	}
-}
-
-func InitCommands(session *discordgo.Session, config *config.Config) error {
+func InitCommands(session *discordgo.Session, config config.Config) error {
 	if config.CreateCommandsOnStartup {
 		err := deployCommands(session, config)
 		if err != nil {
@@ -242,11 +335,11 @@ func InitCommands(session *discordgo.Session, config *config.Config) error {
 		}
 		log.Println("Commands created")
 	}
-	startInteractionCleanup(config)
+	StartInteractionCleanup()
 	return nil
 }
 
-func deployCommands(session *discordgo.Session, config *config.Config) error {
+func deployCommands(session *discordgo.Session, config config.Config) error {
 	var commands []*discordgo.ApplicationCommand
 	var testCommands []*discordgo.ApplicationCommand
 
@@ -281,24 +374,4 @@ func deployCommands(session *discordgo.Session, config *config.Config) error {
 		}
 	}
 	return nil
-}
-
-func startInteractionCleanup(config *config.Config) {
-	cleanupInterval := time.Duration(config.Discord.InteractionCleanupInterval) * time.Second
-	ticker := time.NewTicker(cleanupInterval)
-	go func() {
-		for range ticker.C {
-			cleanupOldInteractions(config)
-		}
-	}()
-}
-
-func cleanupOldInteractions(config *config.Config) {
-	now := time.Now()
-	for id, interaction := range interactionSessions {
-		expiresAfter := time.Duration(config.Discord.InteractionCleanupInterval) * time.Second
-		if now.Sub(interaction.LastUsed) > expiresAfter {
-			delete(interactionSessions, id)
-		}
-	}
 }

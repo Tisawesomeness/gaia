@@ -26,18 +26,13 @@ var (
 			},
 		},
 	}
-	patchlineOptionDev = &discordgo.ApplicationCommandOption{
-		Type:        discordgo.ApplicationCommandOptionString,
-		Name:        "patchline",
-		Description: "The release channel",
-	}
 
 	MavenCommand = &discordgo.ApplicationCommand{
 		Name:        "maven",
 		Description: "Generate a maven build file for Hytale development",
 		Options: []*discordgo.ApplicationCommandOption{
 			scriptSizeOption,
-			patchlineOptionDev,
+			patchlineOption,
 		},
 	}
 
@@ -61,7 +56,7 @@ var (
 					},
 				},
 			},
-			patchlineOptionDev,
+			patchlineOption,
 		},
 	}
 )
@@ -173,7 +168,7 @@ type variables struct {
 	Version    string
 }
 
-func mavenCommand(ctx CommandContext) {
+func mavenCommand(ctx *CommandContext) {
 	options := ctx.Options()
 
 	scriptSize := "dependency"
@@ -188,7 +183,7 @@ func mavenCommand(ctx CommandContext) {
 	}
 }
 
-func gradleCommand(ctx CommandContext) {
+func gradleCommand(ctx *CommandContext) {
 	options := ctx.Options()
 
 	scriptSize := "dependency"
@@ -216,31 +211,21 @@ func gradleCommand(ctx CommandContext) {
 	}
 }
 
-func buildScriptCommand(ctx CommandContext, buildScript buildScript) {
+func buildScriptCommand(ctx *CommandContext, buildScript buildScript) {
 	options := ctx.Options()
 
-	patchlineInput := "release"
+	patchlineValue := "release"
 	if option, exists := options["patchline"]; exists {
-		patchlineInput = option.StringValue()
+		patchlineValue = option.StringValue()
 	}
 
-	var patchline string
-	if patchlineInput == "release" {
-		patchline = "release"
-	} else {
-		patchlineFeed, exists := ctx.HytaleFeeds().GetPatchlinesFeed()
-		if !exists {
-			ctx.ReplyError("Could not retrieve Hytale patchlines.", nil)
-			return
-		}
-		patchline = hytale.ClosestPatchline(patchlineInput, patchlineFeed.Patchlines)
-		if patchline == "" {
-			ctx.ReplyWarn("Patchline must be one of: " + displayPatchlineList(patchlineFeed.Patchlines))
-			return
-		}
+	patchline, err := hytale.ParsePatchline(patchlineValue)
+	if err != nil {
+		ctx.ReplyWarn("Invalid patchline")
+		return
 	}
 
-	feed, exists := ctx.HytaleFeeds().GetMavenFeed(patchline)
+	feed, exists := ctx.HytaleFeeds.Feeds[hytale.GetFeedType(patchline, hytale.Server)]
 	if !exists {
 		ctx.ReplyError("Could not retrieve the latest Hytale version.", nil)
 		return
@@ -253,13 +238,13 @@ func buildScriptCommand(ctx CommandContext, buildScript buildScript) {
 	}
 
 	vars := variables{
-		Repository: ctx.Config().Feeds.MavenRepo,
-		Group:      ctx.Config().Feeds.MavenGroup,
-		Artifact:   ctx.Config().Feeds.MavenArtifact,
+		Repository: ctx.Config.Feeds.MavenRepo,
+		Group:      ctx.Config.Feeds.MavenGroup,
+		Artifact:   ctx.Config.Feeds.MavenArtifact,
 		Version:    version,
 	}
 	var buf bytes.Buffer
-	err := buildScript.template.Execute(&buf, vars)
+	err = buildScript.template.Execute(&buf, vars)
 	if err != nil {
 		ctx.ReplyError("Could not generate build script", nil)
 		return
